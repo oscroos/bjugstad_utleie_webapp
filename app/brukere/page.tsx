@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import AddUserDialog from "./AddUserDialog";
 
@@ -27,25 +27,7 @@ export default async function BrukerePage() {
     );
   }
 
-  // TODO: Update to adapt to new one-to-many user-company roles structure
-  const users = await prisma.user.findMany({
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      role: true,
-      phone: true,
-      email: true,
-      address_street: true,
-      address_postal_code: true,
-      address_region: true,
-      //company: true,
-      createdAt: true,
-      updatedAt: true,
-      acceptedTerms: true,
-      acceptedTermsAt: true,
-    },
-  });
+  const users = await fetchUsers();
   console.log("Rendering user page with users:");
   console.log("Fetched users:", users);
 
@@ -150,6 +132,24 @@ export default async function BrukerePage() {
       </section>
     </main>
   );
+}
+
+async function fetchUsers() {
+  const cookieHeader = cookies().toString();
+  const baseUrl = (process.env.NEXTAUTH_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  const response = await fetch(`${baseUrl}/api/users`, {
+    cache: "no-store",
+    headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    console.error("Failed to load users from API", response.status, errorText);
+    throw new Error("Kunne ikke hente brukere");
+  }
+
+  const payload = (await response.json()) as { users?: any[] };
+  return payload.users ?? [];
 }
 
 function formatPhone(raw?: string | null) {

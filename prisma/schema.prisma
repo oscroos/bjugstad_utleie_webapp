@@ -39,7 +39,8 @@ model User {
   acceptedTermsVersion String?      @map("accepted_terms_version")
   createdAt            DateTime     @default(now()) @map("created_at")
   updatedAt            DateTime     @updatedAt @map("updated_at")
-  lastLoginAt          DateTime?    @updatedAt @map("last_login_at")
+  firstLoginAt         DateTime?    @map("first_login_at")
+  lastLoginAt          DateTime?    @map("last_login_at")
 
   accounts             Account[]
   sessions             Session[]

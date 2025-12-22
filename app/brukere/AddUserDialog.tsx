@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from "react";
-import { MinusCircleIcon, PlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { useRouter } from "next/navigation";
+import { ArrowPathIcon, MinusCircleIcon, PlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 type RoleOption = "customer" | "super_admin";
 type CompanyRole = "selskapsadmin" | "selskapsbruker";
@@ -34,6 +35,11 @@ type Relationship = {
   role: CompanyRole;
 };
 
+type ToastState = {
+  type: "success" | "error";
+  message: string;
+};
+
 // Generate a stable unique ID without relying on a module-level counter
 function createRelationshipId(): string {
   if (typeof window !== "undefined" && window.crypto && "randomUUID" in window.crypto) {
@@ -51,6 +57,7 @@ const defaultRelationship = (): Relationship => ({
 
 
 export default function AddUserDialog() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<RoleOption>("customer");
   const [phoneCountry, setPhoneCountry] = useState<PhoneCountry>("NO");
@@ -61,6 +68,7 @@ export default function AddUserDialog() {
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [companiesError, setCompaniesError] = useState<string | null>(null);
   const [loadingCompanies, setLoadingCompanies] = useState(true);
+  const [toast, setToast] = useState<ToastState | null>(null);
 
   const phoneMeta = PHONE_RULES[phoneCountry];
 
@@ -70,6 +78,12 @@ export default function AddUserDialog() {
     setErrors((prev) => ({ ...prev, phone: undefined }));
   }, [phoneCountry]);
 
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
   function resetForm() {
     setRole("customer");
     setPhoneCountry("NO");
@@ -77,6 +91,10 @@ export default function AddUserDialog() {
     setRelationships([defaultRelationship()]);
     setErrors({});
     setSubmitting(false);
+  }
+
+  function showToast(next: ToastState) {
+    setToast(next);
   }
 
   useEffect(() => {
@@ -128,35 +146,60 @@ export default function AddUserDialog() {
     return undefined;
   }
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (submitting) return;
+
     const phoneError = validatePhone();
     if (phoneError) {
       setErrors({ phone: phoneError });
       return;
     }
 
+    if (showRelationships && relationships.some((rel) => !rel.companyId)) {
+      showToast({ type: "error", message: "Velg selskap for alle relasjoner" });
+      return;
+    }
+
     setErrors({});
     setSubmitting(true);
 
-    // TODO: implement backend API call to create user
-    // Placeholder until backend wiring is ready.
-    setTimeout(() => {
-      console.log("TODO: Send data to backend", {
-        role,
-        phone: `${phoneMeta.code}${phoneNumber}`,
-        relationships:
-          role === "customer"
-            ? relationships.map((rel) => ({
-              companyId: rel.companyId,
-              role: rel.role,
-            }))
-            : [],
+    const payload = {
+      role,
+      phone: `${phoneMeta.code}${phoneNumber}`,
+      relationships: showRelationships
+        ? relationships
+          .filter((rel) => rel.companyId)
+          .map((rel) => ({
+            companyId: Number(rel.companyId),
+            role: rel.role === "selskapsadmin" ? "admin" : "user",
+          }))
+        : [],
+    };
+
+    try {
+      const response = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = (result as { error?: string })?.error ?? "Kunne ikke lagre bruker";
+        throw new Error(message);
+      }
+
+      showToast({ type: "success", message: "Bruker lagret" });
+      closeDialog();
+      router.refresh();
+    } catch (error) {
+      console.error("Failed to save user", error);
+      const message = error instanceof Error ? error.message : "Kunne ikke lagre bruker";
+      showToast({ type: "error", message });
+    } finally {
       setSubmitting(false);
-      setOpen(false);
-      resetForm();
-    }, 600);
+    }
   }
 
   function addRelationship() {
@@ -194,7 +237,7 @@ export default function AddUserDialog() {
               <div>
                 <h2 className="text-2xl font-semibold text-slate-900">Legg til bruker</h2>
                 <p className="text-sm text-slate-600">
-                  Fyll ut detaljene under. Data lagres først når API-integrasjonen er klar.
+                  Fyll ut detaljene under for aa lagre en ny bruker i databasen.
                 </p>
               </div>
               <button
@@ -401,8 +444,7 @@ export default function AddUserDialog() {
 
               <div className="border-t border-slate-100 px-6 py-4 text-sm text-slate-500">
                 <p>
-                  Backend-tilkoblingen er ikke aktiv ennå. Skjemaet validerer formater og gir deg
-                  forhåndsvisning.
+                  Brukeren lagres i databasen naar du trykker Lagre.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-3">
                   <button
@@ -415,14 +457,35 @@ export default function AddUserDialog() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white shadow hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-400"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white shadow hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-400"
                   >
-                    {submitting ? "Lagrer…" : "Lagre"}
+                    {submitting ? (
+                      <>
+                        <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                        Lagrer...
+                      </>
+                    ) : (
+                      "Lagre"
+                    )}
                   </button>
                 </div>
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 w-80 rounded-xl border px-4 py-3 shadow-lg ${toast.type === "success"
+            ? "border-green-200 bg-green-50 text-green-800"
+            : "border-red-200 bg-red-50 text-red-800"
+            }`}
+        >
+          <div className="text-sm font-semibold">
+            {toast.type === "success" ? "Bruker lagret" : "Kunne ikke lagre"}
+          </div>
+          <p className="mt-1 text-sm leading-relaxed">{toast.message}</p>
         </div>
       )}
     </>

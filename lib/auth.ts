@@ -296,7 +296,8 @@ export const authConfig: NextAuthConfig = {
           return url.toString();
         }
 
-        // We never fall through here.
+        // We never fall through here, but keep 'return true' to silence TS warnings.
+        return true;
 
       } catch (err) {
         // On any unexpected error, fall back to the normal flow.

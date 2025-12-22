@@ -27,6 +27,7 @@ export default async function BrukerePage() {
     );
   }
 
+  // TODO: Update to adapt to new one-to-many user-company roles structure
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
     select: {
@@ -38,7 +39,7 @@ export default async function BrukerePage() {
       address_street: true,
       address_postal_code: true,
       address_region: true,
-      company: true,
+      //company: true,
       createdAt: true,
       updatedAt: true,
       acceptedTerms: true,
@@ -67,7 +68,7 @@ export default async function BrukerePage() {
               <tr>
                 <th className="px-4 py-3 rounded-tl-2xl">Navn</th>
                 <th className="px-4 py-3">Rolle</th>
-                <th className="px-4 py-3">Telefon</th>
+                <th className="px-4 py-3 min-w-[11rem] whitespace-nowrap">Telefon</th>
                 <th className="px-4 py-3">E-post</th>
                 <th className="px-4 py-3">Adresse</th>
                 <th className="px-4 py-3">Selskap</th>
@@ -82,6 +83,11 @@ export default async function BrukerePage() {
                 const created = formatDate(user.createdAt);
                 const updated = formatDate(user.updatedAt);
                 const acceptedAt = formatDate(user.acceptedTermsAt);
+                const addressLines = formatAddress({
+                  street: user.address_street,
+                  postalCode: user.address_postal_code,
+                  region: user.address_region,
+                });
 
                 return (
                   <tr key={user.id} className="hover:bg-slate-50">
@@ -90,20 +96,27 @@ export default async function BrukerePage() {
                       <div className="text-xs text-slate-500">{user.id}</div>
                     </td>
                     <td className="px-4 py-3 text-slate-700">{formatRole(user.role)}</td>
-                    <td className="px-4 py-3 text-slate-700">{formatPhone(user.phone)}</td>
+
+                    <td className="px-4 py-3 text-slate-700 min-w-[11rem] whitespace-nowrap">
+                      {formatPhone(user.phone)}
+                    </td>
                     <td className="px-4 py-3 text-slate-700">
                       {user.email ?? <span className="text-slate-400">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {formatAddress({
-                        street: user.address_street,
-                        postalCode: user.address_postal_code,
-                        region: user.address_region,
-                      })}
+                    <td className="px-4 py-3 text-slate-700 min-w-[11rem] whitespace-nowrap">
+                      {addressLines ? (
+                        addressLines.map((line, index) => <div key={`${user.id}-address-${index}`}>{line}</div>)
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-slate-700">{user.company ?? "—"}</td>
-                    <td className="px-4 py-3 tabular-nums text-slate-700">{created ?? "—"}</td>
-                    <td className="px-4 py-3 tabular-nums text-slate-700">{updated ?? "—"}</td>
+                    <td className="px-4 py-3 text-slate-700">{"UNDER DEVELOPMENT"}</td>
+                    <td className="px-4 py-3 tabular-nums text-slate-700">
+                      <span className="whitespace-pre-line">{created ?? "—"}</span>
+                    </td>
+                    <td className="px-4 py-3 tabular-nums text-slate-700">
+                      <span className="whitespace-pre-line">{updated ?? "—"}</span>
+                    </td>
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${user.acceptedTerms
@@ -115,7 +128,11 @@ export default async function BrukerePage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 tabular-nums text-slate-700">
-                      {acceptedAt ?? <span className="text-slate-400">—</span>}
+                      {acceptedAt ? (
+                        <span className="whitespace-pre-line">{acceptedAt}</span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -156,25 +173,35 @@ function formatAddress({
   street?: string | null;
   postalCode?: string | null;
   region?: string | null;
-}) {
-  const parts: string[] = [];
-  if (street) parts.push(street);
-  const postalRegion = [postalCode, region].filter(Boolean).join(" ");
-  if (postalRegion) parts.push(postalRegion);
-  return parts.length ? parts.join(", ") : "N/A";
+}): string[] | undefined {
+  const lines: string[] = [];
+  if (street) {
+    lines.push(street);
+  }
+
+  const postalRegion = [postalCode, region]
+    .map((value) => value?.trim())
+    .filter(Boolean)
+    .join(" ");
+
+  if (postalRegion) {
+    lines.push(postalRegion);
+  }
+
+  return lines.length ? lines : undefined;
 }
 
 function formatDate(value?: Date | string | null) {
   if (!value) return undefined;
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return undefined;
-  return date.toLocaleString("no-NO", {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  const day = pad(date.getDate());
+  const month = pad(date.getMonth() + 1);
+  const year = date.getFullYear();
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  return `${day}.${month}.${year}\nkl. ${hours}:${minutes}`;
 }
 
 function formatRole(role?: string | null) {

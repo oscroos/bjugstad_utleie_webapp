@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 // Use Edge-safe auth to avoid bundling Prisma/native binaries in middleware
 import { auth } from "@/lib/auth-edge";
+import { LATEST_TERMS_VERSION } from "@/lib/constants";
 
 export async function middleware(req: Request) {
   const url = new URL(req.url);
@@ -27,7 +28,13 @@ export async function middleware(req: Request) {
   // reflects whatever provider was used (Vipps in prod, Credentials in dev).
   const session = await auth();
 
-  if (session && !session.user?.acceptedTerms) {
+  const acceptedLatestTerms =
+    session?.user?.acceptedTerms === true &&
+    session?.user?.acceptedTermsVersion === LATEST_TERMS_VERSION;
+  const hasLoggedInBefore = Boolean(session?.user?.lastLoginAt);
+  const needsOnboarding = Boolean(session) && (!acceptedLatestTerms || !hasLoggedInBefore);
+
+  if (needsOnboarding) {
     if (!pathname.startsWith("/onboarding") && !pathname.startsWith("/api/auth") && !pathname.startsWith("/api/onboarding")) {
       return NextResponse.redirect(new URL("/onboarding", url.origin));
     }

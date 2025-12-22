@@ -15,7 +15,8 @@ declare module "next-auth" {
       createdAt?: string | Date | null;
       updatedAt?: string | Date | null;
       acceptedTerms?: boolean;
+      acceptedTermsVersion?: string | null;
+      lastLoginAt?: string | Date | null;
     };
   }
 }
-

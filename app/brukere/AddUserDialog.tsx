@@ -22,9 +22,15 @@ const PHONE_RULES: Record<PhoneCountry, PhoneMeta> = {
   FI: { code: "+358", flag: "🇫🇮", lengthRange: [8, 10], example: "040 123 45 67", formatGroups: [3, 3, 2, 2] },
 };
 
+type CompanyOption = {
+  id: number;
+  name: string | null;
+  organizationNumber: string | null;
+};
+
 type Relationship = {
   id: string;
-  company: string;
+  companyId: string;
   role: CompanyRole;
 };
 
@@ -39,7 +45,7 @@ function createRelationshipId(): string {
 
 const defaultRelationship = (): Relationship => ({
   id: createRelationshipId(),
-  company: "",
+  companyId: "",
   role: "selskapsbruker",
 });
 
@@ -52,6 +58,9 @@ export default function AddUserDialog() {
   const [relationships, setRelationships] = useState<Relationship[]>([defaultRelationship()]);
   const [errors, setErrors] = useState<{ phone?: string }>({});
   const [submitting, setSubmitting] = useState(false);
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [companiesError, setCompaniesError] = useState<string | null>(null);
+  const [loadingCompanies, setLoadingCompanies] = useState(true);
 
   const phoneMeta = PHONE_RULES[phoneCountry];
 
@@ -69,6 +78,38 @@ export default function AddUserDialog() {
     setErrors({});
     setSubmitting(false);
   }
+
+  useEffect(() => {
+    console.log("Fetching companies for AddUserDialog");
+    let active = true;
+
+    async function loadCompanies() {
+      console.log("Loading companies from API");
+      try {
+        setLoadingCompanies(true);
+        const response = await fetch("/api/companies");
+        if (!response.ok) {
+          throw new Error(`Request failed with status ${response.status}`);
+        }
+        const payload: { companies?: CompanyOption[] } = await response.json();
+        if (!active) return;
+        setCompanies(payload.companies ?? []);
+        setCompaniesError(null);
+      } catch (error) {
+        console.error("Failed to load companies", error);
+        if (!active) return;
+        setCompaniesError("Klarte ikke å hente selskapslisten. Prøv igjen senere.");
+      } finally {
+        if (active) setLoadingCompanies(false);
+      }
+    }
+
+    loadCompanies();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function closeDialog() {
     setOpen(false);
@@ -98,12 +139,19 @@ export default function AddUserDialog() {
     setErrors({});
     setSubmitting(true);
 
+    // TODO: implement backend API call to create user
     // Placeholder until backend wiring is ready.
     setTimeout(() => {
       console.log("TODO: Send data to backend", {
         role,
         phone: `${phoneMeta.code}${phoneNumber}`,
-        relationships: role === "customer" ? relationships : [],
+        relationships:
+          role === "customer"
+            ? relationships.map((rel) => ({
+              companyId: rel.companyId,
+              role: rel.role,
+            }))
+            : [],
       });
       setSubmitting(false);
       setOpen(false);
@@ -265,16 +313,39 @@ export default function AddUserDialog() {
                               >
                                 Firmanavn
                               </label>
-                              <input
+                              <select
                                 id={`company-${rel.id}`}
-                                type="text"
-                                value={rel.company}
-                                placeholder="Firmanavn"
+                                value={rel.companyId}
                                 onChange={(event) =>
-                                  updateRelationship(rel.id, { company: event.target.value })
+                                  updateRelationship(rel.id, { companyId: event.target.value })
                                 }
+                                disabled={loadingCompanies || !!companiesError}
                                 className="mt-2 w-full h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 md:mt-0"
-                              />
+                              >
+                                <option value="">
+                                  {loadingCompanies
+                                    ? "Laster selskaper…"
+                                    : companiesError
+                                      ? "Feil ved lasting av selskaper"
+                                      : "Velg selskap"}
+                                </option>
+                                {companies.map((company) => {
+                                  const labelParts = [
+                                    company.name ?? `Kunde #${company.id}`,
+                                    company.organizationNumber
+                                      ? `(Org.nr ${company.organizationNumber})`
+                                      : "",
+                                  ].filter(Boolean);
+                                  return (
+                                    <option key={company.id} value={String(company.id)}>
+                                      {labelParts.join(" ")}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                              {companiesError && (
+                                <p className="mt-1 text-xs text-red-600">{companiesError}</p>
+                              )}
                             </div>
 
                             <div>

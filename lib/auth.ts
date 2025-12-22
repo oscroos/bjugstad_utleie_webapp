@@ -349,6 +349,10 @@ export const authConfig: NextAuthConfig = {
       if (phone) updates.phone = phone;
       if (emailAddr && !user.email) updates.email = emailAddr;
       Object.assign(updates, addressData);
+      if (user.lastLoginAt) {
+        // Only bump the "last login" timestamp for users that have already completed onboarding once.
+        updates.lastLoginAt = new Date();
+      }
 
       if (Object.keys(updates).length) {
         await prisma.user.update({ where: { id: user.id }, data: updates });

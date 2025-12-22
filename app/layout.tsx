@@ -9,6 +9,7 @@ import MachinesProviderServer from "@/components/MachinesProvider.server";
 import { Suspense } from "react";
 import Spinner from "@/components/Spinner";
 import MachinesGate from "@/components/MachinesGate";
+import { LATEST_TERMS_VERSION } from "@/lib/constants";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -25,8 +26,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const session = await auth();
   const isAuthed = !!session; // keep your dev-bypass here if needed
 
-  const accepted = session?.user?.acceptedTerms === true;
-  const showShell = isAuthed && accepted;
+  const acceptedLatestTerms =
+    session?.user?.acceptedTerms === true &&
+    session?.user?.acceptedTermsVersion === LATEST_TERMS_VERSION;
+  const hasLoggedInBefore = Boolean(session?.user?.lastLoginAt);
+  const requiresOnboarding = Boolean(session) && (!acceptedLatestTerms || !hasLoggedInBefore);
+  const showShell = isAuthed && !requiresOnboarding;
 
   return (
     <html lang="no">

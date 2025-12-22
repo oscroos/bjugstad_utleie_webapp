@@ -13,6 +13,9 @@ export const USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY: boolean = false;
 // Vipps OAuth scope to request additional user data.
 export const VIPPS_DATA_REQUESTS = "openid name email phoneNumber address"
 
+// Version label for the currently published terms/conditions PDF shown in onboarding.
+export const LATEST_TERMS_VERSION = "v1";
+
 // Fields to include in the NextAuth session user object, accesible via `session.user`.
 export const SESSION_USER_FIELDS = [
     "name",
@@ -25,4 +28,6 @@ export const SESSION_USER_FIELDS = [
     "address_region",
     "createdAt",
     "updatedAt",
+    "acceptedTermsVersion",
+    "lastLoginAt",
 ] as const;

@@ -7,7 +7,7 @@ import NextAuth from "next-auth";
 import Vipps from "next-auth/providers/vipps";
 import Credentials from "next-auth/providers/credentials";
 import type { NextAuthConfig } from "next-auth";
-import { IS_DEV, USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY } from "./constants";
+import { IS_DEV, USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY, SESSION_USER_FIELDS } from "./constants";
 
 const edgeAuthConfig: NextAuthConfig = {
   // Keep sessions JWT-only; no DB lookups required in the Edge runtime.
@@ -49,6 +49,7 @@ const edgeAuthConfig: NextAuthConfig = {
         // Carry dev flag so middleware can allow navigation during local dev if desired
         // @ts-expect-error - custom token field
         token.acceptedTerms = (user as any).acceptedTerms ?? false;
+        copyUserFields(token as any, user as any);
         if (IS_DEV && USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY) {
           // Shortcut in dev so middleware doesn't bounce you around
           // @ts-expect-error - custom token field
@@ -63,6 +64,7 @@ const edgeAuthConfig: NextAuthConfig = {
         session.user.id = token.uid as string;
         // @ts-expect-error - augmented session type provided in types/next-auth.d.ts
         session.user.acceptedTerms = (token as any).acceptedTerms ?? false;
+        copyUserFields(session.user as any, token as any);
       }
       return session;
     },
@@ -71,3 +73,13 @@ const edgeAuthConfig: NextAuthConfig = {
 
 // Export only the Edge-safe helper used by middleware.
 export const { auth } = NextAuth(edgeAuthConfig);
+
+function copyUserFields(target: Record<string, unknown>, source: Record<string, unknown> | null | undefined) {
+  if (!source) return;
+  for (const key of SESSION_USER_FIELDS) {
+    if (source[key] !== undefined) {
+      const value = source[key];
+      target[key] = value instanceof Date ? value.toISOString() : value;
+    }
+  }
+}

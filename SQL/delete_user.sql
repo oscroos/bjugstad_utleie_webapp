@@ -1,2 +1,2 @@
-DELETE FROM users
-WHERE id IS NOT NULL;
+DELETE FROM user_customer_accesses
+WHERE role IS NOT NULL;

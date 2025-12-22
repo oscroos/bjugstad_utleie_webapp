@@ -23,7 +23,7 @@ VALUES (
         'Norway Street 1',
         '1234',
         'Oslo',
-        TRUE,
+        FALSE,
         NULL,
         NULL,
         NOW(),

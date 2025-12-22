@@ -1,4 +1,4 @@
-// app/(auth)/onboarding/page.tsx
+﻿// app/(auth)/onboarding/page.tsx
 "use client";
 
 import { useSession } from "next-auth/react";
@@ -102,6 +102,7 @@ export default function OnboardingPage() {
 
     const canSubmit = accepted && !submitting && !loadingProfile && Boolean(profile);
 
+    const isAdmin = profile?.user.role === "super_admin";
     const companies = profile?.companies ?? [];
     const hasCompanies = companies.length > 0;
 
@@ -173,21 +174,25 @@ export default function OnboardingPage() {
 
                 <section className="rounded-xl border border-white/15 bg-white/5 p-4 mb-6">
                     <header className="mb-3">
-                        <h2 className="text-lg font-semibold">Tilknyttede selskaper</h2>
-                        <p className="text-sm opacity-80">Du kan være knyttet til flere kunder med ulike rettigheter.</p>
+                        <h2 className="text-lg font-semibold">{isAdmin ? "Administrator" : "Tilknyttede selskaper"}</h2>
+                        <p className="text-sm opacity-80">
+                            {isAdmin
+                                ? "Du er registrert som administrator, hvilket gir deg tilgang til all data på plattformen: maskiner, brukere, selskaper, avtaler m.m. Du er ikke tilknyttet spesifikke selskaper, men styrer alle og kan legge til brukere, selskaper og mer. Godta vilkårene under og kom i gang."
+                                : "Du kan være knyttet til flere kunder med ulike rettigheter."}
+                        </p>
                     </header>
                     {loadingProfile ? (
                         <div className="space-y-2">
                             <div className="h-4 w-full rounded bg-white/20" />
                             <div className="h-4 w-4/5 rounded bg-white/10" />
                         </div>
-                    ) : hasCompanies ? (
+                    ) : isAdmin ? null : hasCompanies ? (
                         <ul className="space-y-3">
                             {companies.map((company) => (
                                 <li key={company.customerId} className="rounded-lg border border-white/15 bg-white/5 px-4 py-3">
                                     <p className="text-base font-medium">{company.companyName ?? "Ukjent selskap"}</p>
                                     <p className="text-xs opacity-80">
-                                        Org.nr: {company.organizationNumber ?? "N/A"} · Rolle: {company.role === "admin" ? "Administrator" : "Bruker"}
+                                        Org.nr: {company.organizationNumber ?? "N/A"} – Rolle: {company.role === "admin" ? "Administrator" : "Bruker"}
                                     </p>
                                 </li>
                             ))}
@@ -212,7 +217,7 @@ export default function OnboardingPage() {
                                 onClick={() => setShowTerms(true)}
                                 className="underline underline-offset-2 hover:text-white cursor-pointer"
                             >
-                                vilkår og betingelser (versjon {LATEST_TERMS_VERSION})
+                                vilkår og betingelser ({LATEST_TERMS_VERSION})
                             </button>
                             .
                         </span>
@@ -241,3 +246,4 @@ function InfoField({ label, value, className = "" }: { label: string; value: Rea
         </div>
     );
 }
+

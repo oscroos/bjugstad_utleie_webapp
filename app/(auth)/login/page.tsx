@@ -45,12 +45,14 @@ export default function LoginPage() {
       case "OAuthCallback":
       case "OAuthCallbackError":
         return "Noe gikk galt i Vipps-innloggingen. Prøv igjen.";
+      case "UserNotFound":
+        return "Vi fant ingen bruker knyttet til kontaktopplysningene dine. Ta kontakt med xxx@bjugstad.no eller din kontoansvarlige for å få brukertilgang før du logger inn igjen.";
       default:
         return "Innlogging mislyktes (" + errorParam + "). Prøv igjen.";
     }
   })();
 
-  // If we’re already authenticated (session from NextAuth/lib/auth.ts),
+  // If we're already authenticated (session from NextAuth/lib/auth.ts),
   // don't show the login screen—go straight to callbackUrl.
   useEffect(() => {
     if (status === "authenticated") {

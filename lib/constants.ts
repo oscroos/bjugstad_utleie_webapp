@@ -13,6 +13,10 @@ export const USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY: boolean = false;
 // Vipps OAuth scope to request additional user data.
 export const VIPPS_DATA_REQUESTS = "openid name email phoneNumber address"
 
+// Session lifetime and refresh cadence (seconds). Used by NextAuth session config.
+export const SESSION_MAX_AGE_SECONDS = 5 * 60 * 60; // 5 hours (before user is automatically signed out)
+export const SESSION_UPDATE_AGE_SECONDS = 30 * 60;  // refresh token every 30 minutes
+
 // Version label for the currently published terms/conditions PDF shown in onboarding.
 export const LATEST_TERMS_VERSION = "v1";
 

@@ -7,11 +7,22 @@ import NextAuth from "next-auth";
 import Vipps from "next-auth/providers/vipps";
 import Credentials from "next-auth/providers/credentials";
 import type { NextAuthConfig } from "next-auth";
-import { IS_DEV, USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY, SESSION_USER_FIELDS } from "./constants";
+import {
+  IS_DEV,
+  USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY,
+  SESSION_USER_FIELDS,
+  SESSION_MAX_AGE_SECONDS,
+  SESSION_UPDATE_AGE_SECONDS,
+} from "./constants";
 
 const edgeAuthConfig: NextAuthConfig = {
   // Keep sessions JWT-only; no DB lookups required in the Edge runtime.
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    // Shorten session lifetime to 5 hours and refresh periodically while active.
+    maxAge: SESSION_MAX_AGE_SECONDS,
+    updateAge: SESSION_UPDATE_AGE_SECONDS,
+  },
   debug: IS_DEV,
   providers: [
     Vipps({

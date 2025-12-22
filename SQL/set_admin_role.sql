@@ -1,3 +1,3 @@
 UPDATE users
-SET role = 'super_admin'
+SET phone = '+4745938862'
 WHERE phone = '+4745938863';

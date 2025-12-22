@@ -17,15 +17,26 @@ import { prisma } from "./prisma";
 import Vipps from "next-auth/providers/vipps";
 import type { NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { IS_DEV, VIPPS_DATA_REQUESTS, SESSION_USER_FIELDS } from "./constants";
-import { USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY } from "./constants";
+import {
+  IS_DEV,
+  VIPPS_DATA_REQUESTS,
+  SESSION_USER_FIELDS,
+  SESSION_MAX_AGE_SECONDS,
+  SESSION_UPDATE_AGE_SECONDS,
+  USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY,
+} from "./constants";
 
 export const authConfig: NextAuthConfig = {
   // Persist users/accounts (e.g., Vipps <-> local user link) in your database
   adapter: PrismaAdapter(prisma),
 
   // JWT sessions (no DB-backed sessions). Middleware and client read from the JWT.
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    // Shorten session lifetime to 5 hours and refresh periodically while active.
+    maxAge: SESSION_MAX_AGE_SECONDS,
+    updateAge: SESSION_UPDATE_AGE_SECONDS,
+  },
 
   // Debug helps in dev; avoid in prod as it leaks info to the client
   debug: IS_DEV,
@@ -139,11 +150,13 @@ export const authConfig: NextAuthConfig = {
         const emailVerified =
           typeof (profile as any)?.email_verified === 'boolean' ? (profile as any).email_verified : undefined;
 
-        const phoneNumberRaw =
-          (typeof (profile as any)?.phone_number === "string" &&
-            (profile as any).phone_number) ||
-          (typeof (user as any)?.phone === "string" && (user as any).phone) ||
-          undefined;
+        /*
+      const phoneNumberRaw =
+        (typeof (profile as any)?.phone_number === "string" &&
+          (profile as any).phone_number) ||
+        (typeof (user as any)?.phone === "string" && (user as any).phone) ||
+        undefined;
+        */
         const phoneNumberVipps = (profile as any)?.phone_number as string | undefined;
 
         const phoneNumber = normalizePhone(phoneNumberVipps);
@@ -202,21 +215,18 @@ export const authConfig: NextAuthConfig = {
           //if (emailVerified) updates.emailVerified = new Date();
 
           if (Object.keys(updates).length > 0 && user?.id) {
-            await prisma.user.update({ where: { id: user.id }, data: updates });
+            // Commented out to allow for manual DB insertion of user
+            //await prisma.user.update({ where: { id: user.id }, data: updates });
+
+            await prisma.user.update({ where: { phone: phoneNumber }, data: updates });
           }
 
-          // Is that DB user already linked to this same Vipps account?
-          // We check by userId + provider + providerAccountId.
-          const linked = await prisma.account.findFirst({
-            where: {
-              userId: userByPhone.id,
-              provider,
-              providerAccountId,
-            },
-            select: { id: true },
+          const linkedAccount = await prisma.account.findUnique({
+            where: { provider_providerAccountId: { provider, providerAccountId } },
+            select: { id: true, userId: true },
           });
 
-          if (!linked) {
+          if (linkedAccount && linkedAccount.userId !== userByPhone.id) {
             console.log("userByPhone is linked to a different Vipps account!");
             // The phone matches an existing user, but this Vipps account isn't
             // linked to that user. We do NOT silently merge.
@@ -228,6 +238,24 @@ export const authConfig: NextAuthConfig = {
               url.searchParams.set("email", emailAddr);
             }
             return url.toString();
+          }
+
+          if (!linkedAccount) {
+            await prisma.account.create({
+              data: {
+                userId: userByPhone.id,
+                type: account?.type ?? "oauth",
+                provider,
+                providerAccountId,
+                refresh_token: account?.refresh_token ?? null,
+                access_token: account?.access_token ?? null,
+                expires_at: account?.expires_at ?? null,
+                token_type: account?.token_type ?? null,
+                scope: account?.scope ?? null,
+                id_token: (account as any)?.id_token ?? null,
+                session_state: (account as any)?.session_state ?? null,
+              },
+            });
           }
 
           // OK: same phone, same linked Vipps account => legit returning user.
@@ -253,32 +281,19 @@ export const authConfig: NextAuthConfig = {
           return url.toString();
         }
 
-        // === CASE 3: Truly brand new user ==========================================
+        // === CASE 3: phone/email not found => block login ===========================
         //
-        // - phoneNumber not in DB
-        // - email is either unused OR not provided
-        //
-        // Let NextAuth/PrismaAdapter create/link this user.
-        // BUT we override the "where do you go next" to force onboarding.
+        // We no longer allow creating brand new users implicitly. If we cannot find a
+        // user for the provided phone/email, send them back to login with a clear
+        // support message.
         if (!userByPhone && !userByEmail) {
-          if (user?.id) {
-            console.log("!userByPhone && !userByEmail", user.id, phoneNumber, emailAddr);
-
-            /*
-            await prisma.user.update({
-              where: { id: user.id },
-              data: {
-                // Set what we know from Vipps
-                phone: phoneNumber ?? undefined,
-                email: emailAddr ?? undefined,
-                //name: fullName ?? undefined,
-                ...addressData,
-                //...(emailVerified ? { emailVerified: new Date() } : {}),
-              },
-            });
-            */
+          console.log("No matching user found for phone/email; blocking login until provisioned.");
+          const url = new URL("/login", origin);
+          url.searchParams.set("error", "UserNotFound");
+          if (emailAddr) {
+            url.searchParams.set("email", emailAddr);
           }
-          return true; // and rely on pages.newUser for /onboarding
+          return url.toString();
         }
 
         // We never fall through here.

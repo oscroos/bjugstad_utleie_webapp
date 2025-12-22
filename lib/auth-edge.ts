@@ -58,12 +58,10 @@ const edgeAuthConfig: NextAuthConfig = {
       if (user) {
         token.uid = user.id;
         // Carry dev flag so middleware can allow navigation during local dev if desired
-        // @ts-expect-error - custom token field
         token.acceptedTerms = (user as any).acceptedTerms ?? false;
         copyUserFields(token as any, user as any);
         if (IS_DEV && USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY) {
           // Shortcut in dev so middleware doesn't bounce you around
-          // @ts-expect-error - custom token field
           token.acceptedTerms = true;
         }
       }
@@ -71,9 +69,7 @@ const edgeAuthConfig: NextAuthConfig = {
     },
     async session({ session, token }) {
       if (session.user) {
-        // @ts-expect-error - augmented session type provided in types/next-auth.d.ts
         session.user.id = token.uid as string;
-        // @ts-expect-error - augmented session type provided in types/next-auth.d.ts
         session.user.acceptedTerms = (token as any).acceptedTerms ?? false;
         copyUserFields(session.user as any, token as any);
       }

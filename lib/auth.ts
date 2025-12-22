@@ -413,9 +413,6 @@ function mapAddress(addr: any) {
   };
 }
 
-// Type representing a single field in SESSION_USER_FIELDS
-type SessionUserField = (typeof SESSION_USER_FIELDS)[number];
-
 // copyUserFields pushes the whitelisted profile columns from one object into another
 // so the JWT/session always mirrors the latest Prisma user record without re-specifying
 // each field in every callback.

@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Feature, FeatureCollection, Point } from "geojson";
+import type { Point } from "geojson";
 import maplibregl, { Map, GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { SunIcon, MoonIcon } from "@heroicons/react/24/solid";

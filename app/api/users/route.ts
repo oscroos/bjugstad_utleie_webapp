@@ -14,7 +14,7 @@ type CreateUserPayload = {
   relationships?: RelationshipInput[];
 };
 
-export async function GET(request: Request) {
+export async function GET(_request: Request) {
   const session = await auth();
 
   if (!session?.user || session.user.role !== "super_admin") {

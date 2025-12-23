@@ -140,6 +140,7 @@ export const authConfig: NextAuthConfig = {
 
         // Canonical fields from Vipps (based on your logs):
         // - profile.email
+        // - profile.name
         // - profile.phone_number (string like "4745938863")
         // Fallback to user.* if needed, but profile is the source of truth here.
         const emailAddr =
@@ -149,6 +150,10 @@ export const authConfig: NextAuthConfig = {
 
         const emailVerified =
           typeof (profile as any)?.email_verified === 'boolean' ? (profile as any).email_verified : undefined;
+
+        const fullName =
+          (typeof (profile as any)?.name === "string" && (profile as any).name) ||
+          undefined;
 
         /*
       const phoneNumberRaw =
@@ -207,7 +212,7 @@ export const authConfig: NextAuthConfig = {
           // Update user record with any new data from Vipps (if we have it).
           const updates: any = {};
           if (!userByPhone.email && emailAddr) updates.email = emailAddr;
-          //if (fullName) updates.name = fullName;
+          if (!userByPhone.name && fullName) updates.name = fullName;
           if (phoneNumber && userByPhone.phone !== phoneNumber) updates.phone = phoneNumber; // optional strictness
           if (addressData.address_street) updates.address_street = addressData.address_street;
           if (addressData.address_postal_code) updates.address_postal_code = addressData.address_postal_code;
@@ -359,11 +364,13 @@ export const authConfig: NextAuthConfig = {
       const phone = normalizePhone((profile as any)?.phone_number);
       const addressData = mapAddress((profile as any)?.address);
       const emailAddr = typeof (profile as any)?.email === "string" ? (profile as any).email : undefined;
+      const fullName = typeof (profile as any)?.name === "string" ? (profile as any).name : undefined;
 
       const updates: any = {};
 
       if (phone) updates.phone = phone;
       if (emailAddr && !user.email) updates.email = emailAddr;
+      if (fullName && !user.name) updates.name = fullName;
       Object.assign(updates, addressData);
       if (user.lastLoginAt) {
         // Only bump the "last login" timestamp for users that have already completed onboarding once.

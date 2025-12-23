@@ -190,7 +190,7 @@ export const authConfig: NextAuthConfig = {
         // Look up existing user by phone (primary identity).
         const userByPhone = await prisma.user.findUnique({
           where: { phone: phoneNumber },
-          select: { id: true, phone: true, email: true },
+          select: { id: true, phone: true, email: true, name: true },
         });
 
         // Look up user by email (for collision checks), but ONLY if we actually got an email.
@@ -198,7 +198,7 @@ export const authConfig: NextAuthConfig = {
         const userByEmail = emailAddr
           ? await prisma.user.findUnique({
             where: { email: emailAddr },
-            select: { id: true, phone: true, email: true },
+            select: { id: true, phone: true, email: true, name: true },
           })
           : null;
 

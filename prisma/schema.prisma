@@ -45,6 +45,7 @@ model User {
   accounts             Account[]
   sessions             Session[]
   accesses             UserCustomerAccess[]
+  loginEvents          UserLoginEvent[]
 
   @@map("users")
 }
@@ -143,4 +144,16 @@ model UserCustomerAccess {
 
   @@id([userId, customerId])
   @@map("user_customer_accesses")
+}
+
+model UserLoginEvent {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  provider  String?
+  loggedAt  DateTime @default(now()) @map("logged_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([loggedAt], map: "idx_user_login_events_logged_at")
+  @@map("user_login_events")
 }

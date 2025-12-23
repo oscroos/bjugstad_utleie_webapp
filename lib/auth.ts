@@ -380,6 +380,21 @@ export const authConfig: NextAuthConfig = {
       if (Object.keys(updates).length) {
         await prisma.user.update({ where: { id: user.id }, data: updates });
       }
+
+      // Log the login event for analytics (non-blocking).
+      try {
+        await prisma.userLoginEvent.create({
+          data: {
+            userId: user.id,
+            provider: account?.provider ?? "unknown",
+          },
+        });
+      } catch (err) {
+        if (IS_DEV) {
+          console.error("[auth:events.signIn] failed to log login event", err);
+        }
+        // Fail-open: do not block auth if logging fails.
+      }
     },
   },
 };

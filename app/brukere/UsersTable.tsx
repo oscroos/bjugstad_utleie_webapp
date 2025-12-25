@@ -8,6 +8,7 @@ type UserRow = {
   role: string | null;
   phone: string | null;
   email: string | null;
+  accesses?: UserAccess[] | null;
   address_street: string | null;
   address_postal_code: string | null;
   address_region: string | null;
@@ -15,6 +16,15 @@ type UserRow = {
   updatedAt: string | Date | null;
   acceptedTerms: boolean;
   acceptedTermsAt: string | Date | null;
+};
+
+type UserAccess = {
+  customerId: number;
+  role: string;
+  customer?: {
+    name?: string | null;
+    customer_number?: number | null;
+  } | null;
 };
 
 type UsersTableProps = {
@@ -29,12 +39,12 @@ export default function UsersTable({ users }: UsersTableProps) {
       accessor: (user) => user.name ?? "",
       cell: (user) => (
         <div>
-          <div className="font-medium text-slate-900">{user.name ?? "Ukjent"}</div>
+          <div className="font-medium text-slate-900">{user.name ?? "-"}</div>
           <div className="text-xs text-slate-500">{user.id}</div>
         </div>
       ),
       sortValue: (user) => (user.name ?? "").toLowerCase(),
-      filterValue: (user) => (user.name ? user.name.trim() : "Ukjent"),
+      filterValue: (user) => (user.name ? user.name.trim() : "-"),
     },
     {
       id: "role",
@@ -82,12 +92,48 @@ export default function UsersTable({ users }: UsersTableProps) {
       cellClassName: "min-w-[11rem] whitespace-nowrap",
     },
     {
-      id: "company",
-      header: "Selskap",
-      accessor: () => "UNDER DEVELOPMENT",
-      cell: () => <span className="text-slate-700">UNDER DEVELOPMENT</span>,
-      filterValue: () => "UNDER DEVELOPMENT",
-      sortValue: () => "UNDER DEVELOPMENT",
+      id: "customers",
+      header: "Kundetilganger",
+      accessor: (user) => getAccessLabels(user).length,
+      cell: (user) => {
+        if (user.role === "super_admin") {
+          return (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-100 px-3 py-1 text-xs font-semibold text-green-800"
+              >
+                Full tilgang
+              </button>
+            </div>
+          );
+        }
+
+        const accesses = user.accesses ?? [];
+        if (!accesses.length) {
+          return <span className="text-slate-400">Ingen tilganger</span>;
+        }
+        return (
+          <div className="flex flex-wrap gap-2">
+            {accesses.map((access) => {
+              const label = formatAccessLabel(access);
+              const customerNumber = access.customer?.customer_number;
+              return (
+                <button
+                  key={`${user.id}-${access.customerId}`}
+                  type="button"
+                  className="group flex cursor-pointer items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800 transition hover:border-blue-300"
+                >
+                  <span className="font-semibold">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        );
+      },
+      filterValue: (user) => getAccessLabels(user),
+      sortValue: (user) => getAccessLabels(user).sort().join(", "),
+      cellClassName: "min-w-[14rem]",
     },
     {
       id: "created",
@@ -127,7 +173,7 @@ export default function UsersTable({ users }: UsersTableProps) {
         <span
           className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${user.acceptedTerms
             ? "bg-green-100 text-green-800"
-            : "bg-amber-100 text-amber-800"
+            : "bg-red-100 text-red-800"
             }`}
         >
           {user.acceptedTerms ? "Ja" : "Nei"}
@@ -226,4 +272,15 @@ function formatRole(role?: string | null) {
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(" ")
   );
+}
+
+function formatAccessLabel(access: UserAccess) {
+  return access.customer?.name?.trim() || "Ukjent kunde";
+}
+
+function getAccessLabels(user: UserRow) {
+  if (user.role === "super_admin") {
+    return ["Full tilgang"];
+  }
+  return (user.accesses ?? []).map((access) => formatAccessLabel(access));
 }

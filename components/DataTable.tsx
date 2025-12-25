@@ -13,7 +13,7 @@ export type DataColumn<T> = {
   accessor: (row: T) => CellValue;
   cell?: (row: T) => ReactNode;
   sortValue?: (row: T) => SortableValue;
-  filterValue?: (row: T) => string;
+  filterValue?: (row: T) => string | string[];
   filterType?: "checkbox" | "date-range";
   dateValue?: (row: T) => Date | string | null | undefined;
   headerClassName?: string;
@@ -25,6 +25,7 @@ type DataTableProps<T> = {
   columns: DataColumn<T>[];
   getRowId?: (row: T, index: number) => string;
   emptyMessage?: string;
+  defaultSort?: { columnId: string; direction: "asc" | "desc" };
 };
 
 type SortState = {
@@ -104,13 +105,16 @@ export function DataTable<T>({
   columns,
   getRowId,
   emptyMessage = "Ingen rader å vise.",
+  defaultSort,
 }: DataTableProps<T>) {
+  const PAGE_SIZE = 100;
   const [sortState, setSortState] = useState<SortState>({
-    columnId: null,
-    direction: null,
+    columnId: defaultSort?.columnId ?? null,
+    direction: defaultSort?.direction ?? null,
   });
   const [filters, setFilters] = useState<Record<string, FilterState>>({});
   const [openFilter, setOpenFilter] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const filterButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const filterDropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -153,10 +157,15 @@ export function DataTable<T>({
       if (column.filterType === "date-range") continue;
       const values = new Set<string>();
       for (const row of data) {
-        const value = column.filterValue
+        const raw = column.filterValue
           ? column.filterValue(row)
           : normalizeDisplay(column.accessor(row));
-        values.add(normalizeFilterValue(value));
+        const normalizedValues = Array.isArray(raw)
+          ? raw.map(normalizeFilterValue)
+          : [normalizeFilterValue(raw)];
+        for (const value of normalizedValues) {
+          values.add(value);
+        }
       }
       options[column.id] = Array.from(values).sort(collator.compare);
     }
@@ -171,10 +180,13 @@ export function DataTable<T>({
 
         if (active.kind === "checkbox") {
           if (active.values.size === 0) return true;
-          const value = column.filterValue
+          const raw = column.filterValue
             ? column.filterValue(row)
             : normalizeDisplay(column.accessor(row));
-          return active.values.has(normalizeFilterValue(value));
+          const normalizedValues = Array.isArray(raw)
+            ? raw.map(normalizeFilterValue)
+            : [normalizeFilterValue(raw)];
+          return normalizedValues.some((value) => active.values.has(value));
         }
 
         if (active.kind === "date-range") {
@@ -213,6 +225,21 @@ export function DataTable<T>({
     });
   }, [columns, filteredRows, sortState.columnId, sortState.direction]);
 
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
+    setCurrentPage((prev) => (prev > totalPages ? totalPages : prev));
+  }, [sortedRows.length]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, data, columns]);
+
+  const totalRows = sortedRows.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const endIndex = Math.min(startIndex + PAGE_SIZE, totalRows);
+  const paginatedRows = sortedRows.slice(startIndex, endIndex);
+
   function toggleSort(columnId: string, direction: "asc" | "desc") {
     setSortState((prev) => {
       if (prev.columnId === columnId) {
@@ -233,6 +260,16 @@ export function DataTable<T>({
         values.add(value);
       }
       return { ...prev, [columnId]: { kind: "checkbox", values } };
+    });
+  }
+
+  function toggleAllCheckboxes(columnId: string, options: string[]) {
+    setFilters((prev) => {
+      const current = prev[columnId];
+      const currentValues = current && current.kind === "checkbox" ? current.values : new Set<string>();
+      const allChecked = options.length > 0 && currentValues.size === options.length;
+      const nextValues = allChecked ? new Set<string>() : new Set(options);
+      return { ...prev, [columnId]: { kind: "checkbox", values: nextValues } };
     });
   }
 
@@ -274,80 +311,88 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="relative overflow-x-auto overflow-y-visible rounded-t-2xl">
-      <table className="min-w-full divide-y divide-slate-100">
-        <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-          <tr>
-            {columns.map((column, index) => {
-              const hasActiveFilter = isFilterActive(column);
-              const isAscending = sortState.columnId === column.id && sortState.direction === "asc";
-              const isDescending = sortState.columnId === column.id && sortState.direction === "desc";
-              const first = index === 0;
-              const last = index === columns.length - 1;
-              const alignLeft = index === 0;
-              const isSorted = sortState.columnId === column.id && sortState.direction !== null;
-              const filterType = column.filterType ?? "checkbox";
-              const minDate = filterType === "date-range" ? dateExtents[column.id]?.min : null;
-              const defaultFrom = minDate ? formatDateInput(minDate) : undefined;
-              const defaultTo = formatDateInput(today);
-              const dateState = (filters[column.id] as DateRangeFilter | undefined)?.kind === "date-range"
-                ? (filters[column.id] as DateRangeFilter)
-                : undefined;
+    <div className="space-y-3">
+      <div className="relative overflow-x-auto overflow-y-visible rounded-t-2xl">
+        <table className="min-w-full divide-y divide-slate-100">
+          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <tr>
+              {columns.map((column, index) => {
+                const hasActiveFilter = isFilterActive(column);
+                const isAscending = sortState.columnId === column.id && sortState.direction === "asc";
+                const isDescending = sortState.columnId === column.id && sortState.direction === "desc";
+                const first = index === 0;
+                const last = index === columns.length - 1;
+                const alignLeft = index === 0;
+                const isSorted = sortState.columnId === column.id && sortState.direction !== null;
+                const filterType = column.filterType ?? "checkbox";
+                const minDate = filterType === "date-range" ? dateExtents[column.id]?.min : null;
+                const defaultFrom = minDate ? formatDateInput(minDate) : undefined;
+                const defaultTo = formatDateInput(today);
+                const dateState = (filters[column.id] as DateRangeFilter | undefined)?.kind === "date-range"
+                  ? (filters[column.id] as DateRangeFilter)
+                  : undefined;
+                const checkboxOptions = filterOptions[column.id] ?? [];
+                const selectedCheckboxValues =
+                  filters[column.id]?.kind === "checkbox"
+                    ? (filters[column.id] as CheckboxFilter).values
+                    : new Set<string>();
+                const allCheckboxesChecked =
+                  checkboxOptions.length > 0 && selectedCheckboxValues.size === checkboxOptions.length;
 
-              return (
-                <th
-                  key={column.id}
-                  scope="col"
-                  className={cx(
-                    "px-4 py-3",
-                    column.headerClassName,
-                    first && "rounded-tl-2xl",
-                    last && "rounded-tr-2xl",
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <span>{column.header}</span>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        aria-label={`${column.header} sorter`}
-                        onClick={() => toggleSort(column.id, "asc")}
-                        className={cx(
-                          "flex h-6 w-7 cursor-pointer items-center justify-center rounded border border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-700",
-                          isSorted && "border-blue-300 bg-blue-100 text-blue-700",
-                        )}
-                      >
-                        <ArrowUpIcon
-                          className={cx(
-                            "h-3.5 w-3.5 transition-transform",
-                            isAscending && "rotate-180",
-                            isDescending && "rotate-0",
-                          )}
-                        />
-                      </button>
-
-                      <div className="relative">
+                return (
+                  <th
+                    key={column.id}
+                    scope="col"
+                    className={cx(
+                      "px-4 py-3",
+                      column.headerClassName,
+                      first && "rounded-tl-2xl",
+                      last && "rounded-tr-2xl",
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>{column.header}</span>
+                      <div className="flex items-center gap-1.5">
                         <button
                           type="button"
-                          aria-label={`${column.header} filter`}
-                          onClick={() => setOpenFilter((prev) => (prev === column.id ? null : column.id))}
+                          aria-label={`${column.header} sorter`}
+                          onClick={() => toggleSort(column.id, "asc")}
                           className={cx(
                             "flex h-6 w-7 cursor-pointer items-center justify-center rounded border border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-700",
-                            hasActiveFilter && "border-blue-300 bg-blue-100 text-blue-700",
+                            isSorted && "border-blue-300 bg-blue-100 text-blue-700",
                           )}
-                          ref={(node) => {
-                            filterButtonRefs.current[column.id] = node;
-                          }}
                         >
-                          <FunnelIcon className="h-4 w-4" />
+                          <ArrowUpIcon
+                            className={cx(
+                              "h-3.5 w-3.5 transition-transform",
+                              isAscending && "rotate-180",
+                              isDescending && "rotate-0",
+                            )}
+                          />
                         </button>
 
-                        {openFilter === column.id && (
-                          <div
+                        <div className="relative">
+                          <button
+                            type="button"
+                            aria-label={`${column.header} filter`}
+                            onClick={() => setOpenFilter((prev) => (prev === column.id ? null : column.id))}
                             className={cx(
-                              "absolute z-20 mt-2 w-60 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl",
-                              alignLeft ? "left-0" : "right-0",
+                              "flex h-6 w-7 cursor-pointer items-center justify-center rounded border border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-700",
+                              hasActiveFilter && "border-blue-300 bg-blue-100 text-blue-700",
                             )}
+                            ref={(node) => {
+                              filterButtonRefs.current[column.id] = node;
+                            }}
+                          >
+                            <FunnelIcon className="h-4 w-4" />
+                          </button>
+
+                          {openFilter === column.id && (
+                            <div
+                              className={cx(
+                                "absolute z-20 mt-2 w-60 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl",
+                                alignLeft ? "left-0" : "right-0",
+                              )}
                             ref={(node) => {
                               filterDropdownRefs.current[column.id] = node;
                             }}
@@ -356,100 +401,152 @@ export function DataTable<T>({
                               <span>Filter</span>
                               <button
                                 type="button"
-                                onClick={() => clearFilter(column.id)}
-                                className="cursor-pointer text-blue-600 hover:text-blue-700"
+                                onClick={() =>
+                                  filterType === "date-range"
+                                    ? clearFilter(column.id)
+                                    : toggleAllCheckboxes(column.id, checkboxOptions)
+                                }
+                                disabled={filterType !== "date-range" && checkboxOptions.length === 0}
+                                className="cursor-pointer text-blue-600 hover:text-blue-700 disabled:text-slate-300 disabled:cursor-not-allowed"
                               >
-                                Nullstill
+                                {filterType === "date-range"
+                                  ? "Nullstill"
+                                  : allCheckboxesChecked
+                                    ? "Fjern alle"
+                                    : "Merk alle"}
                               </button>
                             </div>
 
                             {filterType === "date-range" ? (
                               <div className="space-y-3 border-t border-slate-100 px-3 py-3 text-xs text-slate-700">
-                                <div className="flex flex-col gap-1">
-                                  <label className="text-[11px] uppercase tracking-wide text-slate-500">
-                                    Fra
-                                  </label>
-                                  <input
-                                    type="date"
-                                    min={minDate ? formatDateInput(minDate) : undefined}
-                                    max={defaultTo}
-                                    value={dateState?.from ?? defaultFrom ?? ""}
-                                    onChange={(e) => setDateRangeFilter(column.id, e.target.value || undefined, dateState?.to)}
-                                    className="h-9 rounded-lg border border-slate-200 px-2 text-xs focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                                  />
-                                </div>
-                                <div className="flex flex-col gap-1">
-                                  <label className="text-[11px] uppercase tracking-wide text-slate-500">
-                                    Til
-                                  </label>
-                                  <input
-                                    type="date"
-                                    min={minDate ? formatDateInput(minDate) : undefined}
-                                    max={defaultTo}
-                                    value={dateState?.to ?? defaultTo}
-                                    onChange={(e) => setDateRangeFilter(column.id, dateState?.from ?? defaultFrom, e.target.value || undefined)}
-                                    className="h-9 rounded-lg border border-slate-200 px-2 text-xs focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                                  />
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="max-h-60 overflow-y-auto border-t border-slate-100">
-                                {filterOptions[column.id]?.map((option) => (
-                                  <label
-                                    key={`${column.id}-${option}`}
-                                    className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs font-normal normal-case text-slate-700 hover:bg-slate-50"
-                                  >
+                                  <div className="flex flex-col gap-1">
+                                    <label className="text-[11px] uppercase tracking-wide text-slate-500">
+                                      Fra
+                                    </label>
                                     <input
-                                      type="checkbox"
-                                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                      checked={
-                                        filters[column.id]?.kind === "checkbox"
-                                          ? (filters[column.id] as CheckboxFilter).values.has(option)
-                                          : false
-                                      }
-                                      onChange={() => toggleFilterValue(column.id, option)}
+                                      type="date"
+                                      min={minDate ? formatDateInput(minDate) : undefined}
+                                      max={defaultTo}
+                                      value={dateState?.from ?? defaultFrom ?? ""}
+                                      onChange={(e) => setDateRangeFilter(column.id, e.target.value || undefined, dateState?.to)}
+                                      className="h-9 rounded-lg border border-slate-200 px-2 text-xs focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
                                     />
-                                    <span className="truncate" title={option}>
-                                      {option}
-                                    </span>
-                                  </label>
-                                ))}
-                                {(!filterOptions[column.id] || filterOptions[column.id].length === 0) && (
-                                  <div className="px-3 py-2 text-sm text-slate-500">Ingen verdier</div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                                  </div>
+                                  <div className="flex flex-col gap-1">
+                                    <label className="text-[11px] uppercase tracking-wide text-slate-500">
+                                      Til
+                                    </label>
+                                    <input
+                                      type="date"
+                                      min={minDate ? formatDateInput(minDate) : undefined}
+                                      max={defaultTo}
+                                      value={dateState?.to ?? defaultTo}
+                                      onChange={(e) => setDateRangeFilter(column.id, dateState?.from ?? defaultFrom, e.target.value || undefined)}
+                                      className="h-9 rounded-lg border border-slate-200 px-2 text-xs focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="max-h-60 overflow-y-auto border-t border-slate-100">
+                                  {filterOptions[column.id]?.map((option) => (
+                                    <label
+                                      key={`${column.id}-${option}`}
+                                      className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs font-normal normal-case text-slate-700 hover:bg-slate-50"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                        checked={
+                                          filters[column.id]?.kind === "checkbox"
+                                            ? (filters[column.id] as CheckboxFilter).values.has(option)
+                                            : false
+                                        }
+                                        onChange={() => toggleFilterValue(column.id, option)}
+                                      />
+                                      <span className="truncate" title={option}>
+                                        {option}
+                                      </span>
+                                    </label>
+                                  ))}
+                                  {(!filterOptions[column.id] || filterOptions[column.id].length === 0) && (
+                                    <div className="px-3 py-2 text-sm text-slate-500">Ingen verdier</div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
 
-        <tbody className="divide-y divide-slate-100 text-sm">
-          {sortedRows.map((row, rowIndex) => (
-            <tr key={getRowId ? getRowId(row, rowIndex) : rowIndex} className="hover:bg-slate-50">
-              {columns.map((column) => (
-                <td key={column.id} className={cx("px-4 py-3 align-top text-slate-700", column.cellClassName)}>
-                  {renderCell(row, column)}
+          <tbody className="divide-y divide-slate-100 text-sm">
+            {paginatedRows.map((row, rowIndex) => (
+              <tr
+                key={getRowId ? getRowId(row, startIndex + rowIndex) : startIndex + rowIndex}
+                className="hover:bg-slate-50"
+              >
+                {columns.map((column) => (
+                  <td key={column.id} className={cx("px-4 py-3 align-top text-slate-700", column.cellClassName)}>
+                    {renderCell(row, column)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+
+            {sortedRows.length === 0 && (
+              <tr>
+                <td colSpan={columns.length} className="px-4 py-10 text-center text-slate-500">
+                  {emptyMessage}
                 </td>
-              ))}
-            </tr>
-          ))}
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
-          {sortedRows.length === 0 && (
-            <tr>
-              <td colSpan={columns.length} className="px-4 py-10 text-center text-slate-500">
-                {emptyMessage}
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+      <div className="flex items-center justify-between rounded-md border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600">
+        <span>
+          Viser {startIndex + 1}–{endIndex} av {totalRows}
+        </span>
+        {totalRows > PAGE_SIZE && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className={cx(
+                "rounded border px-3 py-1 text-sm font-medium cursor-pointer",
+                currentPage === 1
+                  ? "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              )}
+            >
+              Forrige
+            </button>
+            <span className="text-xs text-slate-500">
+              Side {currentPage} av {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className={cx(
+                "rounded border px-3 py-1 text-sm font-medium cursor-pointer",
+                currentPage === totalPages
+                  ? "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              )}
+            >
+              Neste
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

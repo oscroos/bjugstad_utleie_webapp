@@ -36,7 +36,7 @@ export default async function BrukerePage() {
         <div>
           <h1 className="text-3xl font-semibold text-slate-900">Brukeroversikt</h1>
           <p className="mt-2 text-slate-600">
-            Oversikt over alle brukere i portalen. Inkluderer ikke registrerte kontaktpersoner hos kunder som ikke har logget inn.
+            Oversikt over alle brukere i portalen, inkludert registrerte telefonnumre som enda ikke har logget inn.
           </p>
         </div>
         <AddUserDialog />

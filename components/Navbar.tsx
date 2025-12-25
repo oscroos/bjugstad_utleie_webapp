@@ -15,6 +15,7 @@ import {
   MapIcon,
   UserIcon,
   UsersIcon,
+  BuildingOfficeIcon,
   ArrowLeftEndOnRectangleIcon,
   ClockIcon,
 } from "@heroicons/react/24/outline";
@@ -44,6 +45,7 @@ export default function ResponsiveNav() {
   // Only shown for admins
   const adminItems: NavItem[] = [
     { href: "/brukere", label: "Brukere", icon: <UsersIcon className="h-5 w-5" /> },
+    { href: "/kunder", label: "Kunder", icon: <BuildingOfficeIcon className="h-5 w-5" /> },
     { href: "/aktivitet", label: "Aktivitet", icon: <ClockIcon className="h-5 w-5" /> },
   ];
 

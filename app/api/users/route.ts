@@ -39,6 +39,18 @@ export async function GET(_request: Request) {
         acceptedTerms: true,
         acceptedTermsAt: true,
         lastLoginAt: true,
+        accesses: {
+          select: {
+            customerId: true,
+            role: true,
+            customer: {
+              select: {
+                name: true,
+                customer_number: true,
+              },
+            },
+          },
+        },
       },
     });
 

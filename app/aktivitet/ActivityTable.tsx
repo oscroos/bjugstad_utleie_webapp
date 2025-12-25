@@ -54,12 +54,12 @@ export default function ActivityTable({ events }: ActivityTableProps) {
       filterValue: (event) => event.user?.email ?? "-",
     },
     {
-      id: "provider",
-      header: "Provider",
-      accessor: (event) => event.provider ?? "-",
-      cell: (event) => <span className="text-slate-700">{event.provider ?? "-"}</span>,
-      filterValue: (event) => event.provider ?? "-",
-      sortValue: (event) => event.provider ?? "",
+      id: "event",
+      header: "Hendelse",
+      accessor: (event) => formatEvent(event),
+      cell: (event) => <span className="text-slate-700">{formatEvent(event)}</span>,
+      filterValue: (event) => formatEvent(event),
+      sortValue: (event) => formatEvent(event),
     },
     {
       id: "loggedAt",
@@ -83,6 +83,7 @@ export default function ActivityTable({ events }: ActivityTableProps) {
       data={events}
       columns={columns}
       getRowId={(event) => event.id}
+      defaultSort={{ columnId: "loggedAt", direction: "desc" }}
       emptyMessage="Ingen innloggingsaktivitet funnet."
     />
   );
@@ -99,6 +100,12 @@ function formatPhone(raw?: string | null) {
   const groups = rest.match(/.{1,2}/g);
   const spaced = groups ? groups.join(" ") : rest;
   return `${country} ${spaced}`.trim();
+}
+
+function formatEvent(event: LoginEvent) {
+  const provider = event.provider?.trim();
+  const providerLabel = provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : "ukjent metode";
+  return `Logget inn med ${providerLabel}`;
 }
 
 function formatDate(value?: string | Date | null) {

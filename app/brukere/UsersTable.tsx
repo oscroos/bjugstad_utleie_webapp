@@ -1,6 +1,15 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import DataTable, { type DataColumn } from "@/components/DataTable";
+import CustomerAccessDialog, {
+  type AccessDialogState,
+  type CustomerAccessEntry,
+  type CustomerDetails,
+} from "./CustomerAccessDialog";
+import UserAccessDialog from "./UserAccessDialog";
+import { formatPhone } from "@/lib/formatters";
 
 type UserRow = {
   id: string;
@@ -32,6 +41,95 @@ type UsersTableProps = {
 };
 
 export default function UsersTable({ users }: UsersTableProps) {
+  const [dialogState, setDialogState] = useState<AccessDialogState>({
+    open: false,
+    loading: false,
+    error: null,
+    customerId: null,
+    customerName: "",
+    customer: null,
+    accesses: [],
+  });
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
+  const router = useRouter();
+
+  function resetDialog() {
+    setDialogState({
+      open: false,
+      loading: false,
+      error: null,
+      customerId: null,
+      customerName: "",
+      customer: null,
+      accesses: [],
+    });
+  }
+
+  function openUserDialog(user: UserRow) {
+    setSelectedUserId(user.id);
+    setSelectedUser(user);
+  }
+
+  function closeUserDialog() {
+    setSelectedUserId(null);
+    setSelectedUser(null);
+  }
+
+  async function handleAccessClick(access: UserAccess) {
+    const customerId = access.customerId;
+    if (!customerId) return;
+
+    setDialogState({
+      open: true,
+      loading: true,
+      error: null,
+      customerId,
+      customerName: access.customer?.name?.trim() || "Kunde",
+      customer: null,
+      accesses: [],
+    });
+
+    try {
+      const [customer, accesses] = await Promise.all([
+        fetchCustomerDetails(customerId),
+        fetchCustomerAccesses(customerId),
+      ]);
+
+      setDialogState((prev) => ({
+        ...prev,
+        loading: false,
+        customer,
+        accesses,
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Kunne ikke hente data";
+      setDialogState((prev) => ({
+        ...prev,
+        loading: false,
+        error: message,
+      }));
+    }
+  }
+
+  async function fetchCustomerDetails(customerId: number): Promise<CustomerDetails | null> {
+    const response = await fetch(`/api/customers/${customerId}`, { cache: "no-store" });
+    const payload = (await response.json().catch(() => ({}))) as { customer?: CustomerDetails; error?: string };
+    if (!response.ok) {
+      throw new Error(payload.error ?? "Kunne ikke hente kundeinformasjon");
+    }
+    return payload.customer ?? null;
+  }
+
+  async function fetchCustomerAccesses(customerId: number): Promise<CustomerAccessEntry[]> {
+    const response = await fetch(`/api/customers/${customerId}/accesses`, { cache: "no-store" });
+    const payload = (await response.json().catch(() => ({}))) as { accesses?: CustomerAccessEntry[]; error?: string };
+    if (!response.ok) {
+      throw new Error(payload.error ?? "Kunne ikke hente tilganger");
+    }
+    return payload.accesses ?? [];
+  }
+
   const columns: DataColumn<UserRow>[] = [
     {
       id: "name",
@@ -117,13 +215,16 @@ export default function UsersTable({ users }: UsersTableProps) {
           <div className="flex flex-wrap gap-2">
             {accesses.map((access) => {
               const label = formatAccessLabel(access);
-              const customerNumber = access.customer?.customer_number;
               return (
                 <button
                   key={`${user.id}-${access.customerId}`}
                   type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleAccessClick(access);
+                  }}
                   className="group flex cursor-pointer items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800 transition hover:border-blue-300"
-                >
+                  >
                   <span className="font-semibold">{label}</span>
                 </button>
               );
@@ -137,7 +238,7 @@ export default function UsersTable({ users }: UsersTableProps) {
     },
     {
       id: "created",
-      header: "Opprettet",
+      header: "Bruker opprettet",
       accessor: (user) => formatDate(user.createdAt) ?? "",
       filterType: "date-range",
       dateValue: (user) => user.createdAt,
@@ -152,7 +253,7 @@ export default function UsersTable({ users }: UsersTableProps) {
     },
     {
       id: "updated",
-      header: "Oppdatert",
+      header: "Bruker oppdatert",
       accessor: (user) => formatDate(user.updatedAt) ?? "",
       filterType: "date-range",
       dateValue: (user) => user.updatedAt,
@@ -167,7 +268,7 @@ export default function UsersTable({ users }: UsersTableProps) {
     },
     {
       id: "terms",
-      header: "Vilkår",
+      header: "Vilkår akseptert?",
       accessor: (user) => (user.acceptedTerms ? "Ja" : "Nei"),
       cell: (user) => (
         <span
@@ -184,7 +285,8 @@ export default function UsersTable({ users }: UsersTableProps) {
     },
     {
       id: "acceptedAt",
-      header: "Akseptert",
+      header: "Vilkår\nakseptert dato",
+      headerClassName: "min-w-[14rem] whitespace-pre-line leading-tight",
       accessor: (user) => formatDate(user.acceptedTermsAt) ?? "",
       filterType: "date-range",
       dateValue: (user) => user.acceptedTermsAt,
@@ -195,31 +297,29 @@ export default function UsersTable({ users }: UsersTableProps) {
       ),
       sortValue: (user) => toTimestamp(user.acceptedTermsAt),
       filterValue: (user) => formatDate(user.acceptedTermsAt) ?? "-",
-      cellClassName: "tabular-nums whitespace-pre-line",
+      cellClassName: "min-w-[14rem] tabular-nums whitespace-pre-line",
     },
   ];
 
   return (
-    <DataTable
-      data={users}
-      columns={columns}
-      getRowId={(user) => user.id}
-      emptyMessage="Ingen brukere funnet."
-    />
-  );
-}
+    <>
+      <DataTable
+        data={users}
+        columns={columns}
+        getRowId={(user) => user.id}
+        emptyMessage="Ingen brukere funnet."
+        onRowClick={openUserDialog}
+      />
 
-function formatPhone(raw?: string | null) {
-  if (!raw) return "-";
-  const compact = raw.replace(/\s+/g, "");
-  if (!compact.startsWith("+") || compact.length <= 3) {
-    return raw;
-  }
-  const country = compact.slice(0, 3);
-  const rest = compact.slice(3);
-  const groups = rest.match(/.{1,2}/g);
-  const spaced = groups ? groups.join(" ") : rest;
-  return `${country} ${spaced}`.trim();
+      <CustomerAccessDialog state={dialogState} onClose={resetDialog} />
+      <UserAccessDialog
+        userId={selectedUserId}
+        initialUser={selectedUser}
+        onClose={closeUserDialog}
+        onChanged={() => router.refresh()}
+      />
+    </>
+  );
 }
 
 function formatAddress(user: Pick<UserRow, "address_street" | "address_postal_code" | "address_region">) {

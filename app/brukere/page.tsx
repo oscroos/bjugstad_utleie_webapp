@@ -50,7 +50,8 @@ export default async function BrukerePage() {
 }
 
 async function fetchUsers() {
-  const cookieHeader = cookies().toString();
+  const cookieStore = await cookies();
+  const cookieHeader = cookieStore.toString();
   const baseUrl = (process.env.NEXTAUTH_URL ?? "http://localhost:3000").replace(/\/$/, "");
   const response = await fetch(`${baseUrl}/api/users`, {
     cache: "no-store",

@@ -26,6 +26,7 @@ type DataTableProps<T> = {
   getRowId?: (row: T, index: number) => string;
   emptyMessage?: string;
   defaultSort?: { columnId: string; direction: "asc" | "desc" };
+  onRowClick?: (row: T) => void;
 };
 
 type SortState = {
@@ -104,8 +105,9 @@ export function DataTable<T>({
   data,
   columns,
   getRowId,
-  emptyMessage = "Ingen rader å vise.",
+  emptyMessage = "Ingen rader ? vise.",
   defaultSort,
+  onRowClick,
 }: DataTableProps<T>) {
   const PAGE_SIZE = 100;
   const [sortState, setSortState] = useState<SortState>({
@@ -488,7 +490,8 @@ export function DataTable<T>({
             {paginatedRows.map((row, rowIndex) => (
               <tr
                 key={getRowId ? getRowId(row, startIndex + rowIndex) : startIndex + rowIndex}
-                className="hover:bg-slate-50"
+                className={cx("hover:bg-slate-50", onRowClick && "cursor-pointer")}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {columns.map((column) => (
                   <td key={column.id} className={cx("px-4 py-3 align-top text-slate-700", column.cellClassName)}>

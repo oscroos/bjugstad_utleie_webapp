@@ -217,6 +217,12 @@ export default function AddUserDialog() {
   }
 
   const showRelationships = role === "customer";
+  const phoneWithinRange = (() => {
+    const [min, max] = phoneMeta.lengthRange;
+    return phoneNumber.length >= min && phoneNumber.length <= max;
+  })();
+  const relationshipsComplete = !showRelationships || relationships.every((rel) => !!rel.companyId);
+  const canSubmit = !submitting && phoneWithinRange && relationshipsComplete;
   const hasMultipleRelationships = relationships.length > 1;
 
   return (
@@ -237,13 +243,13 @@ export default function AddUserDialog() {
               <div>
                 <h2 className="text-2xl font-semibold text-slate-900">Legg til bruker</h2>
                 <p className="text-sm text-slate-600">
-                  Fyll ut detaljene under for aa lagre en ny bruker i databasen.
+                  Fyll ut detaljene under for å lagre en ny bruker i databasen.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={closeDialog}
-                className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
                 aria-label="Lukk dialog"
               >
                 <XMarkIcon className="h-5 w-5" />
@@ -331,7 +337,7 @@ export default function AddUserDialog() {
                           <div aria-hidden="true" className="h-0 overflow-hidden">
                             <button
                               type="button"
-                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium"
+                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium cursor-pointer"
                             >
                               <MinusCircleIcon className="h-5 w-5" />
                               Fjern
@@ -418,7 +424,7 @@ export default function AddUserDialog() {
                                 <button
                                   type="button"
                                   onClick={() => removeRelationship(rel.id)}
-                                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 hover:text-red-600"
+                                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 hover:text-red-600 cursor-pointer"
                                 >
                                   <MinusCircleIcon className="h-5 w-5" />
                                   Fjern
@@ -444,20 +450,20 @@ export default function AddUserDialog() {
 
               <div className="border-t border-slate-100 px-6 py-4 text-sm text-slate-500">
                 <p>
-                  Brukeren lagres i databasen naar du trykker Lagre.
+                  Brukeren lagres i databasen når du trykker Lagre.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-3">
                   <button
                     type="button"
                     onClick={closeDialog}
-                    className="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50"
+                    className="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
                   >
                     Avbryt
                   </button>
                   <button
                     type="submit"
-                    disabled={submitting}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white shadow hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-400"
+                    disabled={!canSubmit}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white shadow hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-400 cursor-pointer"
                   >
                     {submitting ? (
                       <>

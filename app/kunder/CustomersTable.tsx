@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDisplay, formatPhone } from "@/lib/formatters";
 import DataTable, { type DataColumn } from "@/components/DataTable";
 
 type Customer = {
@@ -37,20 +38,20 @@ export default function CustomersTable({ customers }: CustomersTableProps) {
     {
       id: "name",
       header: "Kunde",
-      accessor: (customer) => customer.name ?? "",
+      accessor: (customer) => formatDisplay(customer.name, "Ukjent"),
       cell: (customer) => (
-        <div className="font-medium text-slate-900">{customer.name ?? "Ukjent"}</div>
+        <div className="font-medium text-slate-900">{formatDisplay(customer.name, "Ukjent")}</div>
       ),
-      sortValue: (customer) => (customer.name ?? "").toLowerCase(),
-      filterValue: (customer) => customer.name?.trim() ?? "Ukjent",
+      sortValue: (customer) => formatDisplay(customer.name, "Ukjent").toLowerCase(),
+      filterValue: (customer) => formatDisplay(customer.name, "Ukjent"),
     },
     {
       id: "contact",
-      header: "Kontaktperson",
-      accessor: (customer) => customer.contact ?? "-",
-      cell: (customer) => <span className="text-slate-700">{customer.contact ?? "-"}</span>,
-      sortValue: (customer) => customer.contact ?? "",
-      filterValue: (customer) => customer.contact ?? "-",
+      header: "Kontakt",
+      accessor: (customer) => formatDisplay(customer.contact),
+      cell: (customer) => <span className="text-slate-700">{formatDisplay(customer.contact)}</span>,
+      sortValue: (customer) => formatDisplay(customer.contact),
+      filterValue: (customer) => formatDisplay(customer.contact),
     },
     {
       id: "phone",
@@ -68,10 +69,10 @@ export default function CustomersTable({ customers }: CustomersTableProps) {
     {
       id: "email",
       header: "E-post",
-      accessor: (customer) => customer.email ?? "-",
-      cell: (customer) => <span className="text-slate-700">{customer.email ?? "-"}</span>,
-      sortValue: (customer) => (customer.email ?? "").toLowerCase(),
-      filterValue: (customer) => customer.email ?? "-",
+      accessor: (customer) => formatDisplay(customer.email),
+      cell: (customer) => <span className="text-slate-700">{formatDisplay(customer.email)}</span>,
+      sortValue: (customer) => formatDisplay(customer.email).toLowerCase(),
+      filterValue: (customer) => formatDisplay(customer.email),
     },
     {
       id: "address",
@@ -96,10 +97,10 @@ export default function CustomersTable({ customers }: CustomersTableProps) {
     {
       id: "organization",
       header: "Org.nr",
-      accessor: (customer) => customer.organizationNumber ?? "-",
-      cell: (customer) => <span className="text-slate-700">{customer.organizationNumber ?? "-"}</span>,
-      sortValue: (customer) => customer.organizationNumber ?? "",
-      filterValue: (customer) => customer.organizationNumber ?? "-",
+      accessor: (customer) => formatDisplay(customer.organizationNumber),
+      cell: (customer) => <span className="text-slate-700">{formatDisplay(customer.organizationNumber)}</span>,
+      sortValue: (customer) => formatDisplay(customer.organizationNumber),
+      filterValue: (customer) => formatDisplay(customer.organizationNumber),
       cellClassName: "whitespace-nowrap",
     },
     {
@@ -125,19 +126,6 @@ export default function CustomersTable({ customers }: CustomersTableProps) {
       emptyMessage="Ingen kunder funnet."
     />
   );
-}
-
-function formatPhone(raw?: string | null) {
-  if (!raw) return "-";
-  const compact = raw.replace(/\s+/g, "");
-  if (!compact.startsWith("+") || compact.length <= 3) {
-    return raw;
-  }
-  const country = compact.slice(0, 3);
-  const rest = compact.slice(3);
-  const groups = rest.match(/.{1,2}/g);
-  const spaced = groups ? groups.join(" ") : rest;
-  return `${country} ${spaced}`.trim();
 }
 
 function formatAddress(customer: Pick<Customer, "address" | "postalCode" | "city">) {

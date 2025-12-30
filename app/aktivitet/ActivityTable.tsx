@@ -1,5 +1,6 @@
 "use client";
 
+import { formatPhone } from "@/lib/formatters";
 import DataTable, { type DataColumn } from "@/components/DataTable";
 
 type LoginEvent = {
@@ -87,19 +88,6 @@ export default function ActivityTable({ events }: ActivityTableProps) {
       emptyMessage="Ingen innloggingsaktivitet funnet."
     />
   );
-}
-
-function formatPhone(raw?: string | null) {
-  if (!raw) return "-";
-  const compact = raw.replace(/\s+/g, "");
-  if (!compact.startsWith("+") || compact.length <= 3) {
-    return raw;
-  }
-  const country = compact.slice(0, 3);
-  const rest = compact.slice(3);
-  const groups = rest.match(/.{1,2}/g);
-  const spaced = groups ? groups.join(" ") : rest;
-  return `${country} ${spaced}`.trim();
 }
 
 function formatEvent(event: LoginEvent) {

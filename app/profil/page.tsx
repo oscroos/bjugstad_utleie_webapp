@@ -3,6 +3,7 @@
 
 import { useSession } from "next-auth/react";
 import { CalendarIcon, UserIcon, PhoneIcon, EnvelopeIcon, HomeIcon, BuildingOffice2Icon, BriefcaseIcon } from "@heroicons/react/24/outline";
+import { formatPhone } from "@/lib/formatters";
 
 export default function ProfilPage() {
   const { data, status } = useSession();
@@ -38,7 +39,7 @@ export default function ProfilPage() {
     })
     : "N/A";
 
-  const formattedPhone = formatPhone(user.phone);
+  const formattedPhone = formatPhone(user.phone, "N/A");
   const formattedAddress = formatAddress({
     street: user.address_street,
     postalCode: user.address_postal_code,
@@ -96,19 +97,6 @@ function ProfileRow({
       <span className="text-slate-900">{value}</span>
     </div>
   );
-}
-
-function formatPhone(raw?: string | null) {
-  if (!raw) return "N/A";
-  const compact = raw.replace(/\s+/g, "");
-  if (!compact.startsWith("+") || compact.length <= 3) {
-    return raw;
-  }
-  const country = compact.slice(0, 3); // e.g. +47
-  const rest = compact.slice(3);
-  const groups = rest.match(/.{1,2}/g);
-  const spaced = groups ? groups.join(" ") : rest;
-  return `${country} ${spaced}`.trim();
 }
 
 function formatAddress({

@@ -4,6 +4,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { signOut } from "next-auth/react";
 import {
@@ -86,17 +87,31 @@ export default function ResponsiveNav() {
         <button onClick={() => setIsOpen(true)} aria-label="Open menu">
           <Bars3Icon className="h-6 w-6" />
         </button>
-        <span className="font-semibold">Bjugstad kundeportal</span>
+        <Image
+          src="/bjugstad-logos/horizontal/White.png"
+          alt="Bjugstad"
+          width={160}
+          height={36}
+          className="h-9 w-auto"
+          priority
+        />
       </header>
 
       {/* Desktop sidebar */}
       <aside
-        className="hidden md:fixed md:inset-y-0 md:left-0 md:w-60
+        className="hidden md:fixed md:inset-y-0 md:left-0 md:w-56
                    md:bg-gradient-to-b md:from-[#001a4d] md:via-[#002c6d] md:to-[#1c1464]
                    md:flex md:flex-col"
       >
-        <div className="flex h-16 items-center border-b border-white/10 px-6 text-lg font-semibold text-white">
-          Bjugstad kundeportal
+        <div className="flex h-16 items-center justify-center border-b border-white/10 px-6">
+          <Image
+            src="/bjugstad-logos/horizontal/White.png"
+            alt="Bjugstad"
+            width={180}
+            height={44}
+            className="h-11 w-auto"
+            priority
+          />
         </div>
 
         <nav className="mt-4 flex flex-col gap-1 px-4 flex-1">
@@ -129,7 +144,7 @@ export default function ResponsiveNav() {
 
       {/* Mobile sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 w-60
+        className={`fixed inset-y-0 left-0 w-56
                     bg-gradient-to-b from-[#001a4d] via-[#002c6d] to-[#1c1464]
                     transform transition-transform duration-200 ease-in-out z-50
                     ${isOpen ? "translate-x-0" : "-translate-x-full"}`}

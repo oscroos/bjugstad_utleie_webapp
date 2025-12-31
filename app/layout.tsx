@@ -42,14 +42,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <>
               <SideNav />
               <Suspense fallback={
-                // 60 is sidebar width
-                <main className="md:ml-60 min-h-screen grid place-items-center">
+                // Sidebar width (match Navbar)
+                <main className="md:ml-56 min-h-screen grid place-items-center">
                   <Spinner label="Laster side..." />
                 </main>
               }>
                 {/* Preload machines once per login/refresh and share via context */}
                 <MachinesProviderServer>
-                  <main className="md:ml-60 min-h-screen overflow-y-auto">
+                  <main className="md:ml-56 min-h-screen overflow-y-auto">
                     <MachinesGate>{children}</MachinesGate>
                   </main>
                 </MachinesProviderServer>

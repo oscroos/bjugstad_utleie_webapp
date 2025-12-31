@@ -76,7 +76,7 @@ export default function ErrorPanel({
                     {hasDetails && (
                         <button
                             onClick={() => setOpen((v) => !v)}
-                            className="ml-auto inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900"
+                            className="ml-auto inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 cursor-pointer transition"
                         >
                             <ChevronDownIcon className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
                             Vis detaljer

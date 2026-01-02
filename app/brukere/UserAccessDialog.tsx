@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowPathIcon, MinusCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, MinusCircleIcon, PlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 import { formatDisplay, formatPhone } from "@/lib/formatters";
 
@@ -12,6 +12,13 @@ type UserAccess = {
     name?: string | null;
     customer_number?: number | null;
   } | null;
+};
+
+type CompanyOption = {
+  id: number;
+  customerId?: number;
+  name: string | null;
+  organizationNumber: string | null;
 };
 
 type UserDetails = {
@@ -46,6 +53,9 @@ export default function UserAccessDialog({ userId, initialUser, onClose, onChang
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
+  const [companiesError, setCompaniesError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -100,9 +110,44 @@ export default function UserAccessDialog({ userId, initialUser, onClose, onChang
     }
   }, [initialUser, userId]);
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadCompanies() {
+      if (!userId) return;
+      try {
+        setLoadingCompanies(true);
+        setCompaniesError(null);
+        const response = await fetch("/api/companies");
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error((payload as { error?: string }).error ?? "Kunne ikke hente selskaper");
+        }
+        if (!active) return;
+        const items = (payload as { companies?: CompanyOption[] }).companies ?? [];
+        setCompanies(items);
+      } catch (err) {
+        console.error("Failed to load companies", err);
+        if (!active) return;
+        setCompaniesError("Klarte ikke å hente selskapslisten. Prøv igjen senere.");
+      } finally {
+        if (active) setLoadingCompanies(false);
+      }
+    }
+
+    loadCompanies();
+
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
   const normalizedOriginal = useMemo(() => normalizeAccesses(user?.accesses ?? []), [user]);
   const normalizedCurrent = useMemo(() => normalizeAccesses(entries), [entries]);
-  const isDirty = useMemo(() => JSON.stringify(normalizedOriginal) !== JSON.stringify(normalizedCurrent), [normalizedOriginal, normalizedCurrent]);
+  const isDirty = useMemo(
+    () => JSON.stringify(normalizedOriginal) !== JSON.stringify(normalizedCurrent),
+    [normalizedOriginal, normalizedCurrent],
+  );
 
   function toggleRole(customerId: number) {
     setEntries((prev) =>
@@ -116,6 +161,30 @@ export default function UserAccessDialog({ userId, initialUser, onClose, onChang
 
   function removeEntry(customerId: number) {
     setEntries((prev) => prev.filter((entry) => entry.customerId !== customerId));
+  }
+
+  function addEntry(customerId: number, role: "admin" | "user") {
+    if (entries.some((entry) => entry.customerId === customerId)) {
+      return "Brukeren har allerede denne kundetilgangen";
+    }
+
+    const company = companies.find((item) => item.id === customerId);
+
+    setEntries((prev) => [
+      ...prev,
+      {
+        customerId,
+        role,
+        customer: company
+          ? {
+            name: company.name,
+            customer_number: null,
+          }
+          : undefined,
+      },
+    ]);
+
+    return null;
   }
 
   async function handleSave() {
@@ -211,6 +280,11 @@ export default function UserAccessDialog({ userId, initialUser, onClose, onChang
                 onToggleRole={toggleRole}
                 onRemove={removeEntry}
                 isSuperAdmin={user?.role === "super_admin"}
+                onAddAccess={addEntry}
+                companies={companies}
+                loadingCompanies={loadingCompanies}
+                companiesError={companiesError}
+                disableActions={saving}
               />
               {saveError ? (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -227,10 +301,7 @@ export default function UserAccessDialog({ userId, initialUser, onClose, onChang
                   type="button"
                   onClick={handleSave}
                   disabled={!isDirty || saving}
-                  className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow cursor-pointer ${!isDirty || saving
-                    ? "cursor-not-allowed bg-blue-300"
-                    : "bg-blue-600 hover:bg-blue-500"
-                    }`}
+                  className="inline-flex items-center justify-center bg-blue-600 gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow cursor-pointer hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-400"
                 >
                   {saving ? (
                     <>
@@ -312,11 +383,21 @@ function UserAccessList({
   onToggleRole,
   onRemove,
   isSuperAdmin,
+  onAddAccess,
+  companies,
+  loadingCompanies,
+  companiesError,
+  disableActions,
 }: {
   accesses: UserAccess[];
   onToggleRole: (customerId: number) => void;
   onRemove: (customerId: number) => void;
   isSuperAdmin: boolean;
+  onAddAccess?: (customerId: number, role: "admin" | "user") => string | null;
+  companies: CompanyOption[];
+  loadingCompanies: boolean;
+  companiesError: string | null;
+  disableActions?: boolean;
 }) {
   return (
     <div className="space-y-3">
@@ -333,49 +414,177 @@ function UserAccessList({
         <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
           Som administrator har brukeren tilgang til alle kunder.
         </div>
-      ) : accesses.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-          Ingen registrerte tilganger for denne brukeren.
-        </div>
       ) : (
-        <div className="space-y-3">
-          {accesses.map((access) => (
-            <div key={access.customerId} className="flex items-center gap-3">
-              <div className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-slate-900">
-                    {formatDisplay(access.customer?.name, "Ukjent kunde")}
-                  </div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                    {access.customer?.customer_number ? (
-                      <span>Kundenr {access.customer.customer_number}</span>
-                    ) : null}
-                    <span>ID: {access.customerId}</span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onToggleRole(access.customerId)}
-                  className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold cursor-pointer ${access.role === "admin"
-                    ? "border-amber-200 bg-amber-50 text-amber-800"
-                    : "border-blue-200 bg-blue-50 text-blue-800"
-                    }`}
-                >
-                  {formatCompanyRole(access.role)}
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => onRemove(access.customerId)}
-                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 hover:text-red-600 cursor-pointer"
-              >
-                <MinusCircleIcon className="h-5 w-5" />
-                Fjern
-              </button>
+        <>
+          {accesses.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+              Ingen registrerte tilganger for denne brukeren.
             </div>
-          ))}
-        </div>
+          ) : (
+            <div className="space-y-3">
+              {accesses.map((access) => (
+                <div key={access.customerId} className="flex items-center gap-3">
+                  <div className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-slate-900">
+                        {formatDisplay(access.customer?.name, "Ukjent kunde")}
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        {access.customer?.customer_number ? (
+                          <span>Kundenr {access.customer.customer_number}</span>
+                        ) : null}
+                        <span>ID: {access.customerId}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onToggleRole(access.customerId)}
+                      className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold cursor-pointer ${access.role === "admin"
+                          ? "border-amber-200 bg-amber-50 text-amber-800"
+                          : "border-blue-200 bg-blue-50 text-blue-800"
+                        }`}
+                    >
+                      {formatCompanyRole(access.role)}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onRemove(access.customerId)}
+                    className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 hover:text-red-600 cursor-pointer"
+                  >
+                    <MinusCircleIcon className="h-5 w-5" />
+                    Fjern
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <AddAccessForm
+            onAddAccess={onAddAccess}
+            companies={companies}
+            loadingCompanies={loadingCompanies}
+            companiesError={companiesError}
+            disableActions={disableActions}
+          />
+        </>
       )}
+    </div>
+  );
+}
+
+function AddAccessForm({
+  onAddAccess,
+  companies,
+  loadingCompanies,
+  companiesError,
+  disableActions,
+}: {
+  onAddAccess?: (customerId: number, role: "admin" | "user") => string | null;
+  companies: CompanyOption[];
+  loadingCompanies: boolean;
+  companiesError: string | null;
+  disableActions?: boolean;
+}) {
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [selectedRole, setSelectedRole] = useState<"admin" | "user">("user");
+  const [error, setError] = useState<string | null>(null);
+
+  function handleAdd() {
+    if (disableActions) return;
+    if (!selectedCustomerId) {
+      setError("Velg selskap for å legge til tilgang");
+      return;
+    }
+    const customerId = Number.parseInt(selectedCustomerId, 10);
+    if (!Number.isInteger(customerId) || customerId <= 0) {
+      setError("Ugyldig selskap valgt");
+      return;
+    }
+
+    const addError = onAddAccess?.(customerId, selectedRole) ?? null;
+    if (addError) {
+      setError(addError);
+      return;
+    }
+
+    setSelectedCustomerId("");
+    setSelectedRole("user");
+    setError(null);
+  }
+
+  const disabled = disableActions || loadingCompanies || !!companiesError;
+
+  return (
+    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3">
+      <div className="grid gap-3 md:grid-cols-[2fr_1fr_max-content] md:items-end">
+        <div>
+          <label className="block text-sm font-medium text-slate-700" htmlFor="customer-select">
+            Selskap
+          </label>
+          <select
+            id="customer-select"
+            value={selectedCustomerId}
+            onChange={(event) => setSelectedCustomerId(event.target.value)}
+            disabled={disabled}
+            className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+          >
+            <option value="">
+              {loadingCompanies
+                ? "Laster selskaper..."
+                : companiesError
+                  ? "Feil ved lasting av selskaper"
+                  : companies.length
+                    ? "Velg selskap"
+                    : "Ingen selskap tilgjengelige"}
+            </option>
+            {companies.map((company) => {
+              const labelParts = [
+                company.name ?? `Kunde #${company.id}`,
+                `(ID ${company.id})`,
+                company.organizationNumber ? `(Org.nr ${company.organizationNumber})` : "",
+              ].filter(Boolean);
+              return (
+                <option key={company.id} value={String(company.id)}>
+                  {labelParts.join(" ")}
+                </option>
+              );
+            })}
+          </select>
+          {companiesError ? (
+            <p className="mt-1 text-xs text-red-600">{companiesError}</p>
+          ) : null}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700" htmlFor="role-select">
+            Rolle i selskap
+          </label>
+          <select
+            id="role-select"
+            value={selectedRole}
+            onChange={(event) => setSelectedRole(event.target.value as "admin" | "user")}
+            disabled={disableActions}
+            className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+          >
+            <option value="admin">Admin</option>
+            <option value="user">Bruker</option>
+          </select>
+        </div>
+
+        <div className="flex items-end">
+          <button
+            type="button"
+            onClick={handleAdd}
+            disabled={disabled}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-400 cursor-pointer"
+          >
+            <PlusIcon className="h-4 w-4" />
+            Legg til kundetilgang
+          </button>
+        </div>
+      </div>
+      {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
     </div>
   );
 }

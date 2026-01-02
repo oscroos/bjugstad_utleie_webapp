@@ -25,6 +25,7 @@ const PHONE_RULES: Record<PhoneCountry, PhoneMeta> = {
 
 type CompanyOption = {
   id: number;
+  customerId?: number;
   name: string | null;
   organizationNumber: string | null;
 };
@@ -312,19 +313,19 @@ export default function AddUserDialog() {
 
                 {showRelationships && (
                   <section className="space-y-4 border-t border-slate-200 pt-6">
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-900">
-                        Selskapsrelasjoner
-                      </label>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Legg inn hvilke selskap brukeren skal knyttes til.
-                      </p>
-                    </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-900">
+                      Selskapsrelasjoner
+                    </label>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Legg inn hvilke selskap brukeren skal knyttes til.
+                    </p>
+                  </div>
 
-                    <div className="mt-2">
-                      {/* Header row */}
-                      <div
-                        className={`hidden gap-3 text-sm font-medium text-slate-700 md:grid ${hasMultipleRelationships
+                  <div className="mt-2">
+                    {/* Header row */}
+                    <div
+                      className={`hidden gap-3 text-sm font-medium text-slate-700 md:grid ${hasMultipleRelationships
                           ? "md:grid-cols-[2fr_1fr_max-content]"
                           : "md:grid-cols-[2fr_1fr]"
                           }`}
@@ -376,11 +377,14 @@ export default function AddUserDialog() {
                                     ? "Laster selskaper…"
                                     : companiesError
                                       ? "Feil ved lasting av selskaper"
-                                      : "Velg selskap"}
+                                      : companies.length
+                                        ? "Velg selskap"
+                                        : "Ingen selskap tilgjengelige"}
                                 </option>
                                 {companies.map((company) => {
                                   const labelParts = [
                                     company.name ?? `Kunde #${company.id}`,
+                                    `(ID ${company.id})`,
                                     company.organizationNumber
                                       ? `(Org.nr ${company.organizationNumber})`
                                       : "",

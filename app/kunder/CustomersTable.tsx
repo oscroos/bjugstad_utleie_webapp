@@ -1,7 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { formatDisplay, formatPhone } from "@/lib/formatters";
 import DataTable, { type DataColumn } from "@/components/DataTable";
+import CustomerAccessDialog, {
+  type AccessDialogState,
+  type CustomerAccessEntry,
+  type CustomerDetails,
+} from "../brukere/CustomerAccessDialog";
 
 type Customer = {
   customerId: number;
@@ -21,6 +27,64 @@ type CustomersTableProps = {
 };
 
 export default function CustomersTable({ customers }: CustomersTableProps) {
+  const [dialogState, setDialogState] = useState<AccessDialogState>({
+    open: false,
+    loading: false,
+    error: null,
+    customerId: null,
+    customerName: "",
+    customer: null,
+    accesses: [],
+  });
+
+  function resetDialog() {
+    setDialogState({
+      open: false,
+      loading: false,
+      error: null,
+      customerId: null,
+      customerName: "",
+      customer: null,
+      accesses: [],
+    });
+  }
+
+  async function handleRowClick(customer: Customer) {
+    const customerId = customer.customerId;
+    if (!customerId) return;
+
+    setDialogState({
+      open: true,
+      loading: true,
+      error: null,
+      customerId,
+      customerName: customer.name?.trim() || "Kunde",
+      customer: null,
+      accesses: [],
+    });
+
+    try {
+      const [details, accesses] = await Promise.all([
+        fetchCustomerDetails(customerId),
+        fetchCustomerAccesses(customerId),
+      ]);
+
+      setDialogState((prev) => ({
+        ...prev,
+        loading: false,
+        customer: details,
+        accesses,
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Kunne ikke hente data";
+      setDialogState((prev) => ({
+        ...prev,
+        loading: false,
+        error: message,
+      }));
+    }
+  }
+
   const columns: DataColumn<Customer>[] = [
     {
       id: "id",
@@ -119,13 +183,35 @@ export default function CustomersTable({ customers }: CustomersTableProps) {
   ];
 
   return (
-    <DataTable
-      data={customers}
-      columns={columns}
-      getRowId={(customer, index) => customer.customerId?.toString() ?? String(index)}
-      emptyMessage="Ingen kunder funnet."
-    />
+    <>
+      <DataTable
+        data={customers}
+        columns={columns}
+        getRowId={(customer, index) => customer.customerId?.toString() ?? String(index)}
+        emptyMessage="Ingen kunder funnet."
+        onRowClick={handleRowClick}
+      />
+      <CustomerAccessDialog state={dialogState} onClose={resetDialog} />
+    </>
   );
+}
+
+async function fetchCustomerDetails(customerId: number): Promise<CustomerDetails | null> {
+  const response = await fetch(`/api/customers/${customerId}`, { cache: "no-store" });
+  const payload = (await response.json().catch(() => ({}))) as { customer?: CustomerDetails; error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Kunne ikke hente kundeinformasjon");
+  }
+  return payload.customer ?? null;
+}
+
+async function fetchCustomerAccesses(customerId: number): Promise<CustomerAccessEntry[]> {
+  const response = await fetch(`/api/customers/${customerId}/accesses`, { cache: "no-store" });
+  const payload = (await response.json().catch(() => ({}))) as { accesses?: CustomerAccessEntry[]; error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Kunne ikke hente tilganger");
+  }
+  return payload.accesses ?? [];
 }
 
 function formatAddress(customer: Pick<Customer, "address" | "postalCode" | "city">) {

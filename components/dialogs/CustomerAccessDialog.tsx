@@ -50,9 +50,7 @@ export default function CustomerAccessDialog({
   state: AccessDialogState;
   onClose: () => void;
 }) {
-  if (!state.open) return null;
-
-  const { loading, error, customer, accesses, customerId, customerName } = state;
+  const { open, loading, error, customer, accesses, customerId, customerName } = state;
   const [entries, setEntries] = useState<CustomerAccessEntry[]>(accesses);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -111,9 +109,11 @@ export default function CustomerAccessDialog({
     }
   }
 
+  if (!open) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 px-4 py-8">
-      <div className="w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10">
+      <div className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10">
         <div className="flex items-start justify-between border-b border-slate-100 px-6 py-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kunde</p>

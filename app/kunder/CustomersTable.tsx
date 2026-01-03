@@ -7,7 +7,7 @@ import CustomerAccessDialog, {
   type AccessDialogState,
   type CustomerAccessEntry,
   type CustomerDetails,
-} from "../brukere/CustomerAccessDialog";
+} from "@/components/dialogs/CustomerAccessDialog";
 
 type Customer = {
   customerId: number;

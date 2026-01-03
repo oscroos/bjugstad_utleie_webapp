@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { formatPhone } from "@/lib/formatters";
 import DataTable, { type DataColumn } from "@/components/DataTable";
+import UserAccessDialog from "@/components/dialogs/UserAccessDialog";
 
 type LoginEvent = {
   id: string;
@@ -21,16 +23,33 @@ type ActivityTableProps = {
 };
 
 export default function ActivityTable({ events }: ActivityTableProps) {
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<LoginEvent["user"] | null>(null);
+
+  function openUserDialog(user: LoginEvent["user"] | null) {
+    if (!user?.id) return;
+    setSelectedUserId(user.id);
+    setSelectedUser(user);
+  }
+
+  function closeUserDialog() {
+    setSelectedUserId(null);
+    setSelectedUser(null);
+  }
+
   const columns: DataColumn<LoginEvent>[] = [
     {
       id: "user",
       header: "Bruker",
       accessor: (event) => event.user?.name ?? "Ukjent",
       cell: (event) => (
-        <div>
-          <div className="font-medium text-slate-900">{event.user?.name ?? "Ukjent navn"}</div>
-          <div className="text-xs text-slate-500">{event.user?.id ?? "Ingen bruker-ID"}</div>
-        </div>
+        <button
+          type="button"
+          onClick={() => openUserDialog(event.user)}
+          className="group inline-flex max-w-full cursor-pointer items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-left text-xs font-medium text-blue-800 transition hover:border-blue-300"
+        >
+          <span className="truncate font-semibold">{event.user?.name ?? "Ukjent navn"}</span>
+        </button>
       ),
       sortValue: (event) => (event.user?.name ?? "").toLowerCase(),
       filterValue: (event) => event.user?.name?.trim() ?? "Ukjent navn",
@@ -80,13 +99,30 @@ export default function ActivityTable({ events }: ActivityTableProps) {
   ];
 
   return (
-    <DataTable
-      data={events}
-      columns={columns}
-      getRowId={(event) => event.id}
-      defaultSort={{ columnId: "loggedAt", direction: "desc" }}
-      emptyMessage="Ingen innloggingsaktivitet funnet."
-    />
+    <>
+      <DataTable
+        data={events}
+        columns={columns}
+        getRowId={(event) => event.id}
+        defaultSort={{ columnId: "loggedAt", direction: "desc" }}
+        emptyMessage="Ingen innloggingsaktivitet funnet."
+      />
+      <UserAccessDialog
+        userId={selectedUserId}
+        initialUser={
+          selectedUserId && selectedUser?.id === selectedUserId
+            ? {
+                id: selectedUser.id,
+                name: selectedUser.name,
+                phone: selectedUser.phone,
+                email: selectedUser.email,
+                role: selectedUser.role,
+              }
+            : undefined
+        }
+        onClose={closeUserDialog}
+      />
+    </>
   );
 }
 

@@ -238,7 +238,7 @@ export default function AddUserDialog() {
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 px-4 py-8">
-          <div className="flex w-full max-w-3xl max-h-[90vh] min-h-0 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10">
+          <div className="flex w-full max-w-5xl max-h-[90vh] min-h-0 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10">
             <div className="flex items-start justify-between border-b border-slate-100 px-6 py-4">
               <div>
                 <h2 className="text-2xl font-semibold text-slate-900">Legg til bruker</h2>

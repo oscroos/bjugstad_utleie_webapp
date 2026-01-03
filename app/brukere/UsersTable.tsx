@@ -7,8 +7,8 @@ import CustomerAccessDialog, {
   type AccessDialogState,
   type CustomerAccessEntry,
   type CustomerDetails,
-} from "./CustomerAccessDialog";
-import UserAccessDialog from "./UserAccessDialog";
+} from "@/components/dialogs/CustomerAccessDialog";
+import UserAccessDialog from "@/components/dialogs/UserAccessDialog";
 import { formatPhone } from "@/lib/formatters";
 
 type UserRow = {

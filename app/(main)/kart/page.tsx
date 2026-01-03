@@ -1,4 +1,4 @@
-// app/kart/page.tsx
+// app/(main)/kart/page.tsx
 export const revalidate = 0; // page itself doesn't fetch; let provider control caching
 
 import Map from "./Map";

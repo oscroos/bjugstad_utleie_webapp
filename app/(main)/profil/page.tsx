@@ -1,4 +1,4 @@
-// app/profil/page.tsx
+// app/(main)/profil/page.tsx
 "use client";
 
 import { useSession } from "next-auth/react";

@@ -1,4 +1,4 @@
-// app/kart/Map.tsx
+// app/(main)/kart/Map.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";

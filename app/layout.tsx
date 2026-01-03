@@ -17,6 +17,9 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   title: "Bjugstad Utleie",
   description: "Bjugstad Utleie Web App",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 // Let the data provider control its own ISR; keep the layout dynamic

@@ -8,6 +8,10 @@ import CustomerAccessDialog, {
   type CustomerAccessEntry,
   type CustomerDetails,
 } from "@/components/dialogs/CustomerAccessDialog";
+import MachineDetailsDialog, {
+  type MachineDialogState,
+  type MachineDetails,
+} from "@/components/dialogs/MachineDetailsDialog";
 
 export type AgreementRow = {
   id: string | number;
@@ -26,6 +30,9 @@ type AgreementsTableProps = {
 export default function AgreementsTable({ agreements, emptyMessage, viewer }: AgreementsTableProps) {
   const [dialogState, setDialogState] = useState<AccessDialogState>(createInitialDialogState);
   const [dialogPermissions, setDialogPermissions] = useState<AccessPermissions | undefined>();
+  const [machineDialogState, setMachineDialogState] = useState<MachineDialogState>(
+    createInitialMachineState,
+  );
 
   const columns: DataColumn<AgreementRow>[] = [
     {
@@ -109,6 +116,7 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
                 <PillButton
                   key={`${agreement.id}-machine-${machine?.id ?? index}`}
                   label={label}
+                  onClick={() => handleMachineClick(agreement, machine)}
                 />
               );
             })}
@@ -172,9 +180,54 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
     }
   }
 
+  async function handleMachineClick(agreement: AgreementRow, machine?: { id?: string | number; name?: string | null }) {
+    const rawId = machine?.id;
+    const machineId =
+      typeof rawId === "string" ? Number.parseInt(rawId, 10) : rawId;
+
+    if (!machineId || Number.isNaN(machineId)) {
+      return;
+    }
+
+    const machineLabel =
+      machine?.name?.trim() ||
+      (machineId !== undefined ? `Maskin ${machineId}` : "Maskin");
+    const renter = agreement.customer?.name ?? null;
+
+    setMachineDialogState({
+      open: true,
+      loading: true,
+      error: null,
+      machine: null,
+      machineId,
+      machineLabel,
+      currentRenter: renter,
+    });
+
+    try {
+      const machineDetails = await fetchMachineDetails(machineId);
+      setMachineDialogState((prev) => ({
+        ...prev,
+        loading: false,
+        machine: machineDetails,
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Kunne ikke hente maskindetaljer";
+      setMachineDialogState((prev) => ({
+        ...prev,
+        loading: false,
+        error: message,
+      }));
+    }
+  }
+
   function resetDialog() {
     setDialogState(createInitialDialogState());
     setDialogPermissions(undefined);
+  }
+
+  function resetMachineDialog() {
+    setMachineDialogState(createInitialMachineState());
   }
 
   return (
@@ -190,6 +243,10 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
         state={dialogState}
         onClose={resetDialog}
         permissions={dialogPermissions}
+      />
+      <MachineDetailsDialog
+        state={machineDialogState}
+        onClose={resetMachineDialog}
       />
     </>
   );
@@ -238,6 +295,18 @@ function createInitialDialogState(): AccessDialogState {
   };
 }
 
+function createInitialMachineState(): MachineDialogState {
+  return {
+    open: false,
+    loading: false,
+    error: null,
+    machine: null,
+    machineId: null,
+    machineLabel: "",
+    currentRenter: null,
+  };
+}
+
 async function fetchCustomerDetails(customerId: number): Promise<CustomerDetails | null> {
   const response = await fetch(`/api/customers/${customerId}`, { cache: "no-store" });
   const payload = (await response.json().catch(() => ({}))) as { customer?: CustomerDetails; error?: string };
@@ -254,6 +323,15 @@ async function fetchCustomerAccesses(customerId: number): Promise<CustomerAccess
     throw new Error(payload.error ?? "Kunne ikke hente tilganger");
   }
   return payload.accesses ?? [];
+}
+
+async function fetchMachineDetails(machineId: number): Promise<MachineDetails | null> {
+  const response = await fetch(`/api/machines/${machineId}`, { cache: "no-store" });
+  const payload = (await response.json().catch(() => ({}))) as { machine?: MachineDetails; error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Kunne ikke hente maskindetaljer");
+  }
+  return payload.machine ?? null;
 }
 
 function derivePermissions(

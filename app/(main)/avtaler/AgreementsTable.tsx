@@ -1,6 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import DataTable, { type DataColumn } from "@/components/DataTable";
+import CustomerAccessDialog, {
+  type AccessDialogState,
+  type AccessPermissions,
+  type CustomerAccessEntry,
+  type CustomerDetails,
+} from "@/components/dialogs/CustomerAccessDialog";
 
 export type AgreementRow = {
   id: string | number;
@@ -13,9 +20,13 @@ export type AgreementRow = {
 type AgreementsTableProps = {
   agreements: AgreementRow[];
   emptyMessage?: string;
+  viewer?: { id?: string | null; role?: string | null };
 };
 
-export default function AgreementsTable({ agreements, emptyMessage }: AgreementsTableProps) {
+export default function AgreementsTable({ agreements, emptyMessage, viewer }: AgreementsTableProps) {
+  const [dialogState, setDialogState] = useState<AccessDialogState>(createInitialDialogState);
+  const [dialogPermissions, setDialogPermissions] = useState<AccessPermissions | undefined>();
+
   const columns: DataColumn<AgreementRow>[] = [
     {
       id: "id",
@@ -40,7 +51,10 @@ export default function AgreementsTable({ agreements, emptyMessage }: Agreements
           return <span className="text-slate-400">-</span>;
         }
         return (
-          <PillButton label={label} />
+          <PillButton
+            label={label}
+            onClick={() => handleCustomerClick(agreement.customer)}
+          />
         );
       },
       sortValue: (agreement) => agreement.customer?.name?.toLowerCase() ?? "",
@@ -114,21 +128,78 @@ export default function AgreementsTable({ agreements, emptyMessage }: Agreements
     },
   ];
 
+  async function handleCustomerClick(customer?: AgreementRow["customer"]) {
+    const rawId = customer?.id;
+    const customerId =
+      typeof rawId === "string" ? Number.parseInt(rawId, 10) : rawId;
+
+    if (!customerId || Number.isNaN(customerId)) {
+      return;
+    }
+
+    setDialogState({
+      open: true,
+      loading: true,
+      error: null,
+      customerId,
+      customerName: customer?.name?.trim() || "Kunde",
+      customer: null,
+      accesses: [],
+    });
+    setDialogPermissions(undefined);
+
+    try {
+      const [customerDetails, accesses] = await Promise.all([
+        fetchCustomerDetails(customerId),
+        fetchCustomerAccesses(customerId),
+      ]);
+
+      setDialogPermissions(derivePermissions(accesses, viewer));
+
+      setDialogState((prev) => ({
+        ...prev,
+        loading: false,
+        customer: customerDetails,
+        accesses,
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Kunne ikke hente data";
+      setDialogState((prev) => ({
+        ...prev,
+        loading: false,
+        error: message,
+      }));
+    }
+  }
+
+  function resetDialog() {
+    setDialogState(createInitialDialogState());
+    setDialogPermissions(undefined);
+  }
+
   return (
-    <DataTable
-      data={agreements}
-      columns={columns}
-      getRowId={(agreement, index) => agreement.id?.toString() ?? String(index)}
-      emptyMessage={emptyMessage ?? "Ingen avtaler funnet."}
-      defaultSort={{ columnId: "startDate", direction: "desc" }}
-    />
+    <>
+      <DataTable
+        data={agreements}
+        columns={columns}
+        getRowId={(agreement, index) => agreement.id?.toString() ?? String(index)}
+        emptyMessage={emptyMessage ?? "Ingen avtaler funnet."}
+        defaultSort={{ columnId: "startDate", direction: "desc" }}
+      />
+      <CustomerAccessDialog
+        state={dialogState}
+        onClose={resetDialog}
+        permissions={dialogPermissions}
+      />
+    </>
   );
 }
 
-function PillButton({ label }: { label: string }) {
+function PillButton({ label, onClick }: { label: string; onClick?: () => void }) {
   return (
     <button
       type="button"
+      onClick={onClick}
       className="group inline-flex max-w-full cursor-pointer items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-left text-xs font-medium text-blue-800 transition hover:border-blue-300"
     >
       <span className="truncate font-semibold">{label}</span>
@@ -153,4 +224,50 @@ function toTimestamp(value?: string | Date | null) {
   if (!value) return 0;
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function createInitialDialogState(): AccessDialogState {
+  return {
+    open: false,
+    loading: false,
+    error: null,
+    customerId: null,
+    customerName: "",
+    customer: null,
+    accesses: [],
+  };
+}
+
+async function fetchCustomerDetails(customerId: number): Promise<CustomerDetails | null> {
+  const response = await fetch(`/api/customers/${customerId}`, { cache: "no-store" });
+  const payload = (await response.json().catch(() => ({}))) as { customer?: CustomerDetails; error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Kunne ikke hente kundeinformasjon");
+  }
+  return payload.customer ?? null;
+}
+
+async function fetchCustomerAccesses(customerId: number): Promise<CustomerAccessEntry[]> {
+  const response = await fetch(`/api/customers/${customerId}/accesses`, { cache: "no-store" });
+  const payload = (await response.json().catch(() => ({}))) as { accesses?: CustomerAccessEntry[]; error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Kunne ikke hente tilganger");
+  }
+  return payload.accesses ?? [];
+}
+
+function derivePermissions(
+  accesses: CustomerAccessEntry[],
+  viewer?: { id?: string | null; role?: string | null },
+): AccessPermissions {
+  if (viewer?.role === "super_admin") {
+    return { canEditRoles: true, canRemoveUsers: true, canSave: true };
+  }
+
+  const self = accesses.find((access) => access.userId === viewer?.id);
+  if (self?.role === "admin") {
+    return { canEditRoles: true, canRemoveUsers: true, canSave: true };
+  }
+
+  return { canEditRoles: false, canRemoveUsers: false, canSave: false };
 }

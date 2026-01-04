@@ -33,6 +33,12 @@ export type CustomerAccessEntry = {
   email: string | null;
 };
 
+export type AccessPermissions = {
+  canEditRoles: boolean;
+  canRemoveUsers: boolean;
+  canSave: boolean;
+};
+
 export type AccessDialogState = {
   open: boolean;
   loading: boolean;
@@ -46,14 +52,21 @@ export type AccessDialogState = {
 export default function CustomerAccessDialog({
   state,
   onClose,
+  permissions,
 }: {
   state: AccessDialogState;
   onClose: () => void;
+  permissions?: AccessPermissions;
 }) {
   const { open, loading, error, customer, accesses, customerId, customerName } = state;
   const [entries, setEntries] = useState<CustomerAccessEntry[]>(accesses);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const effectivePermissions = permissions ?? {
+    canEditRoles: true,
+    canRemoveUsers: true,
+    canSave: true,
+  };
 
   useEffect(() => {
     setEntries(accesses);
@@ -68,6 +81,7 @@ export default function CustomerAccessDialog({
   }, [entries, accesses]);
 
   function toggleRole(userId: string) {
+    if (!effectivePermissions.canEditRoles) return;
     setEntries((prev) =>
       prev.map((entry) =>
         entry.userId === userId
@@ -78,11 +92,12 @@ export default function CustomerAccessDialog({
   }
 
   function removeEntry(userId: string) {
+    if (!effectivePermissions.canRemoveUsers) return;
     setEntries((prev) => prev.filter((entry) => entry.userId !== userId));
   }
 
   async function handleSave() {
-    if (!customerId || saving || !isDirty) return;
+    if (!effectivePermissions.canSave || !customerId || saving || !isDirty) return;
     setSaving(true);
     setSaveError(null);
     try {
@@ -147,32 +162,35 @@ export default function CustomerAccessDialog({
                 accesses={entries}
                 onToggleRole={toggleRole}
                 onRemove={removeEntry}
+                permissions={effectivePermissions}
               />
               {saveError ? (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                   {saveError}
                 </div>
               ) : null}
-              <div className="flex justify-start">
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={!isDirty || saving}
-                  className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow cursor-pointer ${!isDirty || saving
-                    ? "cursor-not-allowed bg-blue-300"
-                    : "bg-blue-600 hover:bg-blue-500"
-                    }`}
-                >
-                  {saving ? (
-                    <>
-                      <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                      Lagrer...
-                    </>
-                  ) : (
-                    "Lagre"
-                  )}
-                </button>
-              </div>
+              {effectivePermissions.canSave ? (
+                <div className="flex justify-start">
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={!isDirty || saving}
+                    className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow cursor-pointer ${!isDirty || saving
+                      ? "cursor-not-allowed bg-blue-300"
+                      : "bg-blue-600 hover:bg-blue-500"
+                      }`}
+                  >
+                    {saving ? (
+                      <>
+                        <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                        Lagrer...
+                      </>
+                    ) : (
+                      "Lagre"
+                    )}
+                  </button>
+                </div>
+              ) : null}
             </>
           )}
         </div>
@@ -256,11 +274,15 @@ function CustomerAccessList({
   accesses,
   onToggleRole,
   onRemove,
+  permissions,
 }: {
   accesses: CustomerAccessEntry[];
   onToggleRole: (userId: string) => void;
   onRemove: (userId: string) => void;
+  permissions: AccessPermissions;
 }) {
+  const { canEditRoles, canRemoveUsers } = permissions;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -296,25 +318,38 @@ function CustomerAccessList({
                     ) : null}
                   </div>
                 </div>
+                {canEditRoles ? (
+                  <button
+                    type="button"
+                    onClick={() => onToggleRole(access.userId)}
+                    className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold cursor-pointer ${access.role === "admin"
+                      ? "border-amber-200 bg-amber-50 text-amber-800"
+                      : "border-blue-200 bg-blue-50 text-blue-800"
+                      }`}
+                  >
+                    {formatCompanyRole(access.role)}
+                  </button>
+                ) : (
+                  <span
+                    className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold ${access.role === "admin"
+                      ? "border-amber-200 bg-amber-50 text-amber-800"
+                      : "border-blue-200 bg-blue-50 text-blue-800"
+                      }`}
+                  >
+                    {formatCompanyRole(access.role)}
+                  </span>
+                )}
+              </div>
+              {canRemoveUsers ? (
                 <button
                   type="button"
-                  onClick={() => onToggleRole(access.userId)}
-                  className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold cursor-pointer ${access.role === "admin"
-                    ? "border-amber-200 bg-amber-50 text-amber-800"
-                    : "border-blue-200 bg-blue-50 text-blue-800"
-                    }`}
+                  onClick={() => onRemove(access.userId)}
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 hover:text-red-600 cursor-pointer"
                 >
-                  {formatCompanyRole(access.role)}
+                  <MinusCircleIcon className="h-5 w-5" />
+                  Fjern
                 </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => onRemove(access.userId)}
-                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 hover:text-red-600 cursor-pointer"
-              >
-                <MinusCircleIcon className="h-5 w-5" />
-                Fjern
-              </button>
+              ) : null}
             </div>
           ))}
         </div>

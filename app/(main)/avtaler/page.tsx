@@ -15,6 +15,7 @@ export default async function AvtalerPage() {
     redirect("/login");
   }
 
+  const viewer = { id: session.user?.id, role: session.user?.role };
   const { active, historical, error, adminPlaceholderMessage } = await loadAgreements();
 
   if (error) {
@@ -57,6 +58,7 @@ export default async function AvtalerPage() {
             <AgreementsTable
               agreements={active}
               emptyMessage="Ingen aktive avtaler enda."
+              viewer={viewer}
             />
           </section>
         </div>
@@ -72,6 +74,7 @@ export default async function AvtalerPage() {
             <AgreementsTable
               agreements={historical}
               emptyMessage="Ingen historiske avtaler enda."
+              viewer={viewer}
             />
           </section>
         </div>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(
   _request: Request,
@@ -7,14 +8,31 @@ export async function GET(
 ) {
   const session = await auth();
 
-  if (!session?.user || session.user.role !== "super_admin") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const isSuperAdmin = session.user.role === "super_admin";
 
   const resolvedParams = await params;
   const customerId = Number.parseInt(resolvedParams.customerId, 10);
   if (!Number.isInteger(customerId) || customerId <= 0) {
     return NextResponse.json({ error: "Ugyldig kunde-id" }, { status: 400 });
+  }
+
+  if (!isSuperAdmin) {
+    const hasAccess = await prisma.userCustomerAccess.findUnique({
+      where: {
+        userId_customerId: {
+          userId: session.user.id,
+          customerId,
+        },
+      },
+      select: { userId: true },
+    });
+
+    if (!hasAccess) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   const apiKey =

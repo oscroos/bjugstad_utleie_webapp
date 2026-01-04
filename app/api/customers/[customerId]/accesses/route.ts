@@ -8,14 +8,32 @@ export async function GET(
 ) {
   const session = await auth();
 
-  if (!session?.user || session.user.role !== "super_admin") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { customerId: rawCustomerId } = await params;
   const customerId = Number.parseInt(rawCustomerId, 10);
   if (!Number.isInteger(customerId) || customerId <= 0) {
     return NextResponse.json({ error: "Ugyldig kunde-id" }, { status: 400 });
+  }
+
+  const isSuperAdmin = session.user.role === "super_admin";
+
+  if (!isSuperAdmin) {
+    const membership = await prisma.userCustomerAccess.findUnique({
+      where: {
+        userId_customerId: {
+          userId: session.user.id,
+          customerId,
+        },
+      },
+      select: { role: true },
+    });
+
+    if (!membership) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   try {
@@ -62,14 +80,31 @@ export async function PATCH(
 ) {
   const session = await auth();
 
-  if (!session?.user || session.user.role !== "super_admin") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { customerId: rawCustomerId } = await params;
   const customerId = Number.parseInt(rawCustomerId, 10);
   if (!Number.isInteger(customerId) || customerId <= 0) {
     return NextResponse.json({ error: "Ugyldig kunde-id" }, { status: 400 });
+  }
+  const isSuperAdmin = session.user.role === "super_admin";
+
+  if (!isSuperAdmin) {
+    const membership = await prisma.userCustomerAccess.findUnique({
+      where: {
+        userId_customerId: {
+          userId: session.user.id,
+          customerId,
+        },
+      },
+      select: { role: true },
+    });
+
+    if (!membership || membership.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   let payload: { accesses?: UpdateAccess[] };

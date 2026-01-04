@@ -11,7 +11,6 @@ import {
   Bars3Icon,
   XMarkIcon,
   ListBulletIcon,
-  Squares2X2Icon,
   DocumentTextIcon,
   MapIcon,
   UserIcon,
@@ -36,8 +35,7 @@ export default function ResponsiveNav() {
   const isAdmin = data?.user?.role === "super_admin";
 
   const mainItems: NavItem[] = [
-    { href: "/avtaler", label: "Aktive avtaler", icon: <ListBulletIcon className="h-5 w-5" /> },
-    { href: "/historikk", label: "Avtalehistorikk", icon: <Squares2X2Icon className="h-5 w-5" /> },
+    { href: "/avtaler", label: "Avtaler", icon: <ListBulletIcon className="h-5 w-5" /> },
     { href: "/dokumenter", label: "Dokumenter", icon: <DocumentTextIcon className="h-5 w-5" /> },
     { href: "/kart", label: "Kart", icon: <MapIcon className="h-5 w-5" /> },
     { href: "/profil", label: "Min profil", icon: <UserIcon className="h-5 w-5" /> },

@@ -514,7 +514,11 @@ export function DataTable<T>({
 
       <div className="flex items-center justify-between rounded-md border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600">
         <span>
-          Viser {startIndex + 1}–{endIndex} av {totalRows}
+          {(() => {
+            const displayStart = totalRows === 0 ? 0 : startIndex + 1;
+            const displayEnd = totalRows === 0 ? 0 : endIndex;
+            return `Viser ${displayStart}–${displayEnd} av ${totalRows}`;
+          })()}
         </span>
         {totalRows > PAGE_SIZE && (
           <div className="flex items-center gap-2">

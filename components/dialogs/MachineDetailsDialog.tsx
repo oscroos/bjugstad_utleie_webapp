@@ -1,6 +1,6 @@
 "use client";
 
-import { XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 
 export type MachineDetails = {
@@ -40,6 +40,7 @@ export default function MachineDetailsDialog({
   const { open, loading, error, machine, machineId, machineLabel, currentRenter } = state;
   const [localMachine, setLocalMachine] = useState<MachineDetails | null>(machine);
   const [localError, setLocalError] = useState<string | null>(error);
+  const logoSrc = getOemLogo(localMachine?.make ?? machineLabel);
 
   useEffect(() => {
     setLocalMachine(machine);
@@ -57,19 +58,29 @@ export default function MachineDetailsDialog({
             <h2 className="text-2xl font-semibold text-slate-900">{machineLabel || "Maskin"}</h2>
             {machineId ? <p className="text-sm text-slate-500">ID: {machineId}</p> : null}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="cursor-pointer rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-            aria-label="Lukk dialog"
-          >
-            <XMarkIcon className="h-5 w-5" />
-          </button>
+          <div className="flex items-start gap-4">
+            <div className="flex items-start">
+              <img
+                src={logoSrc}
+                alt={(localMachine?.make ?? machineLabel ?? "OEM") + " logo"}
+                className="h-16 w-auto max-w-[140px] object-contain"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="cursor-pointer rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Lukk dialog"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <div className="space-y-5 px-6 py-5">
           {loading ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              <ArrowPathIcon className="h-5 w-5 animate-spin text-blue-600" />
               Laster maskindetaljer...
             </div>
           ) : localError ? (
@@ -108,8 +119,8 @@ function MachineOverview({
     { label: "Registreringsnummer", value: machine.registrationNumber },
     { label: "Serienummer", value: machine.serialNumber },
     { label: "Lokasjon (tekst)", value: machine.location },
-    { label: "Spor kontroll dato", value: machine.railControlDate },
-    { label: "Kontrolldato", value: machine.controlDate },
+    { label: "Spor kontroll dato", value: formatDateTime(machine.railControlDate) },
+    { label: "Kontrolldato", value: formatDateTime(machine.controlDate) },
     { label: "Aktuell leietaker", value: currentRenter },
   ];
 
@@ -169,4 +180,31 @@ function formatValue(value?: string | number | null) {
     return "-";
   }
   return value;
+}
+
+function formatDateTime(value?: string | Date | null) {
+  if (!value) return "-";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  const day = pad(date.getDate());
+  const month = pad(date.getMonth() + 1);
+  const year = date.getFullYear();
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  return `${day}.${month}.${year} kl. ${hours}:${minutes}`;
+}
+
+function getOemLogo(make?: string | null) {
+  if (!make) return "/oem-logos/no_image_default.svg";
+
+  const normalized = make.trim().toLowerCase();
+
+  if (normalized.includes("volvo")) return "/oem-logos/volvo_logo.svg";
+  if (normalized.includes("liebherr")) return "/oem-logos/liebherr_logo.svg";
+  if (normalized.includes("hydrema")) return "/oem-logos/hydrema_logo.svg";
+  if (normalized.includes("drivex")) return "/oem-logos/drivex_logo.svg";
+  if (normalized.includes("cat") || normalized.includes("caterpillar")) return "/oem-logos/CAT_logo.svg";
+
+  return "/oem-logos/no_image_default.svg";
 }

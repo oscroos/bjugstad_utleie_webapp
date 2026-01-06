@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { fetchCustomerDetails } from "@/lib/api/customers";
 import { formatDisplay, formatPhone } from "@/lib/formatters";
 import DataTable, { type DataColumn } from "@/components/DataTable";
 import CustomerAccessDialog, {
   type AccessDialogState,
   type CustomerAccessEntry,
-  type CustomerDetails,
 } from "@/components/dialogs/CustomerAccessDialog";
 
 type Customer = {
@@ -194,15 +194,6 @@ export default function CustomersTable({ customers }: CustomersTableProps) {
       <CustomerAccessDialog state={dialogState} onClose={resetDialog} />
     </>
   );
-}
-
-async function fetchCustomerDetails(customerId: number): Promise<CustomerDetails | null> {
-  const response = await fetch(`/api/customers/${customerId}`, { cache: "no-store" });
-  const payload = (await response.json().catch(() => ({}))) as { customer?: CustomerDetails; error?: string };
-  if (!response.ok) {
-    throw new Error(payload.error ?? "Kunne ikke hente kundeinformasjon");
-  }
-  return payload.customer ?? null;
 }
 
 async function fetchCustomerAccesses(customerId: number): Promise<CustomerAccessEntry[]> {

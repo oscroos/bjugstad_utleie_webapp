@@ -6,12 +6,12 @@ import CustomerAccessDialog, {
   type AccessDialogState,
   type AccessPermissions,
   type CustomerAccessEntry,
-  type CustomerDetails,
 } from "@/components/dialogs/CustomerAccessDialog";
 import MachineDetailsDialog, {
   type MachineDialogState,
   type MachineDetails,
 } from "@/components/dialogs/MachineDetailsDialog";
+import { fetchCustomerDetails } from "@/lib/api/customers";
 import { formatDate } from "@/lib/formatters";
 
 export type AgreementRow = {
@@ -293,15 +293,6 @@ function createInitialMachineState(): MachineDialogState {
     machineLabel: "",
     currentRenter: null,
   };
-}
-
-async function fetchCustomerDetails(customerId: number): Promise<CustomerDetails | null> {
-  const response = await fetch(`/api/customers/${customerId}`, { cache: "no-store" });
-  const payload = (await response.json().catch(() => ({}))) as { customer?: CustomerDetails; error?: string };
-  if (!response.ok) {
-    throw new Error(payload.error ?? "Kunne ikke hente kundeinformasjon");
-  }
-  return payload.customer ?? null;
 }
 
 async function fetchCustomerAccesses(customerId: number): Promise<CustomerAccessEntry[]> {

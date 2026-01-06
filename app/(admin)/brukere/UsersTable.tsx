@@ -9,7 +9,7 @@ import CustomerAccessDialog, {
   type CustomerDetails,
 } from "@/components/dialogs/CustomerAccessDialog";
 import UserAccessDialog from "@/components/dialogs/UserAccessDialog";
-import { formatPhone } from "@/lib/formatters";
+import { formatPhone, formatDate } from "@/lib/formatters";
 
 type UserRow = {
   id: string;
@@ -239,31 +239,31 @@ export default function UsersTable({ users }: UsersTableProps) {
     {
       id: "created",
       header: "Bruker opprettet",
-      accessor: (user) => formatDate(user.createdAt) ?? "",
+      accessor: (user) => formatDate(user.createdAt, { multiline: true }) ?? "",
       filterType: "date-range",
       dateValue: (user) => user.createdAt,
       cell: (user) => (
         <span className="whitespace-pre-line tabular-nums text-slate-700">
-          {formatDate(user.createdAt) ?? "-"}
+          {formatDate(user.createdAt, { multiline: true }) ?? "-"}
         </span>
       ),
       sortValue: (user) => toTimestamp(user.createdAt),
-      filterValue: (user) => formatDate(user.createdAt) ?? "-",
+      filterValue: (user) => formatDate(user.createdAt, { multiline: true }) ?? "-",
       cellClassName: "tabular-nums whitespace-pre-line",
     },
     {
       id: "updated",
       header: "Bruker oppdatert",
-      accessor: (user) => formatDate(user.updatedAt) ?? "",
+      accessor: (user) => formatDate(user.updatedAt, { multiline: true }) ?? "",
       filterType: "date-range",
       dateValue: (user) => user.updatedAt,
       cell: (user) => (
         <span className="whitespace-pre-line tabular-nums text-slate-700">
-          {formatDate(user.updatedAt) ?? "-"}
+          {formatDate(user.updatedAt, { multiline: true }) ?? "-"}
         </span>
       ),
       sortValue: (user) => toTimestamp(user.updatedAt),
-      filterValue: (user) => formatDate(user.updatedAt) ?? "-",
+      filterValue: (user) => formatDate(user.updatedAt, { multiline: true }) ?? "-",
       cellClassName: "tabular-nums whitespace-pre-line",
     },
     {
@@ -287,16 +287,16 @@ export default function UsersTable({ users }: UsersTableProps) {
       id: "acceptedAt",
       header: "Vilkår\nakseptert dato",
       headerClassName: "min-w-[14rem] whitespace-pre-line leading-tight",
-      accessor: (user) => formatDate(user.acceptedTermsAt) ?? "",
+      accessor: (user) => formatDate(user.acceptedTermsAt, { multiline: true }) ?? "",
       filterType: "date-range",
       dateValue: (user) => user.acceptedTermsAt,
       cell: (user) => (
         <span className="whitespace-pre-line tabular-nums text-slate-700">
-          {formatDate(user.acceptedTermsAt) ?? "-"}
+          {formatDate(user.acceptedTermsAt, { multiline: true }) ?? "-"}
         </span>
       ),
       sortValue: (user) => toTimestamp(user.acceptedTermsAt),
-      filterValue: (user) => formatDate(user.acceptedTermsAt) ?? "-",
+      filterValue: (user) => formatDate(user.acceptedTermsAt, { multiline: true }) ?? "-",
       cellClassName: "min-w-[14rem] tabular-nums whitespace-pre-line",
     },
   ];
@@ -338,19 +338,6 @@ function formatAddress(user: Pick<UserRow, "address_street" | "address_postal_co
   }
 
   return lines.length ? lines : undefined;
-}
-
-function formatDate(value?: string | Date | null) {
-  if (!value) return undefined;
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return undefined;
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  const day = pad(date.getDate());
-  const month = pad(date.getMonth() + 1);
-  const year = date.getFullYear();
-  const hours = pad(date.getHours());
-  const minutes = pad(date.getMinutes());
-  return `${day}.${month}.${year}\nkl. ${hours}:${minutes}`;
 }
 
 function toTimestamp(value?: string | Date | null) {

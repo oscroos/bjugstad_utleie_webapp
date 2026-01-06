@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatPhone } from "@/lib/formatters";
+import { formatPhone, formatDate } from "@/lib/formatters";
 import DataTable, { type DataColumn } from "@/components/DataTable";
 import UserAccessDialog from "@/components/dialogs/UserAccessDialog";
 
@@ -84,16 +84,16 @@ export default function ActivityTable({ events }: ActivityTableProps) {
     {
       id: "loggedAt",
       header: "Tidspunkt",
-      accessor: (event) => formatDate(event.loggedAt) ?? "",
+      accessor: (event) => formatDate(event.loggedAt, { multiline: true }) ?? "",
       filterType: "date-range",
       dateValue: (event) => event.loggedAt,
       cell: (event) => (
         <span className="whitespace-pre-line tabular-nums text-slate-700">
-          {formatDate(event.loggedAt) ?? "-"}
+          {formatDate(event.loggedAt, { multiline: true }) ?? "-"}
         </span>
       ),
       sortValue: (event) => toTimestamp(event.loggedAt),
-      filterValue: (event) => formatDate(event.loggedAt) ?? "-",
+      filterValue: (event) => formatDate(event.loggedAt, { multiline: true }) ?? "-",
       cellClassName: "tabular-nums whitespace-pre-line",
     },
   ];
@@ -130,19 +130,6 @@ function formatEvent(event: LoginEvent) {
   const provider = event.provider?.trim();
   const providerLabel = provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : "ukjent metode";
   return `Logget inn med ${providerLabel}`;
-}
-
-function formatDate(value?: string | Date | null) {
-  if (!value) return undefined;
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return undefined;
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  const day = pad(date.getDate());
-  const month = pad(date.getMonth() + 1);
-  const year = date.getFullYear();
-  const hours = pad(date.getHours());
-  const minutes = pad(date.getMinutes());
-  return `${day}.${month}.${year}\nkl. ${hours}:${minutes}`;
 }
 
 function toTimestamp(value?: string | Date | null) {

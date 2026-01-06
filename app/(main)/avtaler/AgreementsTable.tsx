@@ -12,6 +12,7 @@ import MachineDetailsDialog, {
   type MachineDialogState,
   type MachineDetails,
 } from "@/components/dialogs/MachineDetailsDialog";
+import { formatDate } from "@/lib/formatters";
 
 export type AgreementRow = {
   id: string | number;
@@ -70,31 +71,31 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
     {
       id: "startDate",
       header: "Startdato",
-      accessor: (agreement) => formatDate(agreement.startDate) ?? "",
+      accessor: (agreement) => formatDate(agreement.startDate, { multiline: true }) ?? "",
       filterType: "date-range",
       dateValue: (agreement) => agreement.startDate,
       cell: (agreement) => (
         <span className="whitespace-pre-line tabular-nums text-slate-700">
-          {formatDate(agreement.startDate) ?? "-"}
+          {formatDate(agreement.startDate, { multiline: true }) ?? "-"}
         </span>
       ),
       sortValue: (agreement) => toTimestamp(agreement.startDate),
-      filterValue: (agreement) => formatDate(agreement.startDate) ?? "-",
+      filterValue: (agreement) => formatDate(agreement.startDate, { multiline: true }) ?? "-",
       cellClassName: "tabular-nums whitespace-pre-line",
     },
     {
       id: "endDate",
       header: "Sluttdato",
-      accessor: (agreement) => formatDate(agreement.endDate) ?? "",
+      accessor: (agreement) => formatDate(agreement.endDate, { multiline: true }) ?? "",
       filterType: "date-range",
       dateValue: (agreement) => agreement.endDate,
       cell: (agreement) => (
         <span className="whitespace-pre-line tabular-nums text-slate-700">
-          {formatDate(agreement.endDate) ?? "-"}
+          {formatDate(agreement.endDate, { multiline: true }) ?? "-"}
         </span>
       ),
       sortValue: (agreement) => toTimestamp(agreement.endDate),
-      filterValue: (agreement) => formatDate(agreement.endDate) ?? "-",
+      filterValue: (agreement) => formatDate(agreement.endDate, { multiline: true }) ?? "-",
       cellClassName: "tabular-nums whitespace-pre-line",
     },
     {
@@ -262,19 +263,6 @@ function PillButton({ label, onClick }: { label: string; onClick?: () => void })
       <span className="truncate font-semibold">{label}</span>
     </button>
   );
-}
-
-function formatDate(value?: string | Date | null) {
-  if (!value) return undefined;
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return undefined;
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  const day = pad(date.getDate());
-  const month = pad(date.getMonth() + 1);
-  const year = date.getFullYear();
-  const hours = pad(date.getHours());
-  const minutes = pad(date.getMinutes());
-  return `${day}.${month}.${year}\nkl. ${hours}:${minutes}`;
 }
 
 function toTimestamp(value?: string | Date | null) {

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowPathIcon, MinusCircleIcon, PlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
-import { formatDisplay, formatPhone } from "@/lib/formatters";
+import { formatDisplay, formatPhone, formatDate } from "@/lib/formatters";
 
 type UserAccess = {
   customerId: number;
@@ -604,19 +604,6 @@ function formatAddress(user: Pick<UserDetails, "address_street" | "address_posta
   }
 
   return lines.length ? lines : undefined;
-}
-
-function formatDate(value?: string | Date | null) {
-  if (!value) return undefined;
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return undefined;
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  const day = pad(date.getDate());
-  const month = pad(date.getMonth() + 1);
-  const year = date.getFullYear();
-  const hours = pad(date.getHours());
-  const minutes = pad(date.getMinutes());
-  return `${day}.${month}.${year} kl. ${hours}:${minutes}`;
 }
 
 function formatRole(role?: string | null) {

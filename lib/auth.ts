@@ -15,7 +15,7 @@ import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "./prisma";
 import Vipps from "next-auth/providers/vipps";
-import type { NextAuthConfig } from "next-auth";
+import type { AuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import {
   IS_DEV,
@@ -26,7 +26,7 @@ import {
   USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY,
 } from "./constants";
 
-export const authConfig: NextAuthConfig = {
+export const authConfig: AuthConfig = {
   // Persist users/accounts (e.g., Vipps <-> local user link) in your database
   adapter: PrismaAdapter(prisma),
 

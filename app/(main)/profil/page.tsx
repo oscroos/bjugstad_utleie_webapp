@@ -14,8 +14,11 @@ import {
   UserCircleIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
-import type { CustomerDetails } from "@/components/dialogs/CustomerAccessDialog";
-import { fetchCustomerDetails } from "@/lib/api/customers";
+import type {
+  CustomerAccessEntry,
+  CustomerDetails,
+} from "@/components/dialogs/CustomerAccessDialog";
+import { fetchCustomerAccesses, fetchCustomerDetails } from "@/lib/api/customers";
 import {
   formatCustomerAddress,
   formatDate,
@@ -31,11 +34,17 @@ const EMPTY_ACCESS_LIST: SessionAccessEntry[] = [];
 
 type SessionAccessEntry = {
   customerId?: number | string;
+  role?: string | null;
+  customer?: {
+    name?: string | null;
+    customer_number?: number | null;
+  } | null;
 };
 
 type CompanyCardState = {
   customerId: number;
   company: CustomerDetails | null;
+  accesses: CustomerAccessEntry[];
   status: "loading" | "ready" | "error";
   error: string | null;
 };
@@ -74,6 +83,17 @@ export default function ProfilPage() {
     () => (Array.isArray(userAccessesRaw) ? userAccessesRaw : EMPTY_ACCESS_LIST),
     [userAccessesRaw],
   );
+
+  const accessRoleByCustomer = useMemo(() => {
+    const map = new Map<number, SessionAccessEntry>();
+    sessionAccesses.forEach((access) => {
+      const id = normalizeCustomerId(access?.customerId);
+      if (typeof id === "number") {
+        map.set(id, access);
+      }
+    });
+    return map;
+  }, [sessionAccesses]);
   const profileHeaderName = formatDisplay(user.name, "Ukjent bruker");
 
   const shouldMockGlobalAdminCompanies =
@@ -83,11 +103,8 @@ export default function ProfilPage() {
     if (shouldMockGlobalAdminCompanies) {
       return [...GLOBAL_ADMIN_TEST_COMPANY_IDS];
     }
-    const ids = sessionAccesses
-      .map((access) => normalizeCustomerId(access?.customerId))
-      .filter((id): id is number => typeof id === "number");
-    return Array.from(new Set(ids)).sort((a, b) => a - b);
-  }, [sessionAccesses, shouldMockGlobalAdminCompanies]);
+    return Array.from(accessRoleByCustomer.keys()).sort((a, b) => a - b);
+  }, [accessRoleByCustomer, shouldMockGlobalAdminCompanies]);
 
   const [companyCards, setCompanyCards] = useState<CompanyCardState[]>([]);
   const [companyError, setCompanyError] = useState<string | null>(null);
@@ -105,6 +122,7 @@ export default function ProfilPage() {
       accessibleCustomerIds.map((customerId) => ({
         customerId,
         company: null,
+        accesses: [],
         status: "loading",
         error: null,
       })),
@@ -113,50 +131,65 @@ export default function ProfilPage() {
     const controller = new AbortController();
 
     (async () => {
-      const results = await Promise.allSettled(
-        accessibleCustomerIds.map((customerId) =>
-          fetchCustomerDetails(customerId, { signal: controller.signal }),
-        ),
+      const results = await Promise.all(
+        accessibleCustomerIds.map(async (customerId) => {
+          try {
+            const [company, accesses] = await Promise.all([
+              fetchCustomerDetails(customerId, { signal: controller.signal }),
+              fetchCustomerAccesses(customerId, { signal: controller.signal }),
+            ]);
+            if (!company) {
+              return {
+                customerId,
+                company: null,
+                accesses: [],
+                status: "error" as const,
+                error: "Fant ikke selskapsinformasjon.",
+              };
+            }
+            return {
+              customerId,
+              company,
+              accesses,
+              status: "ready" as const,
+              error: null,
+            };
+          } catch (err) {
+            if (
+              err instanceof DOMException &&
+              err.name === "AbortError"
+            ) {
+              throw err;
+            }
+            return {
+              customerId,
+              company: null,
+              accesses: [],
+              status: "error" as const,
+              error:
+                err instanceof Error
+                  ? err.message
+                  : "Kunne ikke hente selskapsdata.",
+            };
+          }
+        }),
       );
 
       if (isCancelled) return;
 
-      const nextCards = results.map((result, index) => {
-        const customerId = accessibleCustomerIds[index];
-        if (result.status === "fulfilled" && result.value) {
-          return {
-            customerId,
-            company: result.value,
-            status: "ready" as const,
-            error: null,
-          };
-        }
-
-        const message =
-          result.status === "fulfilled"
-            ? "Fant ikke selskapsinformasjon."
-            : result.reason instanceof Error
-              ? result.reason.message
-              : "Kunne ikke hente selskapsdata.";
-
-        return {
-          customerId,
-          company: null,
-          status: "error" as const,
-          error: message,
-        };
-      });
-
-      const hasReadyCard = nextCards.some((card) => card.status === "ready");
-      setCompanyCards(nextCards);
+      const hasReadyCard = results.some((card) => card.status === "ready");
+      setCompanyCards(results);
       setCompanyError(
         hasReadyCard ? null : "Kunne ikke hente selskapsinformasjon akkurat nå.",
       );
     })().catch((error) => {
-      if (isCancelled) return;
+      if (isCancelled || (error instanceof DOMException && error.name === "AbortError")) {
+        return;
+      }
       const fallbackCards = accessibleCustomerIds.map((customerId) => ({
         customerId,
         company: null,
+        accesses: [],
         status: "error" as const,
         error:
           error instanceof Error
@@ -220,6 +253,19 @@ export default function ProfilPage() {
       <main className="p-8">
         <p>Laster profil…</p>
       </main>
+    );
+  }
+
+  function handleAccessesUpdated(
+    customerId: number,
+    updatedAccesses: CustomerAccessEntry[],
+  ) {
+    setCompanyCards((prev) =>
+      prev.map((card) =>
+        card.customerId === customerId
+          ? { ...card, accesses: updatedAccesses }
+          : card,
+      ),
     );
   }
 
@@ -290,7 +336,7 @@ export default function ProfilPage() {
 
               <button
                 onClick={() => alert("TODO: Implement functionality")}
-                className="inline-flex items-center justify-center rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-600 cursor-pointer"
+                className="cursor-pointer rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
               >
                 Slett bruker
               </button>
@@ -332,9 +378,19 @@ export default function ProfilPage() {
                   </div>
                 </section>
               ) : (
-                companyCards.map((card) => (
-                  <CompanyProfileCard key={card.customerId} card={card} />
-                ))
+                companyCards.map((card) => {
+                  const roleEntry = accessRoleByCustomer.get(card.customerId);
+                  const canManageAccesses =
+                    roleEntry?.role === "admin" && !shouldMockGlobalAdminCompanies;
+                  return (
+                    <CompanyProfileCard
+                      key={card.customerId}
+                      card={card}
+                      canManageAccesses={canManageAccesses}
+                      onAccessesUpdated={handleAccessesUpdated}
+                    />
+                  );
+                })
               )}
               {companyError ? (
                 <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
@@ -390,8 +446,32 @@ function ProfileRowCells({
   );
 }
 
-function CompanyProfileCard({ card }: { card: CompanyCardState }) {
-  const { customerId, company, status, error } = card;
+function CompanyProfileCard({
+  card,
+  canManageAccesses,
+  onAccessesUpdated,
+}: {
+  card: CompanyCardState;
+  canManageAccesses: boolean;
+  onAccessesUpdated: (customerId: number, accesses: CustomerAccessEntry[]) => void;
+}) {
+  const { customerId, company, status, error, accesses } = card;
+  const [entries, setEntries] = useState<CustomerAccessEntry[]>(accesses);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEntries(accesses);
+    setSaveError(null);
+    setSaving(false);
+  }, [accesses]);
+
+  const isDirty = useMemo(() => {
+    if (entries.length !== accesses.length) return true;
+    const baseline = new Map(accesses.map((entry) => [entry.userId, entry.role]));
+    return entries.some((entry) => baseline.get(entry.userId) !== entry.role);
+  }, [entries, accesses]);
+
   const headerName = formatDisplay(
     company?.name,
     status === "loading" ? "Laster selskapsinformasjon..." : "Ukjent selskap",
@@ -439,6 +519,50 @@ function CompanyProfileCard({ card }: { card: CompanyCardState }) {
     : [];
 
   const companyRowPairs = chunkRows(companyRows);
+
+  function toggleRole(userId: string) {
+    if (!canManageAccesses) return;
+    setEntries((prev) =>
+      prev.map((entry) =>
+        entry.userId === userId
+          ? { ...entry, role: entry.role === "admin" ? "user" : "admin" }
+          : entry,
+      ),
+    );
+  }
+
+  function removeEntry(userId: string) {
+    if (!canManageAccesses) return;
+    setEntries((prev) => prev.filter((entry) => entry.userId !== userId));
+  }
+
+  async function handleSave() {
+    if (!canManageAccesses || !isDirty || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const response = await fetch(`/api/customers/${customerId}/accesses`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accesses: entries.map((entry) => ({
+            userId: entry.userId,
+            role: entry.role === "admin" ? "admin" : "user",
+          })),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error((payload as { error?: string }).error ?? "Kunne ikke lagre endringer");
+      }
+      onAccessesUpdated(customerId, entries);
+    } catch (err) {
+      console.error("Failed to save accesses", err);
+      setSaveError(err instanceof Error ? err.message : "Kunne ikke lagre endringer");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -505,6 +629,108 @@ function CompanyProfileCard({ card }: { card: CompanyCardState }) {
           </div>
         </div>
       )}
+
+      {status === "ready" ? (
+        <div className="border-t border-slate-100 bg-white px-6 py-5">
+          <div className="flex items-center justify-between">
+            <h4 className="text-lg font-semibold text-slate-900">Brukertilganger</h4>
+            <span className="text-sm text-slate-500">
+              {entries.length} bruker{entries.length === 1 ? "" : "e"}
+            </span>
+          </div>
+
+          {entries.length === 0 ? (
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+              Ingen registrerte tilganger for dette selskapet.
+            </div>
+          ) : (
+            <div className="mt-3 space-y-3">
+              {entries.map((entry) => (
+                <div key={entry.userId} className="flex items-center gap-3">
+                  <div className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-slate-900">
+                        {formatDisplay(entry.name, "Ukjent bruker")}
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        <span>{formatPhone(entry.phone)}</span>
+                        {entry.email ? (
+                          <>
+                            <span className="text-slate-300">&middot;</span>
+                            <span className="truncate">{entry.email}</span>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                    {canManageAccesses ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleRole(entry.userId)}
+                        className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold cursor-pointer ${
+                          entry.role === "admin"
+                            ? "border-amber-200 bg-amber-50 text-amber-800"
+                            : "border-blue-200 bg-blue-50 text-blue-800"
+                        }`}
+                      >
+                        {formatCompanyRole(entry.role)}
+                      </button>
+                    ) : (
+                      <span
+                        className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold ${
+                          entry.role === "admin"
+                            ? "border-amber-200 bg-amber-50 text-amber-800"
+                            : "border-blue-200 bg-blue-50 text-blue-800"
+                        }`}
+                      >
+                        {formatCompanyRole(entry.role)}
+                      </span>
+                    )}
+                  </div>
+                  {canManageAccesses ? (
+                    <button
+                      type="button"
+                      onClick={() => removeEntry(entry.userId)}
+                      className="cursor-pointer rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                    >
+                      Fjern
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {saveError ? (
+            <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {saveError}
+            </div>
+          ) : null}
+
+          {canManageAccesses ? (
+            <div className="mt-4 flex justify-start">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={!isDirty || saving}
+                className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow ${
+                  !isDirty || saving
+                    ? "cursor-not-allowed bg-blue-300"
+                    : "cursor-pointer bg-blue-600 hover:bg-blue-500"
+                }`}
+              >
+                {saving ? (
+                  <>
+                    <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                    Lagrer...
+                  </>
+                ) : (
+                  "Lagre"
+                )}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -526,4 +752,10 @@ function chunkRows(rows: ProfileRowEntry[], chunkSize = 2) {
     pairs.push(rows.slice(index, index + chunkSize));
   }
   return pairs;
+}
+
+function formatCompanyRole(role?: string | null) {
+  if (role === "admin") return "Selskapsadmin";
+  if (role === "user") return "Selskapsbruker";
+  return formatDisplay(role, "Ukjent");
 }

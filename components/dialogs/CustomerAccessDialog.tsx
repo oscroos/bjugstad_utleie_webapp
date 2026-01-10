@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowPathIcon, MinusCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { formatDisplay, formatPhone } from "@/lib/formatters";
 
 export type CustomerContactPerson = {
@@ -344,9 +344,8 @@ function CustomerAccessList({
                 <button
                   type="button"
                   onClick={() => onRemove(access.userId)}
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 hover:text-red-600 cursor-pointer"
+                  className="cursor-pointer rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100"
                 >
-                  <MinusCircleIcon className="h-5 w-5" />
                   Fjern
                 </button>
               ) : null}

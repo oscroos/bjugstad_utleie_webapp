@@ -32,7 +32,7 @@ export default function ResponsiveNav() {
   const [isOpen, setIsOpen] = useState(false);
 
   const { data } = useSession();
-  const isAdmin = data?.user?.role === "super_admin";
+  const isAdmin = (data?.user as any)?.role === "super_admin";
 
   const mainItems: NavItem[] = [
     { href: "/avtaler", label: "Avtaler", icon: <ListBulletIcon className="h-5 w-5" /> },

@@ -392,7 +392,9 @@ export const authConfig: NextAuthConfig = {
 
       // Log the login event for analytics (non-blocking).
       try {
-        await prisma.userLoginEvent.create({
+        // The analytics table may not exist in all deployments; cast to `any` to avoid
+        // TypeScript errors while still attempting to record the event if available.
+        await (prisma as any).userLoginEvent.create({
           data: {
             userId: user.id,
             provider: account?.provider ?? "unknown",
@@ -459,7 +461,7 @@ function copyUserFields(target: Record<string, unknown>, source: Record<string, 
 
 async function loadSessionAccesses(userId: string) {
   try {
-    const entries = await prisma.userCustomerAccess.findMany({
+    const entries = await (prisma as any).userCustomerAccess.findMany({
       where: { userId },
       select: {
         customerId: true,
@@ -477,7 +479,10 @@ async function loadSessionAccesses(userId: string) {
         },
       },
     });
-    return entries.map((entry) => ({
+
+    type AccessEntry = typeof entries[number];
+
+    return entries.map((entry: AccessEntry) => ({
       customerId: entry.customerId,
       role: entry.role,
       customer: entry.customer

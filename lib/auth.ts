@@ -318,11 +318,14 @@ export const authConfig: NextAuthConfig = {
     // Put extra fields you care about onto the token.
     async jwt({ token, user, trigger, session }) {
       if (user) {
-        token.uid = user.id;
+        const userId = typeof user.id === "string" ? user.id : undefined;
+        if (userId) {
+          token.uid = userId;
+        }
         // @ts-expect-error - custom column on your Prisma User model
         token.acceptedTerms = user.acceptedTerms ?? false;
         copyUserFields(token as any, user as any);
-        token.accesses = await loadSessionAccesses(user.id);
+        token.accesses = userId ? await loadSessionAccesses(userId) : [];
 
         // In dev, pretend terms are accepted so middleware doesn't bounce you
         // (only if using Credentials provider).

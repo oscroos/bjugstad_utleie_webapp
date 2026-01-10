@@ -1,5 +1,3 @@
-import NextAuth from "next-auth";
-
 declare module "next-auth" {
   interface Session {
     user: {
@@ -17,6 +15,14 @@ declare module "next-auth" {
       acceptedTerms?: boolean;
       acceptedTermsVersion?: string | null;
       lastLoginAt?: string | Date | null;
+      accesses?: {
+        customerId: number;
+        role: string;
+        customer?: {
+          name?: string | null;
+          customer_number?: number | null;
+        } | null;
+      }[];
     };
   }
 }

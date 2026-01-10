@@ -243,9 +243,7 @@ export default function ProfilPage() {
 
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 bg-slate-50 px-6 py-4">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900">{profileHeaderName}</h3>
-              </div>
+              <h3 className="text-lg font-semibold text-slate-900">{profileHeaderName}</h3>
             </div>
 
             <div className="overflow-x-auto">
@@ -445,9 +443,11 @@ function CompanyProfileCard({ card }: { card: CompanyCardState }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 bg-slate-50 px-6 py-4">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-900">{headerName}</h3>
-          <p className="text-sm text-slate-500">Kunde-ID {customerId}</p>
+        <div className="text-slate-900">
+          <h3 className="text-lg font-semibold">
+            {headerName}
+            <span className="ml-3 text-sm font-normal text-slate-500">ID {customerId}</span>
+          </h3>
         </div>
       </div>
 

@@ -322,6 +322,7 @@ export const authConfig: NextAuthConfig = {
         // @ts-expect-error - custom column on your Prisma User model
         token.acceptedTerms = user.acceptedTerms ?? false;
         copyUserFields(token as any, user as any);
+        token.accesses = await loadSessionAccesses(user.id);
 
         // In dev, pretend terms are accepted so middleware doesn't bounce you
         // (only if using Credentials provider).
@@ -332,9 +333,13 @@ export const authConfig: NextAuthConfig = {
       if (trigger === "update") {
         if (session?.user) {
           copyUserFields(token as any, session.user as any);
+          token.accesses = Array.isArray(session.user.accesses)
+            ? session.user.accesses
+            : token.accesses;
         } else if (token.uid) {
           const latest = await prisma.user.findUnique({ where: { id: token.uid as string } });
           copyUserFields(token as any, latest as any);
+          token.accesses = await loadSessionAccesses(token.uid as string);
         }
         if (typeof session?.acceptedTerms === "boolean") {
           token.acceptedTerms = session.acceptedTerms;
@@ -349,6 +354,7 @@ export const authConfig: NextAuthConfig = {
         session.user.id = token.uid as string;
         session.user.acceptedTerms = (token.acceptedTerms as boolean) ?? false;
         copyUserFields(session.user as any, token as any);
+        session.user.accesses = (token as any).accesses ?? [];
       }
       return session;
     },
@@ -445,5 +451,41 @@ function copyUserFields(target: Record<string, unknown>, source: Record<string, 
     if (source[key] !== undefined) {
       target[key] = source[key] instanceof Date ? source[key].toISOString() : source[key];
     }
+  }
+}
+
+async function loadSessionAccesses(userId: string) {
+  try {
+    const entries = await prisma.userCustomerAccess.findMany({
+      where: { userId },
+      select: {
+        customerId: true,
+        role: true,
+        customer: {
+          select: {
+            name: true,
+            customer_number: true,
+          },
+        },
+      },
+      orderBy: {
+        customer: {
+          name: "asc",
+        },
+      },
+    });
+    return entries.map((entry) => ({
+      customerId: entry.customerId,
+      role: entry.role,
+      customer: entry.customer
+        ? {
+          name: entry.customer.name,
+          customer_number: entry.customer.customer_number,
+        }
+        : null,
+    }));
+  } catch (error) {
+    console.error("Failed to load accesses for user", userId, error);
+    return [];
   }
 }

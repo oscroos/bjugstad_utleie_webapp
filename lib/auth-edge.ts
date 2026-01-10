@@ -6,7 +6,7 @@
 import NextAuth from "next-auth";
 import Vipps from "next-auth/providers/vipps";
 import Credentials from "next-auth/providers/credentials";
-import type { AuthConfig } from "next-auth";
+import type { NextAuthConfig } from "next-auth";
 import {
   IS_DEV,
   USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY,
@@ -15,7 +15,7 @@ import {
   SESSION_UPDATE_AGE_SECONDS,
 } from "./constants";
 
-const edgeAuthConfig: AuthConfig = {
+const edgeAuthConfig: NextAuthConfig = {
   // Keep sessions JWT-only; no DB lookups required in the Edge runtime.
   session: {
     strategy: "jwt",

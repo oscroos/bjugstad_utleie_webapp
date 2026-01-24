@@ -113,9 +113,10 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
               const label =
                 machine?.name?.trim() ||
                 (machine?.id !== undefined ? `Maskin ${machine.id}` : "Maskin");
+              const machineKey = `${agreement.id ?? `agreement-${index}`}-machine-${machine?.id ?? `idx-${index}`}-${index}`;
               return (
                 <PillButton
-                  key={`${agreement.id}-machine-${machine?.id ?? index}`}
+                  key={machineKey}
                   label={label}
                   onClick={() => handleMachineClick(agreement, machine)}
                 />

@@ -204,6 +204,26 @@ function getOemLogo(make?: string | null) {
   if (normalized.includes("liebherr")) return "/oem-logos/liebherr_logo.svg";
   if (normalized.includes("hydrema")) return "/oem-logos/hydrema_logo.svg";
   if (normalized.includes("drivex")) return "/oem-logos/drivex_logo.svg";
+  if (normalized.includes("leica")) return "/oem-logos/leica_logo.svg";
+  if (normalized.includes("sørling") || normalized.includes("sorling")) return "/oem-logos/sorling_logo.svg";
+  if (normalized.includes("dalen")) return "/oem-logos/dalen_logo.png";
+  if (normalized.includes("heatwork")) return "/oem-logos/heatwork_logo.jpg";
+  if (normalized.includes("ifor williams") || normalized.includes("ifor-williams")) return "/oem-logos/ifor-williams_logo.jpg";
+  if (normalized.includes("massey ferguson")) return "/oem-logos/massey-ferguson_logo.png";
+  if (normalized.includes("tellefsdal")) return "/oem-logos/schmidt-tellefsdal_logo.png";
+  if (normalized.includes("svetruck")) return "/oem-logos/svetruck_logo.png";
+  if (normalized.includes("prinoth")) return "/oem-logos/prinoth_logo.webp";
+  if (
+    normalized.includes("d-and-a") ||
+    normalized.includes("d and a") ||
+    normalized.includes("d&a")
+  ) {
+    return "/oem-logos/d-and-a_logo.jpg";
+  }
+  if (normalized.includes("gjerstad")) return "/oem-logos/gjerstad_logo.png";
+  if (normalized.includes("greenmerch") || normalized.includes("greenmech")) return "/oem-logos/greenmech_logo.png";
+  if (normalized.includes("john deere")) return "/oem-logos/john-deere_logo.png";
+  if (normalized.includes("klepp")) return "/oem-logos/klepp_logo.png";
   if (normalized.includes("cat") || normalized.includes("caterpillar")) return "/oem-logos/CAT_logo.svg";
 
   return "/oem-logos/no_image_default.svg";

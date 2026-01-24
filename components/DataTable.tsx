@@ -101,6 +101,9 @@ function formatDateInput(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
+const DEFAULT_PAGE_SIZE = 20;
+
 export function DataTable<T>({
   data,
   columns,
@@ -109,7 +112,7 @@ export function DataTable<T>({
   defaultSort,
   onRowClick,
 }: DataTableProps<T>) {
-  const PAGE_SIZE = 100;
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [sortState, setSortState] = useState<SortState>({
     columnId: defaultSort?.columnId ?? null,
     direction: defaultSort?.direction ?? null,
@@ -228,18 +231,18 @@ export function DataTable<T>({
   }, [columns, filteredRows, sortState.columnId, sortState.direction]);
 
   useEffect(() => {
-    const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
     setCurrentPage((prev) => (prev > totalPages ? totalPages : prev));
-  }, [sortedRows.length]);
+  }, [sortedRows.length, pageSize]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filters, data, columns]);
+  }, [filters, data, columns, pageSize]);
 
   const totalRows = sortedRows.length;
-  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
-  const startIndex = (currentPage - 1) * PAGE_SIZE;
-  const endIndex = Math.min(startIndex + PAGE_SIZE, totalRows);
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalRows);
   const paginatedRows = sortedRows.slice(startIndex, endIndex);
 
   function toggleSort(columnId: string, direction: "asc" | "desc") {
@@ -311,6 +314,13 @@ export function DataTable<T>({
     }
     return false;
   }
+
+  function handlePageSizeChange(nextSize: number) {
+    setPageSize(nextSize);
+  }
+
+  const canAdjustPageSize = totalRows > DEFAULT_PAGE_SIZE;
+  const showPaginationControls = totalRows > pageSize;
 
   return (
     <div className="space-y-3">
@@ -512,15 +522,33 @@ export function DataTable<T>({
         </table>
       </div>
 
-      <div className="flex items-center justify-between rounded-md border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600">
-        <span>
-          {(() => {
-            const displayStart = totalRows === 0 ? 0 : startIndex + 1;
-            const displayEnd = totalRows === 0 ? 0 : endIndex;
-            return `Viser ${displayStart}–${displayEnd} av ${totalRows}`;
-          })()}
-        </span>
-        {totalRows > PAGE_SIZE && (
+      <div className="flex flex-col gap-3 rounded-md border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap items-center gap-3">
+          <span>
+            {(() => {
+              const displayStart = totalRows === 0 ? 0 : startIndex + 1;
+              const displayEnd = totalRows === 0 ? 0 : endIndex;
+              return `Viser ${displayStart}–${displayEnd} av ${totalRows}`;
+            })()}
+          </span>
+          {canAdjustPageSize && (
+            <label className="flex items-center gap-2 text-xs text-slate-500">
+              <span>per side</span>
+              <select
+                className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                value={pageSize}
+                onChange={(event) => handlePageSizeChange(Number(event.target.value))}
+              >
+                {PAGE_SIZE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+        {showPaginationControls && (
           <div className="flex items-center gap-2">
             <button
               type="button"

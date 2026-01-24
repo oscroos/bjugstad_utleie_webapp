@@ -55,26 +55,30 @@ export async function GET() {
     );
   }
 
-  // Temporary admin fallback until GetAllRentals is available
-  const accessibleCustomers = isAdmin
-    ? [{ customerId: 2228 }, { customerId: 1075 }]
-    : await prisma.userCustomerAccess.findMany({
-      where: { userId: session.user.id },
-      select: { customerId: true },
-    });
-
-  const customerIds = [...new Set(accessibleCustomers.map((c) => c.customerId).filter(Boolean))];
-
-  if (!customerIds.length) {
-    return NextResponse.json({ active: [], historical: [] });
-  }
-
   try {
-    const results = await Promise.all(
-      customerIds.map((customerId) => fetchCustomerAgreements(baseUrl, apiKey, customerId)),
-    );
+    let allAgreements: AgreementPayload[];
 
-    const allAgreements = results.flat();
+    if (isAdmin) {
+      allAgreements = await fetchAllAgreements(baseUrl, apiKey);
+    } else {
+      const accessibleCustomers = await prisma.userCustomerAccess.findMany({
+        where: { userId: session.user.id },
+        select: { customerId: true },
+      });
+
+      const customerIds = [...new Set(accessibleCustomers.map((c) => c.customerId).filter(Boolean))];
+
+      if (!customerIds.length) {
+        return NextResponse.json({ active: [], historical: [] });
+      }
+
+      const results = await Promise.all(
+        customerIds.map((customerId) => fetchCustomerAgreements(baseUrl, apiKey, customerId)),
+      );
+
+      allAgreements = results.flat();
+    }
+
     const now = Date.now();
 
     const active: AgreementPayload[] = [];
@@ -96,9 +100,23 @@ export async function GET() {
   }
 }
 
+async function fetchAllAgreements(baseUrl: string, apiKey: string) {
+  const url = `${baseUrl.replace(/\/$/, "")}/GetRentals`;
+  const rentals = await requestRentals(url, apiKey, "Failed to fetch agreements for admin");
+  return rentals.map((rental) => mapRentalToAgreement(rental));
+}
+
 async function fetchCustomerAgreements(baseUrl: string, apiKey: string, customerId: number) {
   const url = `${baseUrl.replace(/\/$/, "")}/GetRentalsByCustomerId?customerId=${customerId}`;
+  const rentals = await requestRentals(
+    url,
+    apiKey,
+    `Failed to fetch agreements for customer ${customerId}`,
+  );
+  return rentals.map((rental) => mapRentalToAgreement(rental, customerId));
+}
 
+async function requestRentals(url: string, apiKey: string, errorPrefix: string): Promise<Rental[]> {
   const response = await fetch(url, {
     cache: "no-store",
     headers: {
@@ -109,15 +127,21 @@ async function fetchCustomerAgreements(baseUrl: string, apiKey: string, customer
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new Error(`Failed to fetch agreements for customer ${customerId}: ${response.status} ${body}`);
+    throw new Error(`${errorPrefix}: ${response.status} ${body}`);
   }
 
   const data = (await response.json()) as Rental[];
-  if (!Array.isArray(data)) return [];
+  return Array.isArray(data) ? data : [];
+}
 
-  return data.map((rental): AgreementPayload => ({
-    id: String(rental.rentalId ?? `${customerId}-${Math.random().toString(36).slice(2, 8)}`),
-    customerId: rental.customerId ?? customerId,
+function mapRentalToAgreement(rental: Rental, fallbackCustomerId?: number): AgreementPayload {
+  const customerId = rental.customerId ?? fallbackCustomerId;
+  const idSeed = customerId ?? "rental";
+  const fallbackId = `${idSeed}-${Math.random().toString(36).slice(2, 8)}`;
+
+  return {
+    id: String(rental.rentalId ?? fallbackId),
+    customerId: customerId,
     customerName: rental.customerName ?? null,
     startDate: rental.startDate ?? null,
     endDate: rental.endDate ?? null,
@@ -125,7 +149,7 @@ async function fetchCustomerAgreements(baseUrl: string, apiKey: string, customer
       id: machine.machineId !== undefined ? String(machine.machineId) : undefined,
       name: formatMachineLabel(machine),
     })),
-  }));
+  };
 }
 
 function formatMachineLabel(machine: RentalMachine) {

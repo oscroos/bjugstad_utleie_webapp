@@ -1,7 +1,7 @@
 // components/Navbar.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, type MouseEvent } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
@@ -18,6 +18,7 @@ import {
   BuildingOfficeIcon,
   ArrowLeftEndOnRectangleIcon,
   ClockIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { IS_DEV } from "@/lib/constants";
 
@@ -30,6 +31,11 @@ type NavItem = {
 export default function ResponsiveNav() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [loadingHref, setLoadingHref] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoadingHref(null);
+  }, [pathname]);
 
   const { data } = useSession();
   const isAdmin = (data?.user as any)?.role === "super_admin";
@@ -51,19 +57,36 @@ export default function ResponsiveNav() {
   const renderLinks = (list: NavItem[]) =>
     list.map(({ href, label, icon }) => {
       const active = pathname === href;
+      const isLoading = loadingHref === href && !active;
+
+      const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) {
+          return;
+        }
+
+        setIsOpen(false);
+        if (!active) {
+          setLoadingHref(href);
+        }
+      };
+
       return (
         <Link
           key={href}
           href={href}
-          onClick={() => setIsOpen(false)}
+          onClick={handleClick}
           className={`flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition-colors cursor-pointer
             ${active
               ? "bg-white/20 text-white"
               : "text-slate-200 hover:bg-white/10 hover:text-white"
             }`}
+          aria-busy={isLoading}
         >
           {icon}
-          <span>{label}</span>
+          <span className="flex-1">{label}</span>
+          {isLoading && (
+            <ArrowPathIcon className="h-4 w-4 animate-spin text-white" />
+          )}
         </Link>
       );
     });

@@ -59,13 +59,15 @@ export default function MachineDetailsDialog({
             {machineId ? <p className="text-sm text-slate-500">ID: {machineId}</p> : null}
           </div>
           <div className="flex items-start gap-4">
-            <div className="flex items-start">
-              <img
-                src={logoSrc}
-                alt={(localMachine?.make ?? machineLabel ?? "OEM") + " logo"}
-                className="h-16 w-auto max-w-[140px] object-contain"
-              />
-            </div>
+            {logoSrc ? (
+              <div className="flex items-start">
+                <img
+                  src={logoSrc}
+                  alt={(localMachine?.make ?? machineLabel ?? "OEM") + " logo"}
+                  className="h-16 w-auto max-w-[140px] object-contain"
+                />
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={onClose}
@@ -165,12 +167,11 @@ function MachineOverview({
 
 function LocationMap() {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-100 px-4 py-3">
-        <h3 className="text-sm font-semibold text-slate-900">Lokasjon</h3>
-        <p className="text-xs text-slate-500">Kart kommer når koordinater er tilgjengelig.</p>
-      </div>
-      <div className="h-64 w-full bg-slate-100" />
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <h3 className="text-sm font-semibold text-slate-900">Lokasjon</h3>
+      <p className="mt-1 text-xs text-slate-500">
+        Koordinater ikke tilgjengelig for denne enheten.
+      </p>
     </div>
   );
 }
@@ -196,14 +197,23 @@ function formatDateTime(value?: string | Date | null) {
 }
 
 function getOemLogo(make?: string | null) {
-  if (!make) return "/oem-logos/no_image_default.svg";
+  console.log("Normalized make:", make);
+  if (!make) return null;
 
   const normalized = make.trim().toLowerCase();
+  console.log("Normalized make:", normalized);
 
-  if (normalized.includes("volvo")) return "/oem-logos/volvo_logo.svg";
-  if (normalized.includes("liebherr")) return "/oem-logos/liebherr_logo.svg";
-  if (normalized.includes("hydrema")) return "/oem-logos/hydrema_logo.svg";
-  if (normalized.includes("drivex")) return "/oem-logos/drivex_logo.svg";
+  if (normalized === "volvo") return "/oem-logos/volvo_logo.svg";
+  if (normalized === "liebherr") return "/oem-logos/liebherr_logo.svg";
+  if (normalized === "hydrema") return "/oem-logos/hydrema_logo.svg";
+  if (normalized === "drivex") return "/oem-logos/drivex_logo.svg";
+  if (normalized === "cat") return "/oem-logos/CAT_logo.svg";
+  if (normalized === "fendt") return "/oem-logos/fendt_logo.svg";
+  if (normalized === "pandrol") return "/oem-logos/pandrol_logo.svg";
+  if (normalized === "kawasaki") return "/oem-logos/kawasaki_logo.svg";
+  if (normalized.includes("rosenqvist")) return "/oem-logos/rosenqvist-rail_logo.png";
+  if (normalized.includes("jcb")) return "/oem-logos/JCB_logo.svg";
+  if (normalized.includes("intermercato") || normalized.includes("inntermercato")) return "/oem-logos/intermercato_logo.png";
   if (normalized.includes("leica")) return "/oem-logos/leica_logo.svg";
   if (normalized.includes("sørling") || normalized.includes("sorling")) return "/oem-logos/sorling_logo.svg";
   if (normalized.includes("dalen")) return "/oem-logos/dalen_logo.png";
@@ -215,6 +225,7 @@ function getOemLogo(make?: string | null) {
   if (normalized.includes("prinoth")) return "/oem-logos/prinoth_logo.webp";
   if (
     normalized.includes("d-and-a") ||
+    normalized.includes("danda") ||
     normalized.includes("d and a") ||
     normalized.includes("d&a")
   ) {
@@ -224,7 +235,7 @@ function getOemLogo(make?: string | null) {
   if (normalized.includes("greenmerch") || normalized.includes("greenmech")) return "/oem-logos/greenmech_logo.png";
   if (normalized.includes("john deere")) return "/oem-logos/john-deere_logo.png";
   if (normalized.includes("klepp")) return "/oem-logos/klepp_logo.png";
-  if (normalized.includes("cat") || normalized.includes("caterpillar")) return "/oem-logos/CAT_logo.svg";
 
-  return "/oem-logos/no_image_default.svg";
+  return null;
 }
+

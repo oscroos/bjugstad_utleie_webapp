@@ -5,10 +5,8 @@ import "./globals.css";
 import SideNav from "@/components/Navbar";
 import { auth } from "@/lib/auth";
 import AuthProvider from "@/components/AuthProvider";
-import MachinesProviderServer from "@/components/MachinesProvider.server";
 import { Suspense } from "react";
 import Spinner from "@/components/Spinner";
-import MachinesGate from "@/components/MachinesGate";
 import { LATEST_TERMS_VERSION } from "@/lib/constants";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -44,18 +42,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {showShell ? (
             <>
               <SideNav />
-              <Suspense fallback={
-                // Sidebar width (match Navbar)
-                <main className="md:ml-56 min-h-screen grid place-items-center">
-                  <Spinner label="Laster side..." />
-                </main>
-              }>
-                {/* Preload machines once per login/refresh and share via context */}
-                <MachinesProviderServer>
-                  <main className="md:ml-56 min-h-screen overflow-y-auto">
-                    <MachinesGate>{children}</MachinesGate>
+              <Suspense
+                fallback={
+                  // Sidebar width (match Navbar)
+                  <main className="md:ml-56 min-h-screen grid place-items-center">
+                    <Spinner label="Laster side..." />
                   </main>
-                </MachinesProviderServer>
+                }
+              >
+                <main className="md:ml-56 min-h-screen overflow-y-auto">
+                  {children}
+                </main>
               </Suspense>
             </>
           ) : (

@@ -7,9 +7,10 @@ import maplibregl, { Map, GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { SunIcon, MoonIcon } from "@heroicons/react/24/solid";
 import { Flag, FlagOff, Route, RouteOff, Text as TextIcon, ListX } from "lucide-react";
-import { useMachines } from "@/components/MachinesContext";
+import { useMachines, useMachinesList } from "@/components/MachinesContext";
 import type { MachineFeature, MachinesFC } from "@/types/machines";
 import Image from "next/image";
+import { getOemLogo } from "@/lib/oem";
 
 type Props = { features?: MachinesFC };
 
@@ -25,23 +26,11 @@ const c = {
     cluster3: "#486581",
 };
 
-const OEM_LOGOS: Record<string, string> = {
-    hydrema: "/oem-logos/hydrema_logo.svg",
-    cat: "/oem-logos/CAT_logo.svg",
-    default: "/oem-logos/no_image_default.svg",
-};
-
 const OEM_COLORS: Record<string, string> = {
     hydrema: "#000000", // black
     cat: "#F59E0B",     // orange/amber
     default: c.blue,    // fallback
 };
-
-function getMachineLogo(oem_name: string): string {
-    const raw = oem_name?.trim().toLowerCase();
-    console.log("OEM name:", raw);
-    return (raw && OEM_LOGOS[raw]) ?? OEM_LOGOS.default;
-}
 
 function buildOemColorExpression(): any[] {
     // ["match", ["downcase", ["coalesce", ["get","oem_name"], ""]], "hydrema","#000", "cat","#F59E0B", fallback]
@@ -83,6 +72,7 @@ export default function MapView({ features }: Props) {
 
     // ----- read data: prefer prop, else context -----
     const ctx = useMachines();
+    const machineList = useMachinesList();
     const data: MachinesFC = features ?? ctx;
 
     // Validate incoming features
@@ -586,33 +576,36 @@ export default function MapView({ features }: Props) {
                             </tr>
                         </thead>
                         <tbody className="text-sm">
-                            {safeFeatures.features.map((f) => {
-                                const [lng, lat] = (f.geometry as Point).coordinates as [number, number];
-                                const id = f.properties?.id;
-                                const name = f.properties?.name ?? "Maskin";
-                                const oem_name = f.properties?.oem_name ?? "N/A";
-                                console.log("Machine OEM name in table:", oem_name);
-                                const last = f.properties?.last_pos_reported_at ?? null;
+                            {machineList.map((machine) => {
+                                const id = machine.id;
+                                const name = machine.name ?? "Maskin";
+                                const oem_name = machine.oem_name ?? "N/A";
+                                const last = machine.last_pos_reported_at ?? null;
+                                const lng = machine.lng;
+                                const lat = machine.lat;
+                                const hasCoords = Number.isFinite(lng) && Number.isFinite(lat);
                                 const isSelected = String(selectedId) === String(id);
 
                                 return (
                                     <tr
-                                        key={String(id) + "_" + lng + "_" + lat}
+                                        key={String(id)}
                                         aria-selected={isSelected}
                                         className={
-                                            `cursor-pointer border-b border-slate-100 ` +
+                                            `${hasCoords ? "cursor-pointer" : "cursor-default"} border-b border-slate-100 ` +
                                             (isSelected
                                                 ? `bg-blue-50/60 ring-1 ring-inset ring-blue-300`
-                                                : `hover:bg-slate-50`)
+                                                : `${hasCoords ? "hover:bg-slate-50" : ""}`)
                                         }
-                                        onClick={() => focusMachineById(String(id))}
+                                        onClick={() => {
+                                            if (hasCoords) focusMachineById(String(id));
+                                        }}
                                     >
                                         <td className="px-3 py-2">
                                             {/* Placeholder image */}
                                             <div className="flex h-10 w-14 items-center justify-center">
                                                 <Image
-                                                    src={getMachineLogo(oem_name)}
-                                                    alt={`${f.properties?.oem_name ?? "Maskin"} logo`}
+                                                    src={getOemLogo(oem_name) ?? "/oem-logos/no_image_default.svg"}
+                                                    alt={`${oem_name ?? "Maskin"} logo`}
                                                     width={56}
                                                     height={40}
                                                     className="max-h-full max-w-full object-contain"
@@ -622,15 +615,21 @@ export default function MapView({ features }: Props) {
                                         </td>
                                         <td className="truncate px-3 py-2 text-slate-700">{String(id ?? "-")}</td>
                                         <td className="truncate px-3 py-2 text-slate-900">{name}</td>
-                                        <td className="px-3 py-2 tabular-nums text-slate-700">{lng.toFixed(5)}</td>
-                                        <td className="px-3 py-2 tabular-nums text-slate-700">{lat.toFixed(5)}</td>
+                                        <td className="px-3 py-2 tabular-nums text-slate-700">
+                                            {hasCoords ? (lng as number).toFixed(5) : <span className="text-slate-400">-</span>}
+                                        </td>
+                                        <td className="px-3 py-2 tabular-nums text-slate-700">
+                                            {hasCoords ? (lat as number).toFixed(5) : <span className="text-slate-400">-</span>}
+                                        </td>
                                         <td className="px-3 py-2 text-slate-600">
-                                            {last ? formatLastUpdated(last) : <span className="text-slate-400">-</span>}
+                                            {hasCoords
+                                                ? (last ? formatLastUpdated(last) : <span className="text-slate-400">-</span>)
+                                                : <span className="text-slate-400">Posisjon ikke tilgjengelig for denne enheten.</span>}
                                         </td>
                                     </tr>
                                 );
                             })}
-                            {safeFeatures.features.length === 0 && (
+                            {machineList.length === 0 && (
                                 <tr>
                                     <td colSpan={6} className="px-3 py-10 text-center text-slate-400">
                                         Ingen maskiner å vise.

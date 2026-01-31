@@ -3,7 +3,7 @@
 
 import { createContext, useContext } from "react";
 import type { AppError } from "@/lib/errors";
-import type { MachinesFC, MachineFeature, MachineProps } from "@/types/machines";
+import type { MachinesFC, MachineFeature, MachineProps, MachineListEntry, MachinesData } from "@/types/machines";
 
 /** Ensure we always have { id, name, last_pos_reported_at } on properties */
 function normalizeMachinesFC(input: any): MachinesFC {
@@ -26,8 +26,21 @@ function normalizeMachinesFC(input: any): MachinesFC {
     return { type: "FeatureCollection", features };
 }
 
+function normalizeMachinesList(input: any): MachineListEntry[] {
+    const list = Array.isArray(input) ? input : [];
+    return list.map((entry: any) => ({
+        id: entry?.id,
+        name: String(entry?.name ?? "N/A"),
+        oem_name: String(entry?.oem_name ?? "N/A"),
+        last_pos_reported_at:
+            entry?.last_pos_reported_at != null ? String(entry.last_pos_reported_at) : null,
+        lat: entry?.lat != null ? Number(entry.lat) : null,
+        lng: entry?.lng != null ? Number(entry.lng) : null,
+    }));
+}
+
 export type MachinesState =
-    | { status: "ready"; data: MachinesFC }
+    | { status: "ready"; data: MachinesData }
     | { status: "error"; error: AppError }
     | { status: "loading" }; // used by Suspense fallback only
 
@@ -42,7 +55,14 @@ export function useMachinesState() {
 /** Back-compat: returns data or throws a helpful error if not ready */
 export function useMachines(): MachinesFC {
     const s = useMachinesState();
-    if (s.status === "ready") return s.data;
+    if (s.status === "ready") return s.data.features;
+    if (s.status === "error") throw new Error("Maskindata er ikke tilgjengelig (error state).");
+    throw new Error("Maskindata lastes fortsatt."); // loading
+}
+
+export function useMachinesList(): MachineListEntry[] {
+    const s = useMachinesState();
+    if (s.status === "ready") return s.data.list;
     if (s.status === "error") throw new Error("Maskindata er ikke tilgjengelig (error state).");
     throw new Error("Maskindata lastes fortsatt."); // loading
 }
@@ -58,7 +78,13 @@ export function MachinesProvider({
     let normalized: MachinesState;
 
     if (value?.status === "ready") {
-        normalized = { status: "ready", data: normalizeMachinesFC(value.data) };
+        normalized = {
+            status: "ready",
+            data: {
+                features: normalizeMachinesFC(value.data?.features),
+                list: normalizeMachinesList(value.data?.list),
+            },
+        };
     } else if (value?.status === "error") {
         normalized = { status: "error", error: value.error };
     } else {

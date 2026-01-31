@@ -1,16 +1,61 @@
 // lib/machines.ts
 import { cache } from "react";
 import { query } from "@/lib/db";
-import type { MachinesFC, MachineFeature } from "@/types/machines";
+import type { MachinesFC, MachineFeature, MachineListEntry, MachinesData } from "@/types/machines";
 import { IS_DEV } from "./constants";
+import { fetchAgreementsForUser, splitAgreementsByStatus } from "@/lib/agreements";
 
-// Fetch all machines with a known position from the DB,
-// and return as a GeoJSON FeatureCollection.
-// Cached for the duration of the serverless function instance,
-// so subsequent calls during the same request (e.g. RSC + API route)
-// or subsequent requests (if the instance is reused) are fast.
-export const getMachinesFC = cache(async (): Promise<MachinesFC> => {
-    const label = `[machines] query ${Date.now().toString(36)}-${Math.random()
+// Fetch machines (with or without coordinates) for the Kart view.
+export async function getVisibleMachinesForUser(user?: { id?: string | null; role?: string | null }): Promise<MachinesData> {
+    if (!user?.id) {
+        return { features: { type: "FeatureCollection", features: [] }, list: [] };
+    }
+
+    const isAdmin = user.role === "super_admin";
+
+    if (isAdmin) {
+        const list = await getAllMachinesList();
+        return { features: buildFeatureCollection(list), list };
+    }
+
+    const agreements = await fetchAgreementsForUser(user.id, user.role);
+    const { active } = splitAgreementsByStatus(agreements);
+    const agreementMachines = collectAgreementMachines(active);
+    const dbIds = agreementMachines
+        .filter((m) => !m.isSynthetic)
+        .map((m) => m.id);
+
+    const dbEntries = await getMachinesByIds(dbIds);
+    const dbMap = new Map(dbEntries.map((entry) => [String(entry.id), entry]));
+
+    const list = agreementMachines.map((machine) => {
+        const dbEntry = machine.isSynthetic ? undefined : dbMap.get(machine.id);
+        if (dbEntry) {
+            const name = dbEntry.name?.trim() || machine.name || `Maskin ${dbEntry.id}`;
+            const oemName =
+                dbEntry.oem_name && dbEntry.oem_name !== "N/A"
+                    ? dbEntry.oem_name
+                    : (machine.make ?? "N/A");
+            return { ...dbEntry, name, oem_name: oemName };
+        }
+
+        return {
+            id: machine.id,
+            name: machine.name || "Maskin",
+            oem_name: machine.make ?? "N/A",
+            last_pos_reported_at: null,
+            lat: null,
+            lng: null,
+        };
+    });
+
+    list.sort((a, b) => a.name.localeCompare(b.name, "nb-NO", { sensitivity: "base" }));
+
+    return { features: buildFeatureCollection(list), list };
+}
+
+const getAllMachinesList = cache(async (): Promise<MachineListEntry[]> => {
+    const label = `[machines] all ${Date.now().toString(36)}-${Math.random()
         .toString(36)
         .slice(2, 7)}`;
 
@@ -29,49 +74,110 @@ export const getMachinesFC = cache(async (): Promise<MachinesFC> => {
                 last_pos_latitude  AS lat,
                 last_pos_longitude AS lng
             FROM machines
-            WHERE last_pos_latitude IS NOT NULL
-                AND last_pos_longitude IS NOT NULL
             ORDER BY name;
             `);
 
         if (IS_DEV) {
             console.log(`[machines] DB returned ${rows.length} rows`);
-            console.dir(rows, { depth: null });
         }
 
-        const features: MachineFeature[] = rows.map((m: any): MachineFeature => {
-            const reportedAt: string | null = m.last_pos_reported_at
-                ? new Date(m.last_pos_reported_at).toISOString()
-                : null;
-
-            return {
-                type: "Feature",
-                geometry: {
-                    type: "Point",
-                    coordinates: [Number(m.lng), Number(m.lat)],
-                },
-                properties: {
-                    id:
-                        typeof m.id === "number" || typeof m.id === "string"
-                            ? m.id
-                            : String(m.id),
-                    name: String(m.name ?? "N/A"),
-                    oem_name: String(m.oem_name ?? "N/A"),
-                    last_pos_reported_at: reportedAt,
-                },
-            };
-        });
-
-        const fc: MachinesFC = { type: "FeatureCollection", features };
-
-        // Print full FeatureCollection object
-        if (false && IS_DEV) {
-            console.log("[machines] FeatureCollection to be provided to client:");
-            console.dir(fc, { depth: null });
-        }
-
-        return fc;
+        return rows.map((m: any) => toMachineListEntry(m));
     } finally {
         if (IS_DEV) console.timeEnd(label);
     }
 });
+
+async function getMachinesByIds(ids: string[]): Promise<MachineListEntry[]> {
+    const unique = [...new Set(ids.filter(Boolean).map((id) => String(id)))];
+    if (!unique.length) return [];
+
+    const { rows } = await query(
+        `
+        SELECT
+            id,
+            name,
+            oem_name,
+            last_pos_reported_at,
+            last_pos_latitude  AS lat,
+            last_pos_longitude AS lng
+        FROM machines
+        WHERE id = ANY($1::text[])
+        ORDER BY name;
+        `,
+        [unique],
+    );
+
+    return rows.map((m: any) => toMachineListEntry(m));
+}
+
+function toMachineListEntry(row: any): MachineListEntry {
+    const reportedAt: string | null = row.last_pos_reported_at
+        ? new Date(row.last_pos_reported_at).toISOString()
+        : null;
+
+    return {
+        id: typeof row.id === "number" || typeof row.id === "string" ? row.id : String(row.id),
+        name: String(row.name ?? "N/A"),
+        oem_name: String(row.oem_name ?? "N/A"),
+        last_pos_reported_at: reportedAt,
+        lat: row.lat != null ? Number(row.lat) : null,
+        lng: row.lng != null ? Number(row.lng) : null,
+    };
+}
+
+function buildFeatureCollection(list: MachineListEntry[]): MachinesFC {
+    const features: MachineFeature[] = list
+        .filter((entry) => Number.isFinite(entry.lat) && Number.isFinite(entry.lng))
+        .map((entry): MachineFeature => ({
+            type: "Feature",
+            geometry: {
+                type: "Point",
+                coordinates: [Number(entry.lng), Number(entry.lat)],
+            },
+            properties: {
+                id: entry.id,
+                name: entry.name,
+                oem_name: entry.oem_name,
+                last_pos_reported_at: entry.last_pos_reported_at,
+            },
+        }));
+
+    return { type: "FeatureCollection", features };
+}
+
+function collectAgreementMachines(
+    agreements: Array<{ id: string; machines?: Array<{ id?: string; name?: string | null; make?: string | null }> }>,
+) {
+    const results: Array<{ id: string; name: string | null; make: string | null; isSynthetic: boolean }> = [];
+    const seen = new Set<string>();
+
+    agreements.forEach((agreement) => {
+        const machines = agreement.machines ?? [];
+        machines.forEach((machine, index) => {
+            const rawId = machine?.id?.trim();
+            if (rawId) {
+                if (seen.has(rawId)) return;
+                seen.add(rawId);
+                results.push({
+                    id: rawId,
+                    name: machine?.name ?? null,
+                    make: machine?.make ?? null,
+                    isSynthetic: false,
+                });
+                return;
+            }
+
+            const syntheticId = `unknown-${agreement.id}-${index}`;
+            if (seen.has(syntheticId)) return;
+            seen.add(syntheticId);
+            results.push({
+                id: syntheticId,
+                name: machine?.name ?? null,
+                make: machine?.make ?? null,
+                isSynthetic: true,
+            });
+        });
+    });
+
+    return results;
+}

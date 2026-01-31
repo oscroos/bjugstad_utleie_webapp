@@ -4,7 +4,7 @@ import AgreementsTable, { type AgreementRow } from "./AgreementsTable";
 import { auth } from "@/lib/auth";
 import ErrorPanel from "@/components/ErrorPanel";
 import { normalizeError, type AppError } from "@/lib/errors";
-import type { AgreementPayload } from "@/app/api/agreements/route";
+import type { AgreementPayload } from "@/lib/agreements";
 
 export const revalidate = 0;
 

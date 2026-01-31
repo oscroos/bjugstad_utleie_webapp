@@ -1,6 +1,7 @@
 // components/MachinesProvider.server.tsx
 // (Server Component)
-import { getMachinesFC } from "@/lib/machines";
+import { auth } from "@/lib/auth";
+import { getVisibleMachinesForUser } from "@/lib/machines";
 import { MachinesProvider } from "./MachinesContext";
 import { normalizeError } from "@/lib/errors";
 
@@ -10,7 +11,8 @@ export default async function MachinesProviderServer({
     children,
 }: { children: React.ReactNode }) {
     try {
-        const machines = await getMachinesFC();
+        const session = await auth();
+        const machines = await getVisibleMachinesForUser(session?.user ?? null);
         return (
             <MachinesProvider value={{ status: "ready", data: machines }}>
                 {children}

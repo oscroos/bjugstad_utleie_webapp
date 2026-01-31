@@ -11,3 +11,13 @@ export type MachineProps = {
 
 export type MachineFeature = Feature<Point, MachineProps>;
 export type MachinesFC = FeatureCollection<Point, MachineProps>;
+
+export type MachineListEntry = MachineProps & {
+    lat: number | null;
+    lng: number | null;
+};
+
+export type MachinesData = {
+    features: MachinesFC;
+    list: MachineListEntry[];
+};

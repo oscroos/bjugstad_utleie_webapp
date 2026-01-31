@@ -6,7 +6,9 @@ import { IS_DEV } from "./constants";
 import { fetchAgreementsForUser, splitAgreementsByStatus } from "@/lib/agreements";
 
 // Fetch machines (with or without coordinates) for the Kart view.
-export async function getVisibleMachinesForUser(user?: { id?: string | null; role?: string | null }): Promise<MachinesData> {
+export async function getVisibleMachinesForUser(
+    user?: { id?: string | null; role?: string | null } | null,
+): Promise<MachinesData> {
     if (!user?.id) {
         return { features: { type: "FeatureCollection", features: [] }, list: [] };
     }

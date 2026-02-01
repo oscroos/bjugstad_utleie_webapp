@@ -44,6 +44,8 @@ export async function query<T = any>(text: string, params?: any[]): Promise<Quer
 
 export type MachineRow = {
     id: string;
+    oem_id: string | null;
+    serial_number: string | null;
     name: string | null;
     oem_name: string | null;
     last_pos_reported_at?: Date | null;
@@ -91,6 +93,8 @@ export async function upsertMachines(rows: MachineRow[]): Promise<number> {
 
     const cols = [
         "id",
+        "oem_id",
+        "serial_number",
         "name",
         "oem_name",
         "last_pos_reported_at",
@@ -104,6 +108,8 @@ export async function upsertMachines(rows: MachineRow[]): Promise<number> {
         const offset = i * cols.length;
         values.push(
             r.id,
+            r.oem_id ?? null,
+            r.serial_number ?? null,
             r.name ?? null,
             r.oem_name ?? null,
             r.last_pos_reported_at ?? null,
@@ -111,13 +117,15 @@ export async function upsertMachines(rows: MachineRow[]): Promise<number> {
             r.last_pos_longitude ?? null,
         );
         placeholders.push(
-            `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6})`
+            `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8})`
         );
     });
 
     const sql = `
     INSERT INTO machines (
       id,
+      oem_id,
+      serial_number,
       name,
       oem_name,
       last_pos_reported_at,
@@ -126,7 +134,9 @@ export async function upsertMachines(rows: MachineRow[]): Promise<number> {
     )
     VALUES ${placeholders.join(", ")}
     ON CONFLICT (id) DO UPDATE
-      SET name = EXCLUDED.name,
+      SET oem_id = EXCLUDED.oem_id,
+          serial_number = EXCLUDED.serial_number,
+          name = EXCLUDED.name,
           oem_name = EXCLUDED.oem_name,
           last_updated = now(),
           last_pos_reported_at = COALESCE(EXCLUDED.last_pos_reported_at, machines.last_pos_reported_at),

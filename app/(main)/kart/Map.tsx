@@ -10,7 +10,7 @@ import { Flag, FlagOff, Route, RouteOff, Text as TextIcon, ListX } from "lucide-
 import { useMachines, useMachinesList } from "@/components/MachinesContext";
 import type { MachineFeature, MachinesFC } from "@/types/machines";
 import Image from "next/image";
-import { getOemLogo } from "@/lib/oem";
+import { getOEMLogo } from "@/lib/get_OEM_logo";
 
 type Props = { features?: MachinesFC };
 
@@ -604,7 +604,7 @@ export default function MapView({ features }: Props) {
                                             {/* Placeholder image */}
                                             <div className="flex h-10 w-14 items-center justify-center">
                                                 <Image
-                                                    src={getOemLogo(oem_name) ?? "/oem-logos/no_image_default.svg"}
+                                                    src={getOEMLogo(oem_name) ?? "/oem-logos/no_image_default.svg"}
                                                     alt={`${oem_name ?? "Maskin"} logo`}
                                                     width={56}
                                                     height={40}

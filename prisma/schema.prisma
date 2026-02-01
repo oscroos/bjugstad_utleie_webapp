@@ -92,6 +92,8 @@ model Machine {
   id                String    @id
   name              String?
   oemName           String?   @map("oem_name")
+  oemId             String?   @map("oem_id")
+  serialNumber      String?   @map("serial_number")
   firstSeen         DateTime  @default(now()) @map("first_seen")
   lastUpdated       DateTime  @default(now()) @updatedAt @map("last_updated")
   lastPosReportedAt DateTime? @map("last_pos_reported_at")

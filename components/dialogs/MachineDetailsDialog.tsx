@@ -2,7 +2,7 @@
 
 import { ArrowPathIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
-import { getOemLogo } from "@/lib/oem";
+import { getOEMLogo } from "@/lib/get_OEM_logo";
 
 export type MachineDetails = {
   machineId: number;
@@ -41,7 +41,7 @@ export default function MachineDetailsDialog({
   const { open, loading, error, machine, machineId, machineLabel, currentRenter } = state;
   const [localMachine, setLocalMachine] = useState<MachineDetails | null>(machine);
   const [localError, setLocalError] = useState<string | null>(error);
-  const logoSrc = getOemLogo(localMachine?.make ?? machineLabel);
+  const logoSrc = getOEMLogo(localMachine?.make ?? machineLabel);
 
   useEffect(() => {
     setLocalMachine(machine);

@@ -1,4 +1,4 @@
-export function getOemLogo(make?: string | null) {
+export function getOEMLogo(make?: string | null) {
   if (!make) return null;
 
   const normalized = make.trim().toLowerCase();
@@ -11,7 +11,14 @@ export function getOemLogo(make?: string | null) {
   if (normalized === "fendt") return "/oem-logos/fendt_logo.svg";
   if (normalized === "pandrol") return "/oem-logos/pandrol_logo.svg";
   if (normalized === "kawasaki") return "/oem-logos/kawasaki_logo.svg";
+  if (normalized === "ariens") return "/oem-logos/ariens_logo.svg";
+  if (normalized === "avant") return "/oem-logos/avant_logo.png";
+  if (normalized === "asp") return "/oem-logos/asp_logo.png";
+  if (normalized === "bsb") return "/oem-logos/bsb_logo.png";
+  if (normalized === "tokvam") return "/oem-logos/tokvam_logo.png";
   if (normalized.includes("rosenqvist")) return "/oem-logos/rosenqvist-rail_logo.png";
+  if (normalized.includes("entrack")) return "/oem-logos/entrack_logo.png";
+  if (normalized.includes("aquarius")) return "/oem-logos/aquarius_logo.jpg";
   if (normalized.includes("jcb")) return "/oem-logos/JCB_logo.svg";
   if (normalized.includes("intermercato") || normalized.includes("inntermercato")) {
     return "/oem-logos/intermercato_logo.png";
@@ -25,10 +32,19 @@ export function getOemLogo(make?: string | null) {
   if (normalized.includes("ifor williams") || normalized.includes("ifor-williams")) {
     return "/oem-logos/ifor-williams_logo.jpg";
   }
+  if (normalized.includes("quicke") || normalized === "ålø" || normalized === "alo") {
+    return "/oem-logos/quicke_logo.png";
+  }
+  if (normalized === "engcon" || normalized === "encon") {
+    return "/oem-logos/engcon_logo.jpg";
+  }
+  if (normalized.includes("can am") || normalized.includes("can-am") || normalized === "brp") {
+    return "/oem-logos/can-am_logo.png";
+  }
   if (normalized.includes("massey ferguson")) return "/oem-logos/massey-ferguson_logo.png";
   if (normalized.includes("tellefsdal")) return "/oem-logos/schmidt-tellefsdal_logo.png";
   if (normalized.includes("svetruck")) return "/oem-logos/svetruck_logo.png";
-  if (normalized.includes("prinoth")) return "/oem-logos/prinoth_logo.webp";
+  if (normalized.includes("prinoth")) return "/oem-logos/prinoth_logo.jpg";
   if (
     normalized.includes("d-and-a") ||
     normalized.includes("danda") ||

@@ -15,7 +15,7 @@ function asNumber(value: any): number | null {
 
 app.timer("timer_get_customers", {
     schedule: "0 0 0 * * *",
-    runOnStartup: true,
+    runOnStartup: false,
     handler: async (_: Timer, ctx: InvocationContext): Promise<void> => {
         const startedAt = new Date().toISOString();
         ctx.log(`timer_get_customers fired at ${startedAt}`);

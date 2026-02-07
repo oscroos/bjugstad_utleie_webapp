@@ -106,18 +106,24 @@ export default function ResponsiveNav() {
   return (
     <>
       {/* Mobile topbar */}
-      <header className="md:hidden flex items-center justify-between bg-gradient-to-b from-[#001a4d] via-[#002c6d] to-[#1c1464] p-4 text-white">
-        <button onClick={() => setIsOpen(true)} aria-label="Open menu">
+      <header className="md:hidden relative flex items-center justify-center bg-gradient-to-b from-[#001a4d] via-[#002c6d] to-[#1c1464] p-4 text-white">
+        <button
+          onClick={() => setIsOpen(true)}
+          aria-label="Open menu"
+          className="absolute left-4"
+        >
           <IconMenu2 className="h-6 w-6" />
         </button>
-        <Image
-          src="/bjugstad-logos/horizontal/White.png"
-          alt="Bjugstad"
-          width={160}
-          height={36}
-          className="h-9 w-auto"
-          priority
-        />
+        <Link href="/" aria-label="Gå til startsiden">
+          <Image
+            src="/bjugstad-logos/horizontal/White.png"
+            alt="Bjugstad"
+            width={160}
+            height={36}
+            className="h-9 w-auto"
+            priority
+          />
+        </Link>
       </header>
 
       {/* Desktop sidebar */}
@@ -127,14 +133,16 @@ export default function ResponsiveNav() {
                    md:flex md:flex-col"
       >
         <div className="flex h-16 items-center justify-center border-b border-white/10 px-6">
-          <Image
-            src="/bjugstad-logos/horizontal/White.png"
-            alt="Bjugstad"
-            width={180}
-            height={44}
-            className="h-11 w-auto"
-            priority
-          />
+          <Link href="/" aria-label="Gå til startsiden">
+            <Image
+              src="/bjugstad-logos/horizontal/White.png"
+              alt="Bjugstad"
+              width={180}
+              height={44}
+              className="h-11 w-auto"
+              priority
+            />
+          </Link>
         </div>
 
         <nav className="mt-4 flex flex-col gap-1 px-2 flex-1">

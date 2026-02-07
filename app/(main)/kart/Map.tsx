@@ -497,6 +497,7 @@ export default function MapView({ features }: Props) {
     useEffect(() => {
         const map = mapRef.current;
         if (!map || !loadedRef.current || !MAPTILER_KEY) return;
+        const stableMap = map;
         if (appliedThemeRef.current === theme) return;
 
         const url =
@@ -525,14 +526,14 @@ export default function MapView({ features }: Props) {
             });
 
             appliedThemeRef.current = theme;
-            map.setStyle(nextStyle, { diff: true });
+            stableMap.setStyle(nextStyle, { diff: true });
 
             // Re-attach once the new style (+glyphs) is fully ready
-            map.once("style.load", () => {
-                ensureDataLayers(map, safeFeatures);
-                reapplyAllVisibilities(map);
-                applyLabelContrast(map, themeRef.current);
-                bringMachineLayersToTop(map);
+            stableMap.once("style.load", () => {
+                ensureDataLayers(stableMap, safeFeatures);
+                reapplyAllVisibilities(stableMap);
+                applyLabelContrast(stableMap, themeRef.current);
+                bringMachineLayersToTop(stableMap);
             });
         }
 
@@ -967,7 +968,8 @@ function applyVisibilityToStyle(
 ) {
     const layers = style.layers ?? [];
     for (const layer of layers) {
-        if (layer.source === "machines") continue;
+        const source = "source" in layer ? layer.source : undefined;
+        if (source === "machines") continue;
 
         const id = String(layer.id ?? "");
         const sourceLayer = String((layer as any)["source-layer"] ?? "");

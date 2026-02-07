@@ -18,7 +18,7 @@ import {
 } from "@tabler/icons-react";
 import DataTable, { type DataColumn } from "@/components/DataTable";
 import { useMachines, useMachinesList } from "@/components/MachinesContext";
-import type { MachineFeature, MachineListEntry, MachinesFC } from "@/types/machines";
+import type { MachineFeature, MachineListEntry, MachinesFC, MachineProps } from "@/types/machines";
 import Image from "next/image";
 import { getOEMLogo } from "@/lib/get_OEM_logo";
 
@@ -352,19 +352,44 @@ export default function MapView({ features }: Props) {
         }
 
         const coords = (f.geometry as Point).coordinates.slice() as [number, number];
-        const { id, name } = (f.properties ?? {}) as { id?: string | number; name?: string };
-        const html = `
-    <div style="min-width:200px; font: 13px/1.4 system-ui, -apple-system, Segoe UI, Roboto;">
-      <div style="font-weight:600; margin-bottom:2px;">${escapeHtml(name ?? "Maskin")}</div>
-      <div style="color:#374151;">ID: ${escapeHtml(String(id ?? "-"))}</div>
-      <div style="color:#6B7280; margin-top:2px;">${coords[1].toFixed(5)}, ${coords[0].toFixed(5)}</div>
-    </div>
-  `;
+        const props = (f.properties ?? {}) as MachineProps;
+        const id = props.id ?? "-";
+        const name = props.name ?? "Maskin";
+        const oemName = props.oem_name ?? "N/A";
+        const logoSrc = getOEMLogo(oemName);
+        const typeValue = formatPopupValue("");
+        const agreementStatus = "-";
+        const renterValue = formatPopupValue("");
+        const lastSeenValue = formatPopupValue(
+            props.last_pos_reported_at ? formatLastUpdated(props.last_pos_reported_at) : "",
+        );
+        const coordsValue = `${coords[1].toFixed(5)}, ${coords[0].toFixed(5)}`;
 
-        const popup = new maplibregl.Popup({ closeOnMove: !(opts?.sticky), offset: 12 })
+        const popupContent = buildPopupContent({
+            id: String(id),
+            name,
+            oemName,
+            logoSrc,
+            typeValue,
+            agreementStatus,
+            renterValue,
+            lastSeenValue,
+            coordsValue,
+        });
+
+        const popup = new maplibregl.Popup({
+            closeOnMove: !(opts?.sticky),
+            closeButton: false,
+            className: "machine-popup",
+            offset: 12,
+        })
             .setLngLat(coords)
-            .setHTML(html)
+            .setDOMContent(popupContent)
             .addTo(map);
+
+        popupContent.querySelector<HTMLButtonElement>("[data-popup-close]")?.addEventListener("click", () => {
+            popup.remove();
+        });
 
         popup.on("close", () => {
             // clear highlight only if it belonged to this popup
@@ -999,6 +1024,107 @@ function escapeHtml(s: string) {
         "'": "&#039;",
     };
     return s.replace(/[&<>"']/g, (ch) => m[ch]);
+}
+
+function formatPopupValue(value?: string | number | null) {
+    if (value === null || value === undefined) return "-";
+    const text = String(value).trim();
+    return text.length ? text : "-";
+}
+
+function buildPopupContent({
+    id,
+    name,
+    oemName,
+    logoSrc,
+    typeValue,
+    agreementStatus,
+    renterValue,
+    lastSeenValue,
+    coordsValue,
+}: {
+    id: string;
+    name: string;
+    oemName: string;
+    logoSrc?: string | null;
+    typeValue: string;
+    agreementStatus: string;
+    renterValue: string;
+    lastSeenValue: string;
+    coordsValue: string;
+}) {
+    const container = document.createElement("div");
+    const statusTone =
+        agreementStatus === "Aktiv"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+            : "border-slate-200 bg-slate-100 text-slate-600";
+    const typeTone = typeValue === "-" ? "text-slate-400 font-medium" : "text-slate-900 font-semibold";
+    const renterTone = renterValue === "-" ? "text-slate-400 font-medium" : "text-slate-900 font-semibold";
+    const lastSeenTone = lastSeenValue === "-" ? "text-slate-400 font-medium" : "text-slate-900 font-semibold";
+    const logoMarkup = logoSrc
+        ? `<img src="${escapeHtml(logoSrc)}" alt="${escapeHtml(oemName)} logo" class="max-h-8 w-auto object-contain" />`
+        : `<span class="text-[10px] font-semibold text-slate-400">OEM</span>`;
+
+    container.className = "min-w-[260px] max-w-[320px]";
+    container.innerHTML = `
+        <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+            <div class="flex items-start justify-between gap-2 border-b border-slate-100 px-2.5 py-2">
+                <div class="flex min-w-0 items-stretch gap-2">
+                    <div class="flex w-9 items-center justify-center rounded-lg border border-slate-200 bg-white p-0.5">
+                        ${logoMarkup}
+                    </div>
+                    <div class="min-w-0">
+                        <div class="truncate text-[13px] font-semibold text-slate-900">${escapeHtml(name)}</div>
+                        <div class="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                            ID: ${escapeHtml(id)}
+                        </div>
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    data-popup-close
+                    class="cursor-pointer rounded-full p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                    aria-label="Lukk"
+                >
+                    <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="space-y-2 px-2.5 py-2.5">
+                <div class="grid grid-cols-2 gap-1.5">
+                    <div class="min-h-[52px] rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
+                        <div class="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Type</div>
+                        <div class="mt-0.5 text-[11px] ${typeTone}">${escapeHtml(typeValue)}</div>
+                    </div>
+                    <div class="min-h-[52px] rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
+                        <div class="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Avtale</div>
+                        <div class="mt-0.5">
+                            <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusTone}">
+                                ${escapeHtml(agreementStatus)}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="min-h-[52px] rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
+                        <div class="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Leietaker</div>
+                        <div class="mt-0.5 text-[11px] ${renterTone}">${escapeHtml(renterValue)}</div>
+                    </div>
+                    <div class="min-h-[52px] rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
+                        <div class="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Sist sett</div>
+                        <div class="mt-0.5 text-[11px] ${lastSeenTone}">${escapeHtml(lastSeenValue)}</div>
+                    </div>
+                    <div class="col-span-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
+                        <div class="text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+                            Koordinater
+                        </div>
+                        <div class="mt-0.5 text-[11px] font-medium text-slate-600">${escapeHtml(coordsValue)}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    return container;
 }
 
 function formatLastUpdated(v: string | number) {

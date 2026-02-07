@@ -12,6 +12,7 @@ import {
   XMarkIcon,
   ListBulletIcon,
   DocumentTextIcon,
+  TruckIcon,
   MapIcon,
   UserIcon,
   UsersIcon,
@@ -43,6 +44,7 @@ export default function ResponsiveNav() {
   const mainItems: NavItem[] = [
     { href: "/avtaler", label: "Avtaler", icon: <ListBulletIcon className="h-5 w-5" /> },
     { href: "/dokumenter", label: "Dokumenter", icon: <DocumentTextIcon className="h-5 w-5" /> },
+    { href: "/maskiner", label: "Maskiner", icon: <TruckIcon className="h-5 w-5" /> },
     { href: "/kart", label: "Kart", icon: <MapIcon className="h-5 w-5" /> },
     { href: "/profil", label: "Min profil", icon: <UserIcon className="h-5 w-5" /> },
   ];

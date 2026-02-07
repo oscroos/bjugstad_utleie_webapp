@@ -11,6 +11,37 @@ export function formatPhone(raw?: string | null, fallback = "-") {
   return `${country} ${spaced}`.trim();
 }
 
+export function normalizePhone(raw?: string | null): string | null {
+  if (raw === null || raw === undefined) return null;
+
+  let s = String(raw).trim();
+  if (!s) return null;
+
+  if (/^(null|undefined|nan)$/i.test(s)) return null;
+
+  s = s.replace(/[\s\-().]/g, "");
+  if (!s) return null;
+
+  if (s.startsWith("+")) {
+    const digits = s.slice(1);
+    return /^\d+$/.test(digits) ? `+${digits}` : null;
+  }
+
+  if (s.startsWith("00")) {
+    const digits = s.slice(2);
+    return /^\d+$/.test(digits) && digits.length > 0 ? `+${digits}` : null;
+  }
+
+  if (!/^\d+$/.test(s)) return null;
+  if (s.length < 7) return null;
+
+  if (s.length === 8) {
+    return `+47${s}`;
+  }
+
+  return `+${s}`;
+}
+
 export function formatDisplay(value?: string | null, fallback = "-") {
   if (!value) return fallback;
   const trimmed = value.trim();

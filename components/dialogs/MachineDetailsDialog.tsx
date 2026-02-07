@@ -122,7 +122,7 @@ function MachineOverview({
     { label: "Registreringsnummer", value: machine.registrationNumber },
     { label: "Serienummer", value: machine.serialNumber },
     { label: "Lokasjon (tekst)", value: machine.location },
-    { label: "Spor kontroll dato", value: formatDateTime(machine.railControlDate) },
+    { label: "Siste jernbanekontroll", value: formatDateTime(machine.railControlDate) },
     { label: "Kontrolldato", value: formatDateTime(machine.controlDate) },
     { label: "Aktuell leietaker", value: currentRenter },
   ];

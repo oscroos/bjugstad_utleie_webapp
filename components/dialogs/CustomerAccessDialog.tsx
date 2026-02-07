@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ArrowPathIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import { formatDisplay, formatPhone } from "@/lib/formatters";
+import { formatDisplay, formatPhone, normalizePhone } from "@/lib/formatters";
 
 export type CustomerContactPerson = {
   contactPersonId: number;
@@ -134,16 +134,16 @@ export default function CustomerAccessDialog({
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kunde</p>
             <h2 className="text-2xl font-semibold text-slate-900">{customerName || "Kunde"}</h2>
             {customerId ? <p className="text-sm text-slate-500">ID: {customerId}</p> : null}
-      </div>
-      <button
-        type="button"
-        onClick={onClose}
-        className="cursor-pointer rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-        aria-label="Lukk dialog"
-      >
-        <XMarkIcon className="h-5 w-5" />
-      </button>
-    </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="cursor-pointer rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Lukk dialog"
+          >
+            <XMarkIcon className="h-5 w-5" />
+          </button>
+        </div>
 
         <div className="space-y-5 px-6 py-5">
           {loading ? (
@@ -218,6 +218,9 @@ function CustomerOverview({ customer }: { customer: CustomerDetails | null }) {
     { label: "E-post", value: formatDisplay(customer.email) },
   ];
 
+  const contactPersons = customer.contactPersons ?? [];
+  const contactListScrollable = contactPersons.length > 4;
+
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
       <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
@@ -243,27 +246,33 @@ function CustomerOverview({ customer }: { customer: CustomerDetails | null }) {
         </div>
       </div>
 
-      {customer.contactPersons?.length ? (
+      {contactPersons.length ? (
         <div className="mt-4 rounded-lg bg-white px-3 py-2 shadow-sm">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            Kontaktpersoner (hentet fra Bjugstad API)
+            Kontaktpersoner
           </p>
-          <ul className="mt-2 space-y-2 text-sm text-slate-700">
-            {customer.contactPersons.map((person) => (
-              <li key={person.contactPersonId} className="rounded border border-slate-200 px-3 py-2">
-                <div className="font-semibold text-slate-900">{formatDisplay(person.name, "Ukjent navn")}</div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                  {person.telephoneNumber ? <span>{formatPhone(person.telephoneNumber)}</span> : null}
-                  {formatDisplay(person.email) !== "-" ? (
-                    <>
-                      <span className="text-slate-300">&middot;</span>
-                      <span className="truncate">{formatDisplay(person.email)}</span>
-                    </>
+          <div className={contactListScrollable ? "mt-2 max-h-64 overflow-y-auto pr-2" : "mt-2"}>
+            <ul className="space-y-2 text-sm text-slate-700">
+              {contactPersons.map((person) => (
+                <li key={person.contactPersonId} className="rounded border border-slate-200 px-3 py-2">
+                  <div className="font-semibold text-slate-900">{formatDisplay(person.name, "Ukjent navn")}</div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  {person.telephoneNumber ? (
+                    <span>
+                      {formatPhone(normalizePhone(person.telephoneNumber) ?? person.telephoneNumber)}
+                    </span>
                   ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
+                    {formatDisplay(person.email) !== "-" ? (
+                      <>
+                        <span className="text-slate-300">&middot;</span>
+                        <span className="truncate">{formatDisplay(person.email)}</span>
+                      </>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       ) : null}
     </div>

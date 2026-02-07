@@ -4,9 +4,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Point } from "geojson";
 import maplibregl, { Map, GeoJSONSource } from "maplibre-gl";
+import type { GeoJSONSourceSpecification, LayerSpecification, StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { IconSun, IconMoon } from "@tabler/icons-react";
-import { Flag, FlagOff, Route, RouteOff, Text as TextIcon, ListX } from "lucide-react";
+import {
+    IconSun,
+    IconMoon,
+    IconFlag,
+    IconFlagOff,
+    IconRoad,
+    IconRoadOff,
+    IconWriting,
+    IconWritingOff,
+} from "@tabler/icons-react";
 import DataTable, { type DataColumn } from "@/components/DataTable";
 import { useMachines, useMachinesList } from "@/components/MachinesContext";
 import type { MachineFeature, MachineListEntry, MachinesFC } from "@/types/machines";
@@ -56,7 +65,8 @@ export default function MapView({ features }: Props) {
     const mapRef = useRef<Map | null>(null);
     const loadedRef = useRef(false);
     const appliedThemeRef = useRef<"light" | "dark">("light");
-    const styleRestorePendingRef = useRef(false);
+    const themeRef = useRef<"light" | "dark">("light");
+    const styleCacheRef = useRef<{ light?: StyleSpecification; dark?: StyleSpecification }>({});
 
     // UI theme
     const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -70,6 +80,9 @@ export default function MapView({ features }: Props) {
     const labelLayerIds = useRef<string[]>([]);
     const roadLayerIds = useRef<string[]>([]);
     const borderLayerIds = useRef<string[]>([]);
+    const labelsVisibleRef = useRef(labelsVisible);
+    const roadsVisibleRef = useRef(roadsVisible);
+    const bordersVisibleRef = useRef(bordersVisible);
 
     // ----- read data: prefer prop, else context -----
     const ctx = useMachines();
@@ -243,9 +256,9 @@ export default function MapView({ features }: Props) {
 
     function reapplyAllVisibilities(map: Map) {
         collectLayerIds(map);
-        setVisibility(map, labelLayerIds.current, labelsVisible);
-        setVisibility(map, roadLayerIds.current, roadsVisible);
-        setVisibility(map, borderLayerIds.current, bordersVisible);
+        setVisibility(map, labelLayerIds.current, labelsVisibleRef.current);
+        setVisibility(map, roadLayerIds.current, roadsVisibleRef.current);
+        setVisibility(map, borderLayerIds.current, bordersVisibleRef.current);
     }
 
     // (Re)add our source + layers safely
@@ -467,20 +480,6 @@ export default function MapView({ features }: Props) {
             fitToFeatures(map, safeFeatures);
         });
 
-        // Guarded restore during style swaps
-        map.on("styledata", () => {
-            if (!loadedRef.current) return;
-            if (styleRestorePendingRef.current) return;
-            styleRestorePendingRef.current = true;
-            map.once("idle", () => {
-                styleRestorePendingRef.current = false;
-                ensureDataLayers(map, safeFeatures);
-                reapplyAllVisibilities(map);
-                applyLabelContrast(map, theme);
-                bringMachineLayersToTop(map);
-            });
-        });
-
         // Resize listener
         const ro = new ResizeObserver(() => map.resize());
         if (containerRef.current) ro.observe(containerRef.current);
@@ -505,32 +504,71 @@ export default function MapView({ features }: Props) {
                 ? `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${MAPTILER_KEY}`
                 : `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`;
 
-        appliedThemeRef.current = theme;
-        map.setStyle(url, { diff: true });
+        let cancelled = false;
 
-        // Re-attach once the new style (+glyphs) is fully ready
-        map.once("style.load", () => {
-            ensureDataLayers(map, safeFeatures);
-            reapplyAllVisibilities(map);
-            applyLabelContrast(map, theme);
-            bringMachineLayersToTop(map);
-        });
+        async function swapStyle() {
+            let baseStyle = styleCacheRef.current[theme];
+            if (!baseStyle) {
+                const res = await fetch(url);
+                if (!res.ok) return;
+                baseStyle = (await res.json()) as StyleSpecification;
+                styleCacheRef.current[theme] = baseStyle;
+            }
+            if (cancelled || !baseStyle) return;
+
+            const nextStyle = cloneStyle(baseStyle);
+            addMachinesToStyle(nextStyle, safeFeatures);
+            applyVisibilityToStyle(nextStyle, {
+                labels: labelsVisibleRef.current,
+                roads: roadsVisibleRef.current,
+                borders: bordersVisibleRef.current,
+            });
+
+            appliedThemeRef.current = theme;
+            map.setStyle(nextStyle, { diff: true });
+
+            // Re-attach once the new style (+glyphs) is fully ready
+            map.once("style.load", () => {
+                ensureDataLayers(map, safeFeatures);
+                reapplyAllVisibilities(map);
+                applyLabelContrast(map, themeRef.current);
+                bringMachineLayersToTop(map);
+            });
+        }
+
+        swapStyle();
+        return () => {
+            cancelled = true;
+        };
     }, [theme, safeFeatures]);
 
     // ---------- visibility toggles ----------
     useEffect(() => {
+        themeRef.current = theme;
+    }, [theme]);
+
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || !loadedRef.current) return;
+        applyLabelContrast(map, theme);
+    }, [theme]);
+
+    useEffect(() => {
+        labelsVisibleRef.current = labelsVisible;
         const map = mapRef.current;
         if (!map || !loadedRef.current) return;
         setVisibility(map, labelLayerIds.current, labelsVisible);
     }, [labelsVisible]);
 
     useEffect(() => {
+        roadsVisibleRef.current = roadsVisible;
         const map = mapRef.current;
         if (!map || !loadedRef.current) return;
         setVisibility(map, roadLayerIds.current, roadsVisible);
     }, [roadsVisible]);
 
     useEffect(() => {
+        bordersVisibleRef.current = bordersVisible;
         const map = mapRef.current;
         if (!map || !loadedRef.current) return;
         setVisibility(map, borderLayerIds.current, bordersVisible);
@@ -618,8 +656,8 @@ export default function MapView({ features }: Props) {
                     <SegmentedIconToggle
                         value={labelsVisible}
                         onChange={(on) => setLabelsVisible(on)}
-                        LeftIcon={TextIcon}
-                        RightIcon={ListX}
+                        LeftIcon={IconWriting}
+                        RightIcon={IconWritingOff}
                         ariaLabel="Place names"
                         title="Stedsnavn"
                         leftTitle="Vis stedsnavn"
@@ -630,8 +668,8 @@ export default function MapView({ features }: Props) {
                     <SegmentedIconToggle
                         value={bordersVisible}
                         onChange={(on) => setBordersVisible(on)}
-                        LeftIcon={Flag}
-                        RightIcon={FlagOff}
+                        LeftIcon={IconFlag}
+                        RightIcon={IconFlagOff}
                         ariaLabel="Borders"
                         title="Grenser"
                         leftTitle="Vis grenser"
@@ -642,8 +680,8 @@ export default function MapView({ features }: Props) {
                     <SegmentedIconToggle
                         value={roadsVisible}
                         onChange={(on) => setRoadsVisible(on)}
-                        LeftIcon={Route}
-                        RightIcon={RouteOff}
+                        LeftIcon={IconRoad}
+                        RightIcon={IconRoadOff}
                         ariaLabel="Roads"
                         title="Veger/veier"
                         leftTitle="Vis veier"
@@ -835,6 +873,118 @@ function applyLabelContrast(map: Map, theme: "light" | "dark") {
     if (map.getLayer("unclustered-point")) {
         map.setPaintProperty("unclustered-point", "circle-stroke-color", isDark ? "#FFFFFF" : c.grayStroke);
         map.setPaintProperty("unclustered-point", "circle-color", isDark ? OEM_COLOR_EXPRESSION : OEM_COLOR_EXPRESSION);
+    }
+}
+
+function cloneStyle(style: StyleSpecification) {
+    return JSON.parse(JSON.stringify(style)) as StyleSpecification;
+}
+
+function addMachinesToStyle(style: StyleSpecification, data: MachinesFC) {
+    style.sources = style.sources ?? {};
+
+    const sourceSpec: GeoJSONSourceSpecification = {
+        type: "geojson",
+        data,
+        cluster: true,
+        clusterRadius: 50,
+        clusterMaxZoom: 12,
+    };
+
+    if (!style.sources["machines"]) {
+        style.sources["machines"] = sourceSpec;
+    } else {
+        const src = style.sources["machines"] as GeoJSONSourceSpecification;
+        src.type = "geojson";
+        src.data = data;
+        src.cluster = true;
+        src.clusterRadius = 50;
+        src.clusterMaxZoom = 12;
+    }
+
+    style.layers = style.layers ?? [];
+    const existing = new Set(style.layers.map((layer) => layer.id));
+
+    const layersToAdd = [
+        {
+            id: "clusters",
+            type: "circle",
+            source: "machines",
+            filter: ["has", "point_count"],
+            paint: {
+                "circle-color": ["step", ["get", "point_count"], c.cluster1, 10, c.cluster2, 25, c.cluster3],
+                "circle-radius": ["step", ["get", "point_count"], 14, 10, 18, 25, 24],
+                "circle-stroke-color": c.grayStroke,
+                "circle-stroke-width": 1.25,
+            },
+        },
+        {
+            id: "cluster-count",
+            type: "symbol",
+            source: "machines",
+            filter: ["has", "point_count"],
+            layout: {
+                "text-field": ["get", "point_count_abbreviated"],
+                "text-size": 12,
+            },
+            paint: { "text-halo-width": 1, "text-halo-color": c.grayStroke },
+        },
+        {
+            id: "unclustered-point",
+            type: "circle",
+            source: "machines",
+            filter: ["!", ["has", "point_count"]],
+            paint: {
+                "circle-color": OEM_COLOR_EXPRESSION,
+                "circle-radius": 6,
+                "circle-stroke-width": 1.5,
+                "circle-stroke-color": c.grayStroke,
+            },
+        },
+        {
+            id: "unclustered-label",
+            type: "symbol",
+            source: "machines",
+            filter: ["!", ["has", "point_count"]],
+            layout: {
+                "text-field": ["get", "name"],
+                "text-size": 11,
+                "text-offset": [0, 1.0],
+                "text-anchor": "top",
+            },
+            paint: { "text-halo-width": 1, "text-halo-color": c.grayStroke },
+        },
+    ] as LayerSpecification[];
+
+    for (const layer of layersToAdd) {
+        if (!existing.has(layer.id)) style.layers.push(layer);
+    }
+}
+
+function applyVisibilityToStyle(
+    style: StyleSpecification,
+    opts: { labels: boolean; roads: boolean; borders: boolean }
+) {
+    const layers = style.layers ?? [];
+    for (const layer of layers) {
+        if (layer.source === "machines") continue;
+
+        const id = String(layer.id ?? "");
+        const sourceLayer = String((layer as any)["source-layer"] ?? "");
+
+        const isLabel = layer.type === "symbol" && (layer.layout as any)?.["text-field"];
+        const isRoad = /road|transportation/i.test(id) || /road|transportation/i.test(sourceLayer);
+        const isBorder = /boundary|border|admin/i.test(id) || /boundary|border|admin/i.test(sourceLayer);
+
+        if (!isLabel && !isRoad && !isBorder) continue;
+
+        const shouldShow =
+            (isLabel ? opts.labels : true) &&
+            (isRoad ? opts.roads : true) &&
+            (isBorder ? opts.borders : true);
+
+        layer.layout = layer.layout ?? {};
+        (layer.layout as any).visibility = shouldShow ? "visible" : "none";
     }
 }
 

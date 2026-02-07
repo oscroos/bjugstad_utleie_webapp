@@ -14,6 +14,8 @@ export type DataColumn<T> = {
   cell?: (row: T) => ReactNode;
   sortValue?: (row: T) => SortableValue;
   filterValue?: (row: T) => string | string[];
+  filterOptionLabel?: (value: string) => ReactNode;
+  filterOptionSortValue?: (value: string) => string;
   filterType?: "checkbox" | "date-range";
   dateValue?: (row: T) => Date | string | null | undefined;
   headerClassName?: string;
@@ -27,6 +29,8 @@ type DataTableProps<T> = {
   emptyMessage?: string;
   defaultSort?: { columnId: string; direction: "asc" | "desc" };
   onRowClick?: (row: T) => void;
+  isRowClickable?: (row: T) => boolean;
+  getRowClassName?: (row: T) => string | undefined;
 };
 
 type SortState = {
@@ -111,6 +115,8 @@ export function DataTable<T>({
   emptyMessage = "Ingen rader ? vise.",
   defaultSort,
   onRowClick,
+  isRowClickable,
+  getRowClassName,
 }: DataTableProps<T>) {
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [sortState, setSortState] = useState<SortState>({
@@ -136,6 +142,7 @@ export function DataTable<T>({
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [openFilter]);
+
 
   const today = useMemo(() => new Date(), []);
 
@@ -172,7 +179,11 @@ export function DataTable<T>({
           values.add(value);
         }
       }
-      options[column.id] = Array.from(values).sort(collator.compare);
+      const optionList = Array.from(values);
+      const sortLabel = column.filterOptionSortValue;
+      options[column.id] = optionList.sort((a, b) =>
+        collator.compare(sortLabel ? sortLabel(a) : a, sortLabel ? sortLabel(b) : b)
+      );
     }
     return options;
   }, [columns, data]);
@@ -300,11 +311,13 @@ export function DataTable<T>({
     return normalizeDisplay(column.accessor(row));
   }
 
-  function isFilterActive(column: DataColumn<T>) {
+  function isFilterActive(column: DataColumn<T>, checkboxOptions: string[]) {
     const state = filters[column.id];
     if (!state) return false;
     if (state.kind === "checkbox") {
-      return state.values.size > 0;
+      if (checkboxOptions.length === 0) return false;
+      if (state.values.size === 0) return false;
+      return state.values.size < checkboxOptions.length;
     }
     if (state.kind === "date-range") {
       const minDate = dateExtents[column.id]?.min;
@@ -329,7 +342,8 @@ export function DataTable<T>({
           <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
             <tr>
               {columns.map((column, index) => {
-                const hasActiveFilter = isFilterActive(column);
+                const checkboxOptions = filterOptions[column.id] ?? [];
+                const hasActiveFilter = isFilterActive(column, checkboxOptions);
                 const isAscending = sortState.columnId === column.id && sortState.direction === "asc";
                 const isDescending = sortState.columnId === column.id && sortState.direction === "desc";
                 const first = index === 0;
@@ -343,7 +357,7 @@ export function DataTable<T>({
                 const dateState = (filters[column.id] as DateRangeFilter | undefined)?.kind === "date-range"
                   ? (filters[column.id] as DateRangeFilter)
                   : undefined;
-                const checkboxOptions = filterOptions[column.id] ?? [];
+                const renderFilterOption = column.filterOptionLabel ?? ((value: string) => value);
                 const selectedCheckboxValues =
                   filters[column.id]?.kind === "checkbox"
                     ? (filters[column.id] as CheckboxFilter).values
@@ -475,9 +489,9 @@ export function DataTable<T>({
                                         }
                                         onChange={() => toggleFilterValue(column.id, option)}
                                       />
-                                      <span className="truncate" title={option}>
-                                        {option}
-                                      </span>
+                                      <div className="truncate" title={option}>
+                                        {renderFilterOption(option)}
+                                      </div>
                                     </label>
                                   ))}
                                   {(!filterOptions[column.id] || filterOptions[column.id].length === 0) && (
@@ -497,19 +511,23 @@ export function DataTable<T>({
           </thead>
 
           <tbody className="divide-y divide-slate-100 text-sm">
-            {paginatedRows.map((row, rowIndex) => (
-              <tr
-                key={getRowId ? getRowId(row, startIndex + rowIndex) : startIndex + rowIndex}
-                className={cx("hover:bg-slate-50", onRowClick && "cursor-pointer")}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
-              >
-                {columns.map((column) => (
-                  <td key={column.id} className={cx("px-4 py-3 align-top text-slate-700", column.cellClassName)}>
-                    {renderCell(row, column)}
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {paginatedRows.map((row, rowIndex) => {
+              const clickable = Boolean(onRowClick) && (isRowClickable ? isRowClickable(row) : true);
+              const rowClassName = getRowClassName ? getRowClassName(row) : undefined;
+              return (
+                <tr
+                  key={getRowId ? getRowId(row, startIndex + rowIndex) : startIndex + rowIndex}
+                  className={cx("hover:bg-slate-50", clickable && "cursor-pointer", rowClassName)}
+                  onClick={clickable && onRowClick ? () => onRowClick(row) : undefined}
+                >
+                  {columns.map((column) => (
+                    <td key={column.id} className={cx("px-4 py-3 align-top text-slate-700", column.cellClassName)}>
+                      {renderCell(row, column)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
 
             {sortedRows.length === 0 && (
               <tr>

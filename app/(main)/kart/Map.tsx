@@ -7,8 +7,9 @@ import maplibregl, { Map, GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { IconSun, IconMoon } from "@tabler/icons-react";
 import { Flag, FlagOff, Route, RouteOff, Text as TextIcon, ListX } from "lucide-react";
+import DataTable, { type DataColumn } from "@/components/DataTable";
 import { useMachines, useMachinesList } from "@/components/MachinesContext";
-import type { MachineFeature, MachinesFC } from "@/types/machines";
+import type { MachineFeature, MachineListEntry, MachinesFC } from "@/types/machines";
 import Image from "next/image";
 import { getOEMLogo } from "@/lib/get_OEM_logo";
 
@@ -89,6 +90,120 @@ export default function MapView({ features }: Props) {
         });
         return { type: "FeatureCollection", features: fs } as MachinesFC;
     }, [data]);
+
+    const columns: DataColumn<MachineListEntry>[] = [
+        {
+            id: "oem",
+            header: "OEM",
+            accessor: (machine) => machine.oem_name ?? "N/A",
+            cell: (machine) => {
+                const oemName = machine.oem_name ?? "N/A";
+                return (
+                    <div className="flex h-10 w-14 items-center justify-center">
+                        <Image
+                            src={getOemFilterKey(oemName)}
+                            alt={`${oemName} logo`}
+                            width={56}
+                            height={40}
+                            className="max-h-full max-w-full object-contain"
+                            priority={false}
+                        />
+                    </div>
+                );
+            },
+            sortValue: (machine) => (machine.oem_name ?? "").toLowerCase(),
+            filterValue: (machine) => getOemFilterKey(machine.oem_name ?? "N/A"),
+            filterOptionSortValue: (value) => formatOemFilterLabel(value),
+            filterOptionLabel: (value) => (
+                <span className="inline-flex items-center gap-2">
+                    <span className="inline-flex h-7 w-10 items-center justify-center rounded bg-white">
+                        <Image
+                            src={value}
+                            alt="OEM logo"
+                            width={40}
+                            height={28}
+                            className="max-h-full max-w-full object-contain"
+                        />
+                    </span>
+                    <span className="truncate">{formatOemFilterLabel(value)}</span>
+                </span>
+            ),
+            headerClassName: "w-16",
+            cellClassName: "w-16 align-middle",
+        },
+        {
+            id: "id",
+            header: "ID",
+            accessor: (machine) => machine.id ?? "-",
+            cell: (machine) => <span className="text-slate-700">{String(machine.id ?? "-")}</span>,
+            sortValue: (machine) => String(machine.id ?? ""),
+            filterValue: (machine) => String(machine.id ?? "-"),
+            cellClassName: "whitespace-nowrap align-middle",
+        },
+        {
+            id: "name",
+            header: "Navn",
+            accessor: (machine) => machine.name ?? "",
+            cell: (machine) => <span className="text-slate-900">{machine.name ?? "-"}</span>,
+            sortValue: (machine) => (machine.name ?? "").toLowerCase(),
+            filterValue: (machine) => machine.name ?? "-",
+            cellClassName: "align-middle",
+        },
+        {
+            id: "type",
+            header: "Type",
+            accessor: () => "",
+            cell: () => <span className="text-slate-400">-</span>,
+            sortValue: () => "",
+            filterValue: () => "-",
+            cellClassName: "text-slate-400 align-middle",
+        },
+        {
+            id: "activeAgreement",
+            header: "Aktiv avtale",
+            accessor: () => "",
+            cell: () => <span className="text-slate-400">-</span>,
+            sortValue: () => "",
+            filterValue: () => "-",
+            cellClassName: "text-slate-400 align-middle",
+        },
+        {
+            id: "renter",
+            header: "Leietaker",
+            accessor: () => "",
+            cell: () => <span className="text-slate-400">-</span>,
+            sortValue: () => "",
+            filterValue: () => "-",
+            cellClassName: "text-slate-400 align-middle",
+        },
+        {
+            id: "lastSeen",
+            header: "Sist sett",
+            accessor: (machine) =>
+                machine.last_pos_reported_at ? formatLastUpdated(machine.last_pos_reported_at) : "",
+            filterType: "date-range",
+            dateValue: (machine) => machine.last_pos_reported_at ?? null,
+            cell: (machine) => {
+                const hasCoords = hasMachineCoords(machine);
+                const last = machine.last_pos_reported_at ?? null;
+                if (!hasCoords) {
+                    return <span className="text-slate-400">Posisjon ikke tilgjengelig for denne enheten.</span>;
+                }
+                if (!last) {
+                    return <span className="text-slate-400">-</span>;
+                }
+                return <span className="text-slate-600">{formatLastUpdated(last)}</span>;
+            },
+            sortValue: (machine) => {
+                if (!machine.last_pos_reported_at) return -1;
+                const parsed = new Date(machine.last_pos_reported_at);
+                return Number.isNaN(parsed.getTime()) ? -1 : parsed.getTime();
+            },
+            filterValue: (machine) =>
+                machine.last_pos_reported_at ? formatLastUpdated(machine.last_pos_reported_at) : "-",
+            cellClassName: "min-w-[12rem] align-middle",
+        },
+    ];
 
     // ---------- helpers ----------
     function collectLayerIds(map: Map) {
@@ -564,80 +679,29 @@ export default function MapView({ features }: Props) {
                 style={{ height: isCollapsed ? 0 : panelPx }}
             >
                 <div className="h-full overflow-auto">
-                    <table className="min-w-full table-fixed">
-                        <thead className="sticky top-0 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                            <tr>
-                                <th className="w-16 px-3 py-2">OEM</th>
-                                <th className="w-28 px-3 py-2">ID</th>
-                                <th className="px-3 py-2">Navn</th>
-                                <th className="w-36 px-3 py-2">Long</th>
-                                <th className="w-36 px-3 py-2">Lat</th>
-                                <th className="w-48 px-3 py-2">Sist sett</th>
-                            </tr>
-                        </thead>
-                        <tbody className="text-sm">
-                            {machineList.map((machine) => {
-                                const id = machine.id;
-                                const name = machine.name ?? "Maskin";
-                                const oem_name = machine.oem_name ?? "N/A";
-                                const last = machine.last_pos_reported_at ?? null;
-                                const lng = machine.lng;
-                                const lat = machine.lat;
-                                const hasCoords = Number.isFinite(lng) && Number.isFinite(lat);
-                                const isSelected = String(selectedId) === String(id);
-
-                                return (
-                                    <tr
-                                        key={String(id)}
-                                        aria-selected={isSelected}
-                                        className={
-                                            `${hasCoords ? "cursor-pointer" : "cursor-default"} border-b border-slate-100 ` +
-                                            (isSelected
-                                                ? `bg-blue-50/60 ring-1 ring-inset ring-blue-300`
-                                                : `${hasCoords ? "hover:bg-slate-50" : ""}`)
-                                        }
-                                        onClick={() => {
-                                            if (hasCoords) focusMachineById(String(id));
-                                        }}
-                                    >
-                                        <td className="px-3 py-2">
-                                            {/* Placeholder image */}
-                                            <div className="flex h-10 w-14 items-center justify-center">
-                                                <Image
-                                                    src={getOEMLogo(oem_name) ?? "/oem-logos/no_image_default.svg"}
-                                                    alt={`${oem_name ?? "Maskin"} logo`}
-                                                    width={56}
-                                                    height={40}
-                                                    className="max-h-full max-w-full object-contain"
-                                                    priority={false}
-                                                />
-                                            </div>
-                                        </td>
-                                        <td className="truncate px-3 py-2 text-slate-700">{String(id ?? "-")}</td>
-                                        <td className="truncate px-3 py-2 text-slate-900">{name}</td>
-                                        <td className="px-3 py-2 tabular-nums text-slate-700">
-                                            {hasCoords ? (lng as number).toFixed(5) : <span className="text-slate-400">-</span>}
-                                        </td>
-                                        <td className="px-3 py-2 tabular-nums text-slate-700">
-                                            {hasCoords ? (lat as number).toFixed(5) : <span className="text-slate-400">-</span>}
-                                        </td>
-                                        <td className="px-3 py-2 text-slate-600">
-                                            {hasCoords
-                                                ? (last ? formatLastUpdated(last) : <span className="text-slate-400">-</span>)
-                                                : <span className="text-slate-400">Posisjon ikke tilgjengelig for denne enheten.</span>}
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            {machineList.length === 0 && (
-                                <tr>
-                                    <td colSpan={6} className="px-3 py-10 text-center text-slate-400">
-                                        Ingen maskiner å vise.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
+                    <DataTable
+                        data={machineList}
+                        columns={columns}
+                        getRowId={(machine, index) => String(machine.id ?? index)}
+                        emptyMessage="Ingen maskiner a vise."
+                        defaultSort={{ columnId: "lastSeen", direction: "desc" }}
+                        onRowClick={(machine) => {
+                            if (hasMachineCoords(machine)) {
+                                focusMachineById(String(machine.id));
+                            }
+                        }}
+                        isRowClickable={(machine) => hasMachineCoords(machine)}
+                        getRowClassName={(machine) => {
+                            const hasCoords = hasMachineCoords(machine);
+                            const isSelected = String(selectedId) === String(machine.id);
+                            return [
+                                isSelected ? "bg-blue-50/60 ring-1 ring-inset ring-blue-300" : "",
+                                !hasCoords ? "cursor-default hover:bg-transparent" : "",
+                            ]
+                                .filter(Boolean)
+                                .join(" ");
+                        }}
+                    />
                 </div>
             </div>
         </div>
@@ -703,6 +767,29 @@ function SegmentedIconToggle({
 
 
 // ---------- HELPER FUNCTIONS ----------
+
+function hasMachineCoords(machine: MachineListEntry) {
+    return Number.isFinite(machine.lng) && Number.isFinite(machine.lat);
+}
+
+function getOemFilterKey(oemName: string) {
+    return getOEMLogo(oemName) ?? "/oem-logos/no_image_default.svg";
+}
+
+function formatOemFilterLabel(src: string) {
+    const file = src.split("/").pop() ?? "";
+    const cleaned = file.replace(/_logo/gi, "").replace(/\.(svg|png|jpg|jpeg)$/gi, "");
+    const label = cleaned.replace(/[-_]+/g, " ").trim();
+    if (!label || /no image default/i.test(label)) return "Andre";
+    return toTitleCase(label);
+}
+
+function toTitleCase(value: string) {
+    return value
+        .split(/\s+/)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(" ");
+}
 
 function fitToFeatures(map: Map, fc: MachinesFC, opts?: { onlyIfChanged?: boolean }) {
     const feats = fc.features ?? [];

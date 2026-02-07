@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowPathIcon, MinusCircleIcon, PlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { IconLoader2, IconCircleMinus, IconPlus, IconX } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import { formatDisplay, formatPhone, formatDate } from "@/lib/formatters";
 
@@ -257,14 +257,14 @@ export default function UserAccessDialog({ userId, initialUser, onClose, onChang
             className="cursor-pointer rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
             aria-label="Lukk dialog"
           >
-            <XMarkIcon className="h-5 w-5" />
+            <IconX className="h-5 w-5" />
           </button>
         </div>
 
         <div className="space-y-5 px-6 py-5">
           {loading ? (
             <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              <ArrowPathIcon className="h-5 w-5 animate-spin text-blue-600" />
+              <IconLoader2 className="h-5 w-5 animate-spin text-blue-600" />
               Laster bruker og tilganger...
             </div>
           ) : error ? (
@@ -304,7 +304,7 @@ export default function UserAccessDialog({ userId, initialUser, onClose, onChang
                 >
                   {saving ? (
                     <>
-                      <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                      <IconLoader2 className="h-4 w-4 animate-spin" />
                       Lagrer...
                     </>
                   ) : (
@@ -452,7 +452,7 @@ function UserAccessList({
                     onClick={() => onRemove(access.customerId)}
                     className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 hover:text-red-600 cursor-pointer"
                   >
-                    <MinusCircleIcon className="h-5 w-5" />
+                    <IconCircleMinus className="h-5 w-5" />
                     Fjern
                   </button>
                 </div>
@@ -578,7 +578,7 @@ function AddAccessForm({
             disabled={disabled}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-400 cursor-pointer"
           >
-            <PlusIcon className="h-4 w-4" />
+            <IconPlus className="h-4 w-4" />
             Legg til kundetilgang
           </button>
         </div>

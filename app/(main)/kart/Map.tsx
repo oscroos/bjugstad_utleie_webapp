@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Point } from "geojson";
 import maplibregl, { Map, GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { SunIcon, MoonIcon } from "@heroicons/react/24/solid";
+import { IconSun, IconMoon } from "@tabler/icons-react";
 import { Flag, FlagOff, Route, RouteOff, Text as TextIcon, ListX } from "lucide-react";
 import { useMachines, useMachinesList } from "@/components/MachinesContext";
 import type { MachineFeature, MachinesFC } from "@/types/machines";
@@ -491,8 +491,8 @@ export default function MapView({ features }: Props) {
                     <SegmentedIconToggle
                         value={theme === "light"}
                         onChange={(on) => setTheme(on ? "light" : "dark")}
-                        LeftIcon={SunIcon}
-                        RightIcon={MoonIcon}
+                        LeftIcon={IconSun}
+                        RightIcon={IconMoon}
                         ariaLabel="Map style"
                         title="Kartstil"
                         leftTitle="Lyst kart"

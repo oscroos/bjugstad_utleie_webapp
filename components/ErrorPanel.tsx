@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { signOut } from "next-auth/react";
 import { AppError, isAppError } from "@/lib/errors";
-import { ArrowPathIcon, ArrowLeftEndOnRectangleIcon, ExclamationTriangleIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
+import { IconRefresh, IconLogout, IconAlertTriangle, IconChevronDown } from "@tabler/icons-react";
 
 export default function ErrorPanel({
     error,
@@ -37,7 +37,7 @@ export default function ErrorPanel({
             <div className="w-full max-w-xl rounded-2xl bg-white shadow-xl ring-1 ring-slate-200">
                 <div className="flex items-start gap-3 p-5 border-b border-slate-100">
                     <div className="rounded-full bg-red-50 p-2 ring-1 ring-red-100">
-                        <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
+                        <IconAlertTriangle className="h-6 w-6 text-red-600" />
                     </div>
                     <div className="flex-1">
                         <h2 className="text-lg font-semibold text-slate-900">{headline}</h2>
@@ -59,7 +59,7 @@ export default function ErrorPanel({
                             onClick={onRetry}
                             className="cursor-pointer inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 transition"
                         >
-                            <ArrowPathIcon className="h-5 w-5" />
+                            <IconRefresh className="h-5 w-5" />
                             Prøv igjen
                         </button>
                     )}
@@ -68,7 +68,7 @@ export default function ErrorPanel({
                         onClick={() => signOut({ callbackUrl: "/login" })}
                         className="cursor-pointer inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-slate-800 hover:bg-slate-200 transition"
                     >
-                        <ArrowLeftEndOnRectangleIcon className="h-5 w-5" />
+                        <IconLogout className="h-5 w-5" />
                         Logg ut
                     </button>
 
@@ -78,7 +78,7 @@ export default function ErrorPanel({
                             onClick={() => setOpen((v) => !v)}
                             className="ml-auto inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 cursor-pointer transition"
                         >
-                            <ChevronDownIcon className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
+                            <IconChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
                             Vis detaljer
                         </button>
                     )}

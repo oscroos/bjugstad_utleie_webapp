@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpIcon, FunnelIcon } from "@heroicons/react/20/solid";
+import { IconArrowUp, IconFilter } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -374,7 +374,7 @@ export function DataTable<T>({
                             isSorted && "border-blue-300 bg-blue-100 text-blue-700",
                           )}
                         >
-                          <ArrowUpIcon
+                          <IconArrowUp
                             className={cx(
                               "h-3.5 w-3.5 transition-transform",
                               isAscending && "rotate-180",
@@ -396,7 +396,7 @@ export function DataTable<T>({
                               filterButtonRefs.current[column.id] = node;
                             }}
                           >
-                            <FunnelIcon className="h-4 w-4" />
+                            <IconFilter className="h-4 w-4" />
                           </button>
 
                           {openFilter === column.id && (

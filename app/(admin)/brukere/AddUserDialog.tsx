@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowPathIcon, MinusCircleIcon, PlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { IconLoader2, IconCircleMinus, IconPlus, IconX } from "@tabler/icons-react";
 
 type RoleOption = "customer" | "super_admin";
 type CompanyRole = "selskapsadmin" | "selskapsbruker";
@@ -232,7 +232,7 @@ export default function AddUserDialog() {
         onClick={() => setOpen(true)}
         className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-500 cursor-pointer"
       >
-        <PlusIcon className="h-5 w-5" />
+        <IconPlus className="h-5 w-5" />
         Legg til bruker
       </button>
 
@@ -252,7 +252,7 @@ export default function AddUserDialog() {
                 className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
                 aria-label="Lukk dialog"
               >
-                <XMarkIcon className="h-5 w-5" />
+                <IconX className="h-5 w-5" />
               </button>
             </div>
 
@@ -339,7 +339,7 @@ export default function AddUserDialog() {
                               type="button"
                               className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium cursor-pointer"
                             >
-                              <MinusCircleIcon className="h-5 w-5" />
+                              <IconCircleMinus className="h-5 w-5" />
                               Fjern
                             </button>
                           </div>
@@ -426,7 +426,7 @@ export default function AddUserDialog() {
                                   onClick={() => removeRelationship(rel.id)}
                                   className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 hover:text-red-600 cursor-pointer"
                                 >
-                                  <MinusCircleIcon className="h-5 w-5" />
+                                  <IconCircleMinus className="h-5 w-5" />
                                   Fjern
                                 </button>
                               </div>
@@ -441,7 +441,7 @@ export default function AddUserDialog() {
                       onClick={addRelationship}
                       className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-500 cursor-pointer"
                     >
-                      <PlusIcon className="h-4 w-4" />
+                      <IconPlus className="h-4 w-4" />
                       Legg til selskapsrelasjon
                     </button>
                   </section>
@@ -467,7 +467,7 @@ export default function AddUserDialog() {
                   >
                     {submitting ? (
                       <>
-                        <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                        <IconLoader2 className="h-5 w-5 animate-spin" />
                         Lagrer...
                       </>
                     ) : (

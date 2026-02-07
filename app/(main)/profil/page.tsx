@@ -4,16 +4,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import {
-  ArrowPathIcon,
-  BuildingOffice2Icon,
-  CalendarIcon,
-  EnvelopeIcon,
-  HomeIcon,
-  IdentificationIcon,
-  PhoneIcon,
-  UserCircleIcon,
-  UserIcon,
-} from "@heroicons/react/24/outline";
+  IconLoader2,
+  IconBuilding,
+  IconCalendar,
+  IconMail,
+  IconHome,
+  IconId,
+  IconPhone,
+  IconUserCircle,
+  IconUser,
+} from "@tabler/icons-react";
 import type {
   CustomerAccessEntry,
   CustomerDetails,
@@ -217,31 +217,31 @@ export default function ProfilPage() {
   const profileRows: ProfileRowEntry[] = [
     {
       key: "name",
-      icon: <UserIcon className="h-5 w-5 text-slate-400" />,
+      icon: <IconUser className="h-5 w-5 text-slate-400" />,
       label: "Navn",
       value: user.name ?? "N/A",
     },
     {
       key: "phone",
-      icon: <PhoneIcon className="h-5 w-5 text-slate-400" />,
+      icon: <IconPhone className="h-5 w-5 text-slate-400" />,
       label: "Telefon",
       value: formattedPhone ?? "N/A",
     },
     {
       key: "email",
-      icon: <EnvelopeIcon className="h-5 w-5 text-slate-400" />,
+      icon: <IconMail className="h-5 w-5 text-slate-400" />,
       label: "E-post",
       value: user.email ?? "N/A",
     },
     {
       key: "address",
-      icon: <HomeIcon className="h-5 w-5 text-slate-400" />,
+      icon: <IconHome className="h-5 w-5 text-slate-400" />,
       label: "Adresse",
       value: formattedAddress ?? "N/A",
     },
     {
       key: "created",
-      icon: <CalendarIcon className="h-5 w-5 text-slate-400" />,
+      icon: <IconCalendar className="h-5 w-5 text-slate-400" />,
       label: "Bruker opprettet",
       value: createdLabel ?? "N/A",
     },
@@ -373,7 +373,7 @@ export default function ProfilPage() {
               {companyCards.length === 0 ? (
                 <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
                   <div className="flex items-center gap-3 px-6 py-6 text-sm text-slate-600">
-                    <ArrowPathIcon className="h-5 w-5 animate-spin text-blue-600" />
+                    <IconLoader2 className="h-5 w-5 animate-spin text-blue-600" />
                     Laster selskapsinformasjon...
                   </div>
                 </section>
@@ -481,37 +481,37 @@ function CompanyProfileCard({
     ? [
       {
         key: "id",
-        icon: <IdentificationIcon className="h-5 w-5 text-slate-400" />,
+        icon: <IconId className="h-5 w-5 text-slate-400" />,
         label: "ID",
         value: String(company.customerId ?? customerId),
       },
       {
         key: "org",
-        icon: <BuildingOffice2Icon className="h-5 w-5 text-slate-400" />,
+        icon: <IconBuilding className="h-5 w-5 text-slate-400" />,
         label: "Org.nr.",
         value: formatDisplay(company.organizationNumber, "N/A"),
       },
       {
         key: "contact",
-        icon: <UserCircleIcon className="h-5 w-5 text-slate-400" />,
+        icon: <IconUserCircle className="h-5 w-5 text-slate-400" />,
         label: "Kontakt",
         value: formatDisplay(company.contact, "N/A"),
       },
       {
         key: "phone",
-        icon: <PhoneIcon className="h-5 w-5 text-slate-400" />,
+        icon: <IconPhone className="h-5 w-5 text-slate-400" />,
         label: "Telefon",
         value: formatPhone(company.telephoneNumber, "N/A"),
       },
       {
         key: "email",
-        icon: <EnvelopeIcon className="h-5 w-5 text-slate-400" />,
+        icon: <IconMail className="h-5 w-5 text-slate-400" />,
         label: "E-post",
         value: formatDisplay(company.email, "N/A"),
       },
       {
         key: "address",
-        icon: <HomeIcon className="h-5 w-5 text-slate-400" />,
+        icon: <IconHome className="h-5 w-5 text-slate-400" />,
         label: "Adresse",
         value: formatCustomerAddress(company),
       },
@@ -577,7 +577,7 @@ function CompanyProfileCard({
 
       {status === "loading" ? (
         <div className="flex items-center gap-3 px-6 py-6 text-sm text-slate-600">
-          <ArrowPathIcon className="h-5 w-5 animate-spin text-blue-600" />
+          <IconLoader2 className="h-5 w-5 animate-spin text-blue-600" />
           Laster selskapsinformasjon...
         </div>
       ) : status === "error" || !company ? (
@@ -720,7 +720,7 @@ function CompanyProfileCard({
               >
                 {saving ? (
                   <>
-                    <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                    <IconLoader2 className="h-4 w-4 animate-spin" />
                     Lagrer...
                   </>
                 ) : (

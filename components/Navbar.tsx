@@ -8,19 +8,19 @@ import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { signOut } from "next-auth/react";
 import {
-  Bars3Icon,
-  XMarkIcon,
-  ListBulletIcon,
-  DocumentTextIcon,
-  TruckIcon,
-  MapIcon,
-  UserIcon,
-  UsersIcon,
-  BuildingOfficeIcon,
-  ArrowLeftEndOnRectangleIcon,
-  ClockIcon,
-  ArrowPathIcon,
-} from "@heroicons/react/24/outline";
+  IconMenu2,
+  IconX,
+  IconListDetails,
+  IconFileText,
+  IconBackhoe,
+  IconMap2,
+  IconUser,
+  IconUsers,
+  IconBuilding,
+  IconLogout,
+  IconClock,
+  IconLoader2,
+} from "@tabler/icons-react";
 import { IS_DEV } from "@/lib/constants";
 
 type NavItem = {
@@ -42,18 +42,18 @@ export default function ResponsiveNav() {
   const isAdmin = (data?.user as any)?.role === "super_admin";
 
   const mainItems: NavItem[] = [
-    { href: "/avtaler", label: "Avtaler", icon: <ListBulletIcon className="h-5 w-5" /> },
-    { href: "/dokumenter", label: "Dokumenter", icon: <DocumentTextIcon className="h-5 w-5" /> },
-    { href: "/maskiner", label: "Maskiner", icon: <TruckIcon className="h-5 w-5" /> },
-    { href: "/kart", label: "Kart", icon: <MapIcon className="h-5 w-5" /> },
-    { href: "/profil", label: "Min profil", icon: <UserIcon className="h-5 w-5" /> },
+    { href: "/avtaler", label: "Avtaler", icon: <IconListDetails className="h-5 w-5" /> },
+    { href: "/dokumenter", label: "Dokumenter", icon: <IconFileText className="h-5 w-5" /> },
+    { href: "/maskiner", label: "Maskiner", icon: <IconBackhoe className="h-5 w-5" /> },
+    { href: "/kart", label: "Kart", icon: <IconMap2 className="h-5 w-5" /> },
+    { href: "/profil", label: "Min profil", icon: <IconUser className="h-5 w-5" /> },
   ];
 
   // Only shown for admins
   const adminItems: NavItem[] = [
-    { href: "/brukere", label: "Brukere", icon: <UsersIcon className="h-5 w-5" /> },
-    { href: "/kunder", label: "Kunder", icon: <BuildingOfficeIcon className="h-5 w-5" /> },
-    { href: "/aktivitet", label: "Aktivitet", icon: <ClockIcon className="h-5 w-5" /> },
+    { href: "/brukere", label: "Brukere", icon: <IconUsers className="h-5 w-5" /> },
+    { href: "/kunder", label: "Kunder", icon: <IconBuilding className="h-5 w-5" /> },
+    { href: "/aktivitet", label: "Aktivitet", icon: <IconClock className="h-5 w-5" /> },
   ];
 
   const renderLinks = (list: NavItem[]) =>
@@ -87,7 +87,7 @@ export default function ResponsiveNav() {
           {icon}
           <span className="flex-1">{label}</span>
           {isLoading && (
-            <ArrowPathIcon className="h-4 w-4 animate-spin text-white" />
+            <IconLoader2 className="h-4 w-4 animate-spin text-white" />
           )}
         </Link>
       );
@@ -108,7 +108,7 @@ export default function ResponsiveNav() {
       {/* Mobile topbar */}
       <header className="md:hidden flex items-center justify-between bg-gradient-to-b from-[#001a4d] via-[#002c6d] to-[#1c1464] p-4 text-white">
         <button onClick={() => setIsOpen(true)} aria-label="Open menu">
-          <Bars3Icon className="h-6 w-6" />
+          <IconMenu2 className="h-6 w-6" />
         </button>
         <Image
           src="/bjugstad-logos/horizontal/White.png"
@@ -137,7 +137,7 @@ export default function ResponsiveNav() {
           />
         </div>
 
-        <nav className="mt-4 flex flex-col gap-1 px-4 flex-1">
+        <nav className="mt-4 flex flex-col gap-1 px-2 flex-1">
           {renderLinks(mainItems)}
 
           {isAdmin && (
@@ -148,7 +148,7 @@ export default function ResponsiveNav() {
           )}
         </nav>
 
-        <div className="p-4 border-t border-white/10 flex flex-col gap-3">
+        <div className="p-2 border-t border-white/10 flex flex-col gap-3">
           {IS_DEV && (
             <div className="rounded bg-yellow-500 text-black text-xs font-bold px-2 py-1 text-center">
               DEV MODE
@@ -159,7 +159,7 @@ export default function ResponsiveNav() {
             onClick={() => signOut({ callbackUrl: "/login" })}
             className="flex items-center gap-3 w-full rounded px-3 py-2 text-sm font-medium text-slate-200 hover:bg-white/10 hover:text-white cursor-pointer"
           >
-            <ArrowLeftEndOnRectangleIcon className="h-5 w-5" />
+            <IconLogout className="h-5 w-5" />
             <span>Logg ut</span>
           </button>
         </div>
@@ -174,11 +174,11 @@ export default function ResponsiveNav() {
       >
         <div className="flex justify-end p-4">
           <button onClick={() => setIsOpen(false)} aria-label="Close menu">
-            <XMarkIcon className="h-6 w-6 text-white" />
+            <IconX className="h-6 w-6 text-white" />
           </button>
         </div>
 
-        <nav className="mt-2 flex flex-col gap-1 px-4">
+        <nav className="mt-2 flex flex-col gap-1 px-2">
           {renderLinks(mainItems)}
 
           {isAdmin && (
@@ -189,7 +189,7 @@ export default function ResponsiveNav() {
           )}
         </nav>
 
-        <div className="p-4 border-t border-white/10 flex flex-col gap-3">
+        <div className="p-2 border-t border-white/10 flex flex-col gap-3">
           {IS_DEV && (
             <div className="rounded bg-yellow-500 text-black text-xs font-bold px-2 py-1 text-center">
               DEV MODE
@@ -200,7 +200,7 @@ export default function ResponsiveNav() {
             onClick={() => signOut({ callbackUrl: "/login" })}
             className="flex items-center gap-3 w-full rounded px-3 py-2 text-sm font-medium text-slate-200 hover:bg-white/10 hover:text-white cursor-pointer"
           >
-            <ArrowLeftEndOnRectangleIcon className="h-5 w-5" />
+            <IconLogout className="h-5 w-5" />
             <span>Logg ut</span>
           </button>
         </div>

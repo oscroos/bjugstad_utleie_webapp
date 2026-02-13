@@ -1,7 +1,9 @@
 "use client";
 
-import { IconLoader2, IconX } from "@tabler/icons-react";
-import { useEffect, useState } from "react";
+import { IconLoader2, IconMinus, IconPlus, IconX } from "@tabler/icons-react";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { useEffect, useRef, useState } from "react";
 import { getOEMLogo } from "@/lib/get_OEM_logo";
 
 export type MachineDetails = {
@@ -34,6 +36,13 @@ type LocationState = {
   status: "idle" | "loading" | "ready" | "error";
   location: MachineLocation | null;
   error: string | null;
+};
+
+const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
+const OEM_COLORS: Record<string, string> = {
+  hydrema: "#000000",
+  cat: "#F59E0B",
+  default: "#3B82F6",
 };
 
 export type MachineDialogState = {
@@ -273,17 +282,17 @@ function LocationMap({
           {effectiveError}
         </p>
       ) : hasCoords ? (
-        <div className="mt-2 space-y-1 text-sm text-slate-700">
-          <p className="text-xs text-slate-500">
-            Sist rapportert:{" "}
-            <span className="font-semibold text-slate-900">
-              {formatDateTime(location?.last_pos_reported_at)}
-            </span>
-          </p>
-          <p className="text-sm font-semibold text-slate-900">
-            {lat.toFixed(5)}, {lng.toFixed(5)}
-          </p>
-          <p className="text-[11px] text-slate-500">Fra maskindatabasen (Azure)</p>
+        <div className="mt-2">
+          <div className="h-60 overflow-hidden rounded-lg border border-slate-100 shadow-sm">
+            <LocationMiniMap
+              lat={lat}
+              lng={lng}
+              label={machineLabel || location?.name || "Maskin"}
+              lastReported={location?.last_pos_reported_at}
+              oemName={location?.oem_name}
+              machineId={location?.id}
+            />
+          </div>
         </div>
       ) : (
         <p className="mt-1 text-xs text-slate-500">
@@ -295,6 +304,199 @@ function LocationMap({
       )}
     </div>
   );
+}
+
+function LocationMiniMap({
+  lat,
+  lng,
+  label,
+  lastReported,
+  oemName,
+  machineId,
+}: {
+  lat: number;
+  lng: number;
+  label?: string;
+  lastReported?: string | null;
+  oemName?: string | null;
+  machineId?: string | number | null;
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    const styleUrl = MAPTILER_KEY
+      ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`
+      : "https://demotiles.maplibre.org/style.json";
+
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: styleUrl,
+      center: [lng, lat],
+      zoom: 12,
+      attributionControl: false,
+      hash: false,
+      pitchWithRotate: false,
+      dragRotate: false,
+    });
+    mapRef.current = map;
+
+    map.scrollZoom.disable();
+    map.boxZoom.disable();
+    map.doubleClickZoom.disable();
+    map.touchZoomRotate.disableRotation();
+
+    const markerEl = document.createElement("div");
+    const markerColor = getOemColor(oemName);
+    Object.assign(markerEl.style, {
+      width: "16px",
+      height: "16px",
+      borderRadius: "9999px",
+      background: markerColor,
+      border: "2px solid #F8FAFC",
+      boxShadow: "0 3px 8px rgba(15, 23, 42, 0.15)",
+    });
+
+    const marker = new maplibregl.Marker({
+      element: markerEl,
+      anchor: "bottom",
+    })
+      .setLngLat([lng, lat])
+      .addTo(map);
+
+    const popupContent = buildMiniPopupContent({
+      id: machineId ? String(machineId) : "-",
+      name: label ? String(label) : "Maskin",
+      oemName: oemName ?? "N/A",
+      logoSrc: getOEMLogo(oemName ?? undefined),
+      lastSeen: lastReported ? formatDateTime(lastReported) : "-",
+    });
+
+    const popup = new maplibregl.Popup({
+      offset: 12,
+      closeButton: false,
+      closeOnClick: false,
+      className: "machine-popup",
+    });
+    popup.setDOMContent(popupContent);
+    marker.setPopup(popup).togglePopup();
+
+    popupContent
+      .querySelector<HTMLButtonElement>("[data-popup-close]")
+      ?.addEventListener("click", () => popup.remove());
+
+    return () => {
+      marker.remove();
+      map.remove();
+      mapRef.current = null;
+    };
+  }, [lat, lng, label, lastReported, oemName, machineId]);
+
+  const zoomIn = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.zoomIn({ duration: 200 });
+  };
+
+  const zoomOut = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.zoomOut({ duration: 200 });
+  };
+
+  return (
+    <div className="relative h-full w-full">
+      <div ref={containerRef} className="h-full w-full" />
+      <div className="absolute right-2 top-2 flex flex-col gap-1">
+        <button
+          type="button"
+          onClick={zoomIn}
+          className="flex h-9 w-9 items-center justify-center rounded-md bg-white text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50"
+          aria-label="Zoom inn"
+        >
+          <IconPlus className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={zoomOut}
+          className="flex h-9 w-9 items-center justify-center rounded-md bg-white text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50"
+          aria-label="Zoom ut"
+        >
+          <IconMinus className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function getOemColor(oemName?: string | null) {
+  if (!oemName) return OEM_COLORS.default;
+  const key = oemName.trim().toLowerCase();
+  return OEM_COLORS[key] ?? OEM_COLORS.default;
+}
+
+function escapeHtml(s: string) {
+  const map: Record<string, string> = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  };
+  return s.replace(/[&<>"']/g, (ch) => map[ch]);
+}
+
+function buildMiniPopupContent({
+  id,
+  name,
+  oemName,
+  logoSrc,
+  lastSeen,
+}: {
+  id: string;
+  name: string;
+  oemName: string;
+  logoSrc?: string | null;
+  lastSeen: string;
+}) {
+  const container = document.createElement("div");
+  const logoMarkup = logoSrc
+    ? `<img src="${escapeHtml(logoSrc)}" alt="${escapeHtml(oemName)} logo" class="max-h-8 w-auto object-contain" />`
+    : `<span class="text-[10px] font-semibold text-slate-400">OEM</span>`;
+
+  container.className = "min-w-[240px] max-w-[320px]";
+  container.dataset.machineId = id;
+  container.innerHTML = `
+    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+      <div class="flex items-start justify-between gap-2 border-b border-slate-100 px-2.5 py-2">
+        <div class="flex min-w-0 items-stretch gap-2">
+          <div class="flex w-9 items-center justify-center rounded-lg border border-slate-200 bg-white p-0.5">
+            ${logoMarkup}
+          </div>
+          <div class="min-w-0">
+            <div class="truncate text-[13px] font-semibold text-slate-900">${escapeHtml(name)}</div>
+            <div class="mt-0.5 text-[10px] font-semibold tracking-wide text-slate-500">
+              ${escapeHtml(lastSeen)}
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          data-popup-close
+          class="cursor-pointer rounded-full p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+          aria-label="Lukk"
+        >
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  `;
+
+  return container;
 }
 
 function formatValue(value?: string | number | null) {

@@ -56,6 +56,32 @@ export async function getVisibleMachinesForUser(
     return { features: buildFeatureCollection(list), list };
 }
 
+export async function getMachineLocationById(
+    id: string | number,
+): Promise<MachineListEntry | null> {
+    const machineId = String(id ?? "").trim();
+    if (!machineId) return null;
+
+    const { rows } = await query(
+        `
+        SELECT
+            id,
+            name,
+            oem_name,
+            last_pos_reported_at,
+            last_pos_latitude  AS lat,
+            last_pos_longitude AS lng
+        FROM machines
+        WHERE id::text = $1::text
+        LIMIT 1;
+        `,
+        [machineId],
+    );
+
+    if (!rows.length) return null;
+    return toMachineListEntry(rows[0]);
+}
+
 const getAllMachinesList = cache(async (): Promise<MachineListEntry[]> => {
     const label = `[machines] all ${Date.now().toString(36)}-${Math.random()
         .toString(36)

@@ -42,6 +42,8 @@
     "SQL"
   ],
   "types": [
+    "next",
+    "next/types/global",
     "next-auth",
     "./types/next-auth.d.ts"
   ]

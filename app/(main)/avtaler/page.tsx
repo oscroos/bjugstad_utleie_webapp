@@ -155,9 +155,11 @@ function mapAgreement(payload: AgreementPayload): AgreementRow {
       : undefined,
     startDate: payload.startDate ?? null,
     endDate: payload.endDate ?? null,
-    machines: payload.machines?.map((machine) => ({
-      id: machine.id,
-      name: machine.name ?? undefined,
-    })) ?? [],
+    machines:
+      payload.machines?.map((machine) => ({
+        id: machine.id,
+        name: machine.name ?? undefined,
+        make: machine.make ?? undefined,
+      })) ?? [],
   };
 }

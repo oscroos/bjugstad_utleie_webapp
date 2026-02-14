@@ -20,7 +20,7 @@ export function getOEMLogo(make?: string | null) {
   if (normalized.includes("entrack")) return "/oem-logos/entrack_logo.png";
   if (normalized.includes("aquarius")) return "/oem-logos/aquarius_logo.jpg";
   if (normalized.includes("jcb")) return "/oem-logos/JCB_logo.svg";
-  if (normalized.includes("intermercato") || normalized.includes("inntermercato")) {
+  if (normalized.includes("intermercato") || normalized.includes("inntermercato") || normalized.includes("intermecato")) {
     return "/oem-logos/intermercato_logo.png";
   }
   if (normalized.includes("leica")) return "/oem-logos/leica_logo.svg";

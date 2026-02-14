@@ -1,6 +1,6 @@
 "use client";
 
-import { IconCertificate, IconLoader2, IconMinus, IconPlus, IconX } from "@tabler/icons-react";
+import { IconCertificate, IconChevronLeft, IconLoader2, IconMinus, IconPlus, IconX } from "@tabler/icons-react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -80,9 +80,11 @@ export type MachineDialogState = {
 export default function MachineDetailsDialog({
   state,
   onClose,
+  onBack,
 }: {
   state: MachineDialogState;
   onClose: () => void;
+  onBack?: () => void;
 }) {
   const { open, loading, error, machine, machineId, machineLabel, currentRenter } = state;
   const [localMachine, setLocalMachine] = useState<MachineDetails | null>(machine);
@@ -221,10 +223,22 @@ export default function MachineDetailsDialog({
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 px-4 py-8">
       <div className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10">
         <div className="flex items-start justify-between border-b border-slate-100 px-6 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Maskin</p>
-            <h2 className="text-2xl font-semibold text-slate-900">{machineLabel || "Maskin"}</h2>
-            {machineId ? <p className="text-sm text-slate-500">ID: {machineId}</p> : null}
+          <div className="flex items-start gap-3">
+            {onBack ? (
+              <button
+                type="button"
+                onClick={onBack}
+                className="mt-1 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+                aria-label="Tilbake"
+              >
+                <IconChevronLeft className="h-4 w-4" />
+              </button>
+            ) : null}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Maskin</p>
+              <h2 className="text-2xl font-semibold text-slate-900">{machineLabel || "Maskin"}</h2>
+              {machineId ? <p className="text-sm text-slate-500">ID: {machineId}</p> : null}
+            </div>
           </div>
           <div className="flex items-start gap-4">
             {logoSrc ? (

@@ -22,7 +22,7 @@ export type AgreementRow = {
   customer?: { id?: string | number; name?: string | null } | null;
   startDate?: string | Date | null;
   endDate?: string | Date | null;
-  machines?: Array<{ id?: string | number; name?: string | null }> | null;
+  machines?: Array<{ id?: string | number; name?: string | null; make?: string | null }> | null;
 };
 
 type AgreementsTableProps = {
@@ -39,6 +39,8 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
   );
   const [rentalDialogState, setRentalDialogState] =
     useState<RentalDialogState>(createInitialRentalState);
+  const [customerBackToRental, setCustomerBackToRental] = useState(false);
+  const [machineBackToRental, setMachineBackToRental] = useState(false);
 
   const columns: DataColumn<AgreementRow>[] = [
     {
@@ -147,7 +149,14 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
     },
   ];
 
-  async function handleCustomerClick(customer?: AgreementRow["customer"]) {
+  async function handleCustomerClick(
+    customer?: AgreementRow["customer"],
+    opts?: { fromRental?: boolean },
+  ) {
+    setCustomerBackToRental(Boolean(opts?.fromRental));
+    if (opts?.fromRental) {
+      setRentalDialogState((prev) => ({ ...prev, open: false }));
+    }
     const rawId = customer?.id;
     const customerId =
       typeof rawId === "string" ? Number.parseInt(rawId, 10) : rawId;
@@ -198,14 +207,30 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
       error: null,
       rental: {
         rentalId: agreement.id ?? null,
+        customerId: agreement.customer?.id ?? null,
         customerName: agreement.customer?.name ?? null,
         startDate: agreement.startDate ?? null,
         endDate: agreement.endDate ?? null,
+        machines: agreement.machines ?? [],
       },
     });
   }
 
-  async function handleMachineClick(agreement: AgreementRow, machine?: { id?: string | number; name?: string | null }) {
+  function handleMachineClick(agreement: AgreementRow, machine?: { id?: string | number; name?: string | null; make?: string | null }) {
+    setMachineBackToRental(false);
+    openMachineDialog(machine, agreement.customer?.name ?? null);
+  }
+
+  function handleMachineClickFromRental(machine?: { id?: string | number; name?: string | null; make?: string | null }, renter?: string | null) {
+    setRentalDialogState((prev) => ({ ...prev, open: false }));
+    setMachineBackToRental(true);
+    openMachineDialog(machine, renter ?? null);
+  }
+
+  async function openMachineDialog(
+    machine?: { id?: string | number; name?: string | null; make?: string | null },
+    renter?: string | null,
+  ) {
     const rawId = machine?.id;
     const machineId =
       typeof rawId === "string" ? Number.parseInt(rawId, 10) : rawId;
@@ -217,7 +242,6 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
     const machineLabel =
       machine?.name?.trim() ||
       (machineId !== undefined ? `Maskin ${machineId}` : "Maskin");
-    const renter = agreement.customer?.name ?? null;
 
     setMachineDialogState({
       open: true,
@@ -226,7 +250,7 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
       machine: null,
       machineId,
       machineLabel,
-      currentRenter: renter,
+      currentRenter: renter ?? null,
     });
 
     try {
@@ -249,14 +273,26 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
   function resetDialog() {
     setDialogState(createInitialDialogState());
     setDialogPermissions(undefined);
+    setCustomerBackToRental(false);
   }
 
   function resetMachineDialog() {
     setMachineDialogState(createInitialMachineState());
+    setMachineBackToRental(false);
   }
 
   function resetRentalDialog() {
     setRentalDialogState(createInitialRentalState());
+  }
+
+  function handleCustomerBack() {
+    resetDialog();
+    setRentalDialogState((prev) => ({ ...prev, open: true }));
+  }
+
+  function handleMachineBack() {
+    resetMachineDialog();
+    setRentalDialogState((prev) => ({ ...prev, open: true }));
   }
 
   return (
@@ -271,15 +307,24 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
       <CustomerAccessDialog
         state={dialogState}
         onClose={resetDialog}
+        onBack={customerBackToRental ? handleCustomerBack : undefined}
         permissions={dialogPermissions}
       />
       <MachineDetailsDialog
         state={machineDialogState}
         onClose={resetMachineDialog}
+        onBack={machineBackToRental ? handleMachineBack : undefined}
       />
       <RentalDetailsDialog
         state={rentalDialogState}
         onClose={resetRentalDialog}
+        onCustomerClick={(customerId, customerName) =>
+          handleCustomerClick(
+            { id: customerId ?? undefined, name: customerName ?? undefined },
+            { fromRental: true },
+          )
+        }
+        onMachineClick={handleMachineClickFromRental}
       />
     </>
   );

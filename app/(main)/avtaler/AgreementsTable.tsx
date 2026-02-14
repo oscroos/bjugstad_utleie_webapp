@@ -7,6 +7,9 @@ import CustomerAccessDialog, {
   type AccessPermissions,
   type CustomerAccessEntry,
 } from "@/components/dialogs/CustomerAccessDialog";
+import RentalDetailsDialog, {
+  type RentalDialogState,
+} from "@/components/dialogs/RentalDetailsDialog";
 import MachineDetailsDialog, {
   type MachineDialogState,
   type MachineDetails,
@@ -34,17 +37,23 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
   const [machineDialogState, setMachineDialogState] = useState<MachineDialogState>(
     createInitialMachineState,
   );
+  const [rentalDialogState, setRentalDialogState] =
+    useState<RentalDialogState>(createInitialRentalState);
 
   const columns: DataColumn<AgreementRow>[] = [
     {
       id: "id",
       header: "Avtale ID",
       accessor: (agreement) => agreement.id ?? "-",
-      cell: (agreement) => (
-        <span className="whitespace-nowrap text-slate-700">
-          {agreement.id ?? "-"}
-        </span>
-      ),
+      cell: (agreement) => {
+        const label = agreement.id?.toString() ?? "-";
+        return (
+          <PillButton
+            label={label}
+            onClick={() => handleAgreementClick(agreement)}
+          />
+        );
+      },
       sortValue: (agreement) => agreement.id?.toString() ?? "",
       filterValue: (agreement) => agreement.id?.toString() ?? "-",
       cellClassName: "whitespace-nowrap",
@@ -182,6 +191,20 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
     }
   }
 
+  function handleAgreementClick(agreement: AgreementRow) {
+    setRentalDialogState({
+      open: true,
+      loading: false,
+      error: null,
+      rental: {
+        rentalId: agreement.id ?? null,
+        customerName: agreement.customer?.name ?? null,
+        startDate: agreement.startDate ?? null,
+        endDate: agreement.endDate ?? null,
+      },
+    });
+  }
+
   async function handleMachineClick(agreement: AgreementRow, machine?: { id?: string | number; name?: string | null }) {
     const rawId = machine?.id;
     const machineId =
@@ -232,6 +255,10 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
     setMachineDialogState(createInitialMachineState());
   }
 
+  function resetRentalDialog() {
+    setRentalDialogState(createInitialRentalState());
+  }
+
   return (
     <>
       <DataTable
@@ -249,6 +276,10 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
       <MachineDetailsDialog
         state={machineDialogState}
         onClose={resetMachineDialog}
+      />
+      <RentalDetailsDialog
+        state={rentalDialogState}
+        onClose={resetRentalDialog}
       />
     </>
   );
@@ -293,6 +324,15 @@ function createInitialMachineState(): MachineDialogState {
     machineId: null,
     machineLabel: "",
     currentRenter: null,
+  };
+}
+
+function createInitialRentalState(): RentalDialogState {
+  return {
+    open: false,
+    loading: false,
+    error: null,
+    rental: null,
   };
 }
 

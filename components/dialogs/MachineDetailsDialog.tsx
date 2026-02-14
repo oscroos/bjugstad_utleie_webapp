@@ -1,10 +1,11 @@
 "use client";
 
-import { IconLoader2, IconMinus, IconPlus, IconX } from "@tabler/icons-react";
+import { IconCertificate, IconLoader2, IconMinus, IconPlus, IconX } from "@tabler/icons-react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getOEMLogo } from "@/lib/get_OEM_logo";
+import { isYoutubeUrl } from "@/lib/youtube";
 
 export type MachineDetails = {
   machineId: number;
@@ -49,6 +50,13 @@ type AttachmentsState = {
   status: "idle" | "loading" | "ready" | "error";
   attachments: MachineAttachment[];
   error: string | null;
+};
+
+type VideoMetadata = {
+  title: string | null;
+  author: string | null;
+  provider: string | null;
+  thumbnail: string | null;
 };
 
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
@@ -309,26 +317,158 @@ function MachineOverview({
 }
 
 function TrainingVideosSection({ machine }: { machine: MachineDetails }) {
-  const trainingVideos = [
-    ...(machine.trainingVideos ?? []),
-    ...(machine.documentedTrainingVideoUri ? [machine.documentedTrainingVideoUri] : []),
-    ...(machine.englishDocumentedTrainingVideoUri ? [machine.englishDocumentedTrainingVideoUri] : []),
-  ].filter(Boolean);
+  const trainingVideos = useMemo(
+    () =>
+      [
+        ...(machine.trainingVideos ?? []),
+        ...(machine.documentedTrainingVideoUri ? [machine.documentedTrainingVideoUri] : []),
+        ...(machine.englishDocumentedTrainingVideoUri ? [machine.englishDocumentedTrainingVideoUri] : []),
+      ]
+        .filter(Boolean)
+        .map(String),
+    [
+      machine.trainingVideos,
+      machine.documentedTrainingVideoUri,
+      machine.englishDocumentedTrainingVideoUri,
+    ],
+  );
+  const hasVideos = trainingVideos.length > 0;
+  const documentedLinks = useMemo(
+    () =>
+      new Set(
+        [machine.documentedTrainingVideoUri, machine.englishDocumentedTrainingVideoUri]
+          .filter(Boolean)
+          .map(String),
+      ),
+    [machine.documentedTrainingVideoUri, machine.englishDocumentedTrainingVideoUri],
+  );
+  const [videoMetadata, setVideoMetadata] = useState<Record<string, VideoMetadata | null>>({});
 
-  if (!trainingVideos.length) return null;
+  useEffect(() => {
+    if (!trainingVideos.length) {
+      setVideoMetadata({});
+      return;
+    }
+
+    const controller = new AbortController();
+    let cancelled = false;
+
+    async function loadMetadata() {
+      const results = await Promise.all(
+        trainingVideos.map(async (url) => {
+          if (!isYoutubeUrl(url)) return [url, null] as const;
+          try {
+            const response = await fetch(
+              `/api/videos/oembed?url=${encodeURIComponent(url)}`,
+              {
+                signal: controller.signal,
+                cache: "force-cache",
+              },
+            );
+            if (!response.ok) return [url, null] as const;
+            const payload = (await response.json()) as {
+              title?: string | null;
+              author?: string | null;
+              provider?: string | null;
+              thumbnail?: string | null;
+            };
+            return [
+              url,
+              {
+                title: payload.title ?? null,
+                author: payload.author ?? null,
+                provider: payload.provider ?? "YouTube",
+                thumbnail: payload.thumbnail ?? null,
+              } satisfies VideoMetadata,
+            ] as const;
+          } catch (error) {
+            if (controller.signal.aborted) return [url, null] as const;
+            console.error("Failed to fetch video metadata", error);
+            return [url, null] as const;
+          }
+        }),
+      );
+
+      if (cancelled) return;
+      const mapped: Record<string, VideoMetadata | null> = {};
+      for (const [url, meta] of results) {
+        mapped[url] = meta;
+      }
+      setVideoMetadata(mapped);
+    }
+
+    loadMetadata();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [trainingVideos]);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
       <h3 className="text-sm font-semibold text-slate-900">Opplæringsvideoer</h3>
-      <ul className="mt-2 space-y-1 text-sm text-blue-700">
-        {trainingVideos.map((link, index) => (
-          <li key={`training-${index}`}>
-            <a href={link as string} target="_blank" rel="noreferrer" className="underline">
-              {link}
-            </a>
-          </li>
-        ))}
-      </ul>
+      {hasVideos ? (
+        <div
+          className="mt-2 max-h-[240px] overflow-y-scroll pr-3"
+          style={{ scrollbarGutter: "stable" }}
+        >
+          <ul className="divide-y divide-slate-100 text-sm text-blue-700">
+            {trainingVideos.map((link, index) => {
+              const meta = videoMetadata[link];
+              const displayTitle = meta?.title || link;
+              const secondary = meta?.provider || getDisplayHost(link);
+              const thumbnail = meta?.thumbnail;
+              const isDocumented = documentedLinks.has(link);
+
+              return (
+                <li key={`training-${index}`}>
+                  <a
+                    href={link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group flex items-center gap-3 rounded-md px-2 py-1.5 transition hover:bg-blue-50"
+                  >
+                    <div className="relative h-16 w-28 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-100">
+                      {thumbnail ? (
+                        <img
+                          src={thumbnail}
+                          alt={meta?.title || "Videominiatyr"}
+                          className="h-full w-full object-cover transition duration-150 group-hover:scale-[1.02]"
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                          Lenke
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate font-semibold text-blue-800 group-hover:underline">
+                        {displayTitle}
+                      </span>
+                      <span className="block truncate text-[11px] text-slate-500">
+                        {secondary}
+                      </span>
+                    </div>
+                    {isDocumented ? (
+                      <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-100">
+                        <IconCertificate className="h-4 w-4" aria-hidden />
+                        <span>Dokumentert</span>
+                      </span>
+                    ) : null}
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : (
+        <p className="mt-1 text-xs text-slate-500">
+          Ingen opplæringsvideoer tilgjengelig for denne enheten.
+        </p>
+      )}
     </div>
   );
 }
@@ -512,6 +652,7 @@ function LocationMiniMap({
       closeButton: false,
       closeOnClick: false,
       className: "machine-popup",
+      focusAfterOpen: false,
     });
     popup.setDOMContent(popupContent);
     marker.setPopup(popup).togglePopup();
@@ -630,6 +771,14 @@ function buildMiniPopupContent({
   `;
 
   return container;
+}
+
+function getDisplayHost(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "lenke";
+  }
 }
 
 function formatValue(value?: string | number | null) {

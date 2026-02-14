@@ -38,12 +38,26 @@ type LocationState = {
   error: string | null;
 };
 
+type MachineAttachment = {
+  id: number | string;
+  name: string;
+  description: string | null;
+  filePath: string;
+};
+
+type AttachmentsState = {
+  status: "idle" | "loading" | "ready" | "error";
+  attachments: MachineAttachment[];
+  error: string | null;
+};
+
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 const OEM_COLORS: Record<string, string> = {
   hydrema: "#000000",
   cat: "#F59E0B",
   default: "#3B82F6",
 };
+const SAS_TOKEN_PLACEHOLDER = "<SAS_TOKEN>";
 
 export type MachineDialogState = {
   open: boolean;
@@ -68,6 +82,11 @@ export default function MachineDetailsDialog({
   const [locationState, setLocationState] = useState<LocationState>({
     status: "idle",
     location: null,
+    error: null,
+  });
+  const [attachmentsState, setAttachmentsState] = useState<AttachmentsState>({
+    status: "idle",
+    attachments: [],
     error: null,
   });
   const logoSrc = getOEMLogo(localMachine?.make ?? machineLabel);
@@ -131,6 +150,63 @@ export default function MachineDetailsDialog({
     };
   }, [open, machineId]);
 
+  useEffect(() => {
+    if (!open || !machineId) {
+      setAttachmentsState({ status: "idle", attachments: [], error: null });
+      return;
+    }
+
+    const controller = new AbortController();
+    let isCancelled = false;
+
+    async function fetchAttachments() {
+      setAttachmentsState({ status: "loading", attachments: [], error: null });
+      try {
+        const response = await fetch(`/api/machines/${machineId}/attachments`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const payload = (await response.json().catch(() => ({}))) as {
+          attachments?: MachineAttachment[];
+          error?: string;
+        };
+
+        if (isCancelled) return;
+
+        if (!response.ok) {
+          setAttachmentsState({
+            status: "error",
+            attachments: [],
+            error: payload.error ?? "Kunne ikke hente vedlegg",
+          });
+          return;
+        }
+
+        setAttachmentsState({
+          status: "ready",
+          attachments: (payload.attachments ?? []).sort((a, b) =>
+            (a.description || a.name || "").localeCompare(b.description || b.name || "", "nb-NO", {
+              sensitivity: "base",
+            }),
+          ),
+          error: null,
+        });
+      } catch (err) {
+        if (isCancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        const message = err instanceof Error ? err.message : "Kunne ikke hente vedlegg";
+        setAttachmentsState({ status: "error", attachments: [], error: message });
+      }
+    }
+
+    fetchAttachments();
+
+    return () => {
+      isCancelled = true;
+      controller.abort();
+    };
+  }, [open, machineId]);
+
   if (!open) return null;
 
   return (
@@ -176,6 +252,8 @@ export default function MachineDetailsDialog({
           ) : localMachine ? (
             <>
               <MachineOverview machine={localMachine} currentRenter={currentRenter} />
+              <TrainingVideosSection machine={localMachine} />
+              <AttachmentsSection state={attachmentsState} />
               <LocationMap machineLabel={machineLabel} state={locationState} />
             </>
           ) : (
@@ -210,17 +288,15 @@ function MachineOverview({
     { label: "Aktuell leietaker", value: currentRenter },
   ];
 
-  const trainingVideos = [
-    ...(machine.trainingVideos ?? []),
-    ...(machine.documentedTrainingVideoUri ? [machine.documentedTrainingVideoUri] : []),
-    ...(machine.englishDocumentedTrainingVideoUri ? [machine.englishDocumentedTrainingVideoUri] : []),
-  ].filter(Boolean);
-
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <h3 className="text-sm font-semibold text-slate-900">Generelt</h3>
+      <div className="mt-3 grid gap-4 sm:grid-cols-2 md:grid-cols-3">
         {infoRows.map((row) => (
-          <div key={row.label} className="rounded-lg bg-white px-3 py-2 shadow-sm">
+          <div
+            key={row.label}
+            className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 shadow-sm"
+          >
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               {row.label}
             </p>
@@ -228,23 +304,80 @@ function MachineOverview({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
 
-      {trainingVideos.length ? (
-        <div className="mt-4 rounded-lg bg-white px-3 py-3 shadow-sm">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            Opplæringsvideoer
-          </p>
-          <ul className="mt-2 space-y-1 text-sm text-blue-700">
-            {trainingVideos.map((link, index) => (
-              <li key={`training-${index}`}>
-                <a href={link as string} target="_blank" rel="noreferrer" className="underline">
-                  {link}
-                </a>
-              </li>
-            ))}
-          </ul>
+function TrainingVideosSection({ machine }: { machine: MachineDetails }) {
+  const trainingVideos = [
+    ...(machine.trainingVideos ?? []),
+    ...(machine.documentedTrainingVideoUri ? [machine.documentedTrainingVideoUri] : []),
+    ...(machine.englishDocumentedTrainingVideoUri ? [machine.englishDocumentedTrainingVideoUri] : []),
+  ].filter(Boolean);
+
+  if (!trainingVideos.length) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <h3 className="text-sm font-semibold text-slate-900">Opplæringsvideoer</h3>
+      <ul className="mt-2 space-y-1 text-sm text-blue-700">
+        {trainingVideos.map((link, index) => (
+          <li key={`training-${index}`}>
+            <a href={link as string} target="_blank" rel="noreferrer" className="underline">
+              {link}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function AttachmentsSection({ state }: { state: AttachmentsState }) {
+  const { status, attachments, error } = state;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <h3 className="text-sm font-semibold text-slate-900">Vedlegg</h3>
+      {status === "loading" ? (
+        <div className="mt-2 inline-flex items-center gap-2 text-xs text-slate-500">
+          <IconLoader2 className="h-4 w-4 animate-spin text-blue-600" />
+          Laster vedlegg...
         </div>
-      ) : null}
+      ) : status === "error" ? (
+        <p className="mt-1 text-xs text-slate-500">
+          {error ?? "Kunne ikke hente vedlegg"}
+        </p>
+      ) : attachments.length === 0 ? (
+        <p className="mt-1 text-xs text-slate-500">Ingen vedlegg tilgjengelig.</p>
+      ) : (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {attachments.map((attachment) => (
+            <div
+              key={attachment.id}
+              className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 shadow-sm"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-900">
+                    {attachment.description || attachment.name || "Vedlegg"}
+                  </p>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">
+                    {attachment.name || "Ingen navn"}
+                  </p>
+                </div>
+                <a
+                  href={`${attachment.filePath}${attachment.filePath.includes("?") ? "&" : "?"}${SAS_TOKEN_PLACEHOLDER}`}
+                  className="group inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 transition hover:border-blue-300"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <span className="truncate">Last ned</span>
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

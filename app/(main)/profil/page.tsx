@@ -35,6 +35,19 @@ type SessionAccessEntry = {
   } | null;
 };
 
+type ProfileSessionUser = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  role?: string | null;
+  createdAt?: string | Date | null;
+  address_street?: string | null;
+  address_postal_code?: string | null;
+  address_region?: string | null;
+  accesses?: SessionAccessEntry[] | null;
+};
+
 type ProfileRowEntry = {
   key: string;
   icon: React.ReactNode;
@@ -49,13 +62,13 @@ export default async function ProfilPage() {
     redirect("/login");
   }
 
-  const user = (session.user as Record<string, unknown>) ?? {};
-  const createdLabel = formatDate(user.createdAt as string | Date | null | undefined) ?? "N/A";
-  const formattedPhone = formatPhone(user.phone as string | null | undefined, "N/A");
+  const user = session.user as ProfileSessionUser;
+  const createdLabel = formatDate(user.createdAt) ?? "N/A";
+  const formattedPhone = formatPhone(user.phone, "N/A");
   const formattedAddress = formatUserAddress({
-    street: user.address_street as string | null | undefined,
-    postalCode: user.address_postal_code as string | null | undefined,
-    region: user.address_region as string | null | undefined,
+    street: user.address_street,
+    postalCode: user.address_postal_code,
+    region: user.address_region,
   });
 
   const role = typeof user.role === "string" ? user.role : null;
@@ -84,14 +97,14 @@ export default async function ProfilPage() {
   const shouldShowGlobalAdminMessage =
     showEmptyCompanyState && isGlobalAdmin && !shouldMockGlobalAdminCompanies;
 
-  const profileHeaderName = formatDisplay(user.name as string | null | undefined, "Ukjent bruker");
+  const profileHeaderName = formatDisplay(user.name, "Ukjent bruker");
 
   const profileRows: ProfileRowEntry[] = [
     {
       key: "name",
       icon: <IconUser className="h-5 w-5 text-slate-400" />,
       label: "Navn",
-      value: formatDisplay(user.name as string | null | undefined, "N/A"),
+      value: formatDisplay(user.name, "N/A"),
     },
     {
       key: "phone",
@@ -103,7 +116,7 @@ export default async function ProfilPage() {
       key: "email",
       icon: <IconMail className="h-5 w-5 text-slate-400" />,
       label: "E-post",
-      value: formatDisplay(user.email as string | null | undefined, "N/A"),
+      value: formatDisplay(user.email, "N/A"),
     },
     {
       key: "address",

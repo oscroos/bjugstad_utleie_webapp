@@ -1,22 +1,8 @@
 import { auth } from "@/lib/auth";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import ActivityTable from "./ActivityTable";
 import ErrorPanel from "@/components/ErrorPanel";
-import { normalizeError, type AppError } from "@/lib/errors";
-
-type LoginEvent = {
-  id: string;
-  provider: string | null;
-  loggedAt: string;
-  user: {
-    id: string;
-    name: string | null;
-    phone: string | null;
-    email: string | null;
-    role: string | null;
-  } | null;
-};
+import { loadLoginEventsForAdmin } from "@/lib/login-events";
 
 export default async function AktivitetPage() {
   const session = await auth();
@@ -40,7 +26,7 @@ export default async function AktivitetPage() {
     );
   }
 
-  const { events, error } = await loadLoginEvents();
+  const { events, error } = await loadLoginEventsForAdmin();
 
   if (error) {
     return (
@@ -72,46 +58,4 @@ export default async function AktivitetPage() {
       </section>
     </main>
   );
-}
-
-async function loadLoginEvents(): Promise<{ events: LoginEvent[] | null; error: AppError | null }> {
-  try {
-    const events = await fetchLoginEvents();
-    return { events, error: null };
-  } catch (error) {
-    return {
-      events: null,
-      error: normalizeError(error, {
-        title: "Kunne ikke hente innloggingsaktivitet",
-        message:
-          error instanceof Error && error.message
-            ? error.message
-            : "Vi klarte ikke hente innloggingsaktivitet akkurat na.",
-      }),
-    };
-  }
-}
-
-async function fetchLoginEvents(): Promise<LoginEvent[]> {
-  const cookieStore = await cookies();
-  const cookieHeader = cookieStore.toString();
-  const baseUrl = (process.env.NEXTAUTH_URL ?? "http://localhost:3000").replace(/\/$/, "");
-  const response = await fetch(`${baseUrl}/api/login-events`, {
-    cache: "no-store",
-    headers: cookieHeader ? { cookie: cookieHeader } : undefined,
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "");
-    console.error("Failed to load login events from API", response.status, errorText);
-    throw {
-      code: response.status === 401 || response.status === 403 ? "API_AUTH" : "API_HTTP",
-      title: "Kunne ikke hente innloggingsaktivitet",
-      message: "API-et svarte med en feil mens vi hentet innloggingsaktivitet.",
-      details: { status: response.status, statusText: response.statusText, body: errorText || undefined },
-    } satisfies AppError;
-  }
-
-  const payload = (await response.json()) as { events?: LoginEvent[] };
-  return payload.events ?? [];
 }

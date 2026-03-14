@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { loadLoginEventsForAdmin } from "@/lib/login-events";
 
 export async function GET() {
   const session = await auth();
@@ -9,29 +9,15 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  try {
-    const events = await prisma.userLoginEvent.findMany({
-      orderBy: { loggedAt: "desc" },
-      take: 200,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            email: true,
-            role: true,
-          },
-        },
-      },
-    });
+  const { events, error } = await loadLoginEventsForAdmin();
 
-    return NextResponse.json({ events });
-  } catch (error) {
+  if (error) {
     console.error("Failed to fetch login events", error);
     return NextResponse.json(
       { error: "Kunne ikke hente innloggingshendelser" },
       { status: 500 },
     );
   }
+
+  return NextResponse.json({ events });
 }

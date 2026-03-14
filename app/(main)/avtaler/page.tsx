@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import AgreementsTable from "./AgreementsTable";
+import AgreementsTable, { type AgreementRow } from "./AgreementsTable";
 import { auth } from "@/lib/auth";
 import ErrorPanel from "@/components/ErrorPanel";
-import { loadAgreementsForUser } from "@/lib/agreements";
+import { loadAgreementsForUser, type AgreementPayload } from "@/lib/agreements";
 
 export default async function AvtalerPage() {
   const session = await auth();
@@ -12,10 +12,13 @@ export default async function AvtalerPage() {
   }
 
   const viewer = { id: session.user?.id, role: session.user?.role };
-  const { active, historical, error } = await loadAgreementsForUser(
+  const { active: activePayloads, historical: historicalPayloads, error } = await loadAgreementsForUser(
     session.user.id,
     session.user.role,
   );
+
+  const active = activePayloads.map(mapAgreement);
+  const historical = historicalPayloads.map(mapAgreement);
 
   if (error) {
     return (
@@ -75,4 +78,24 @@ export default async function AvtalerPage() {
       </section>
     </main>
   );
+}
+
+function mapAgreement(payload: AgreementPayload): AgreementRow {
+  return {
+    id: payload.id,
+    customer: payload.customerId || payload.customerName
+      ? {
+        id: payload.customerId,
+        name: payload.customerName ?? undefined,
+      }
+      : undefined,
+    startDate: payload.startDate ?? null,
+    endDate: payload.endDate ?? null,
+    machines:
+      payload.machines?.map((machine) => ({
+        id: machine.id,
+        name: machine.name ?? undefined,
+        make: machine.make ?? undefined,
+      })) ?? [],
+  };
 }

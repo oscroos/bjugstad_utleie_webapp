@@ -1,10 +1,9 @@
 import { auth } from "@/lib/auth";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import AddUserDialog from "./AddUserDialog";
 import UsersTable from "./UsersTable";
 import ErrorPanel from "@/components/ErrorPanel";
-import { normalizeError, type AppError } from "@/lib/errors";
+import { loadUsersForAdmin } from "@/lib/users";
 
 export default async function BrukerePage() {
   const session = await auth();
@@ -28,7 +27,7 @@ export default async function BrukerePage() {
     );
   }
 
-  const { users, error } = await loadUsers();
+  const { users, error } = await loadUsersForAdmin();
 
   if (error) {
     return (
@@ -41,8 +40,6 @@ export default async function BrukerePage() {
       </main>
     );
   }
-
-  const safeUsers = users ?? [];
 
   return (
     <main className="p-8 space-y-6">
@@ -57,50 +54,8 @@ export default async function BrukerePage() {
       </header>
 
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <UsersTable users={safeUsers} />
+        <UsersTable users={users} />
       </section>
     </main>
   );
-}
-
-async function loadUsers(): Promise<{ users: any[] | null; error: AppError | null }> {
-  try {
-    const users = await fetchUsers();
-    return { users, error: null };
-  } catch (error) {
-    return {
-      users: null,
-      error: normalizeError(error, {
-        title: "Kunne ikke hente brukere",
-        message:
-          error instanceof Error && error.message
-            ? error.message
-            : "Vi kunne ikke laste brukerlisten akkurat na. Prøv igjen.",
-      }),
-    };
-  }
-}
-
-async function fetchUsers() {
-  const cookieStore = await cookies();
-  const cookieHeader = cookieStore.toString();
-  const baseUrl = (process.env.NEXTAUTH_URL ?? "http://localhost:3000").replace(/\/$/, "");
-  const response = await fetch(`${baseUrl}/api/users`, {
-    cache: "no-store",
-    headers: cookieHeader ? { cookie: cookieHeader } : undefined,
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "");
-    console.error("Failed to load users from API", response.status, errorText);
-    throw {
-      code: response.status === 401 || response.status === 403 ? "API_AUTH" : "API_HTTP",
-      title: "Kunne ikke hente brukere",
-      message: "API-et svarte med en feil mens vi hentet brukere.",
-      details: { status: response.status, statusText: response.statusText, body: errorText || undefined },
-    } satisfies AppError;
-  }
-
-  const payload = (await response.json()) as { users?: any[] };
-  return payload.users ?? [];
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { CompanyRole, GlobalRole, Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { loadUsersForAdmin } from "@/lib/users";
 
 type RelationshipInput = {
   companyId: number | string;
@@ -14,54 +15,24 @@ type CreateUserPayload = {
   relationships?: RelationshipInput[];
 };
 
-export async function GET(_request: Request) {
+export async function GET() {
   const session = await auth();
 
   if (!session?.user || session.user.role !== "super_admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  try {
-    // TODO: Fetch company relationships as well
-    const users = await prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        name: true,
-        role: true,
-        phone: true,
-        email: true,
-        address_street: true,
-        address_postal_code: true,
-        address_region: true,
-        createdAt: true,
-        updatedAt: true,
-        acceptedTerms: true,
-        acceptedTermsAt: true,
-        lastLoginAt: true,
-        accesses: {
-          select: {
-            customerId: true,
-            role: true,
-            customer: {
-              select: {
-                name: true,
-                customer_number: true,
-              },
-            },
-          },
-        },
-      },
-    });
+  const { users, error } = await loadUsersForAdmin();
 
-    return NextResponse.json({ users });
-  } catch (error) {
+  if (error) {
     console.error("Failed to fetch users", error);
     return NextResponse.json(
       { error: "Kunne ikke hente brukere" },
       { status: 500 },
     );
   }
+
+  return NextResponse.json({ users });
 }
 
 export async function POST(request: Request) {
@@ -91,7 +62,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // Validate and normalize company relationships (only relevant for customer role)
   const relationshipInputs = Array.isArray(payload.relationships) ? payload.relationships : [];
   const normalizedRelationships =
     normalizedRole === "customer"
@@ -106,7 +76,6 @@ export async function POST(request: Request) {
   }
 
   try {
-    // Make sure phone is unique
     const existing = await prisma.user.findUnique({
       where: { phone: normalizedPhone },
       select: { id: true },
@@ -118,7 +87,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify that referenced companies exist
     if (normalizedRelationships.length) {
       const companyIds = [...new Set(normalizedRelationships.map((rel) => rel.customerId))];
       const foundCompanies = await prisma.customer.findMany({
@@ -147,11 +115,11 @@ export async function POST(request: Request) {
         accesses:
           normalizedRelationships.length > 0
             ? {
-              create: normalizedRelationships.map((rel) => ({
-                customerId: rel.customerId,
-                role: rel.role,
-              })),
-            }
+                create: normalizedRelationships.map((rel) => ({
+                  customerId: rel.customerId,
+                  role: rel.role,
+                })),
+              }
             : undefined,
       },
       select: {

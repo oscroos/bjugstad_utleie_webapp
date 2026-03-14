@@ -41,9 +41,9 @@ export async function middleware(req: Request) {
   }
 
   // If user is already authenticated and opens /login manually,
-  // send them to the intended callback (or /avtaler).
+  // send them to the intended callback (or /).
   if (session && pathname === "/login") {
-    const target = url.searchParams.get("callbackUrl") || "/avtaler";
+    const target = url.searchParams.get("callbackUrl") || "/";
     return NextResponse.redirect(new URL(target, url.origin));
   }
 

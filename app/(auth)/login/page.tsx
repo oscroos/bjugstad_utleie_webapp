@@ -18,7 +18,7 @@ export default function LoginPage() {
   // If middleware redirected here, it'll attach ?callbackUrl=...
   // After completing Vipps, NextAuth will send the user back to this path.
   const search = useSearchParams();
-  const callbackUrl = search.get("callbackUrl") || "/avtaler";
+  const callbackUrl = search.get("callbackUrl") || "/";
   const errorParam = search.get("error");
   const emailFromVipps = search.get("email");
 

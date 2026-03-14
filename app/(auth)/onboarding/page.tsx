@@ -92,7 +92,7 @@ export default function OnboardingPage() {
                 acceptedTermsVersion: LATEST_TERMS_VERSION,
                 lastLoginAt: nowIso,
             });
-            router.replace("/avtaler");
+            router.replace("/");
             router.refresh();
         } else {
             setError("Kunne ikke lagre bekreftelsen. Prøv igjen.");

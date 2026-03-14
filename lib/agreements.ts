@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { normalizeError, type AppError } from "@/lib/errors";
 
 type RentalMachine = {
     machineId?: number;
@@ -23,6 +24,12 @@ export type AgreementPayload = {
     startDate?: string | null;
     endDate?: string | null;
     machines?: Array<{ id?: string; name?: string | null; make?: string | null }>;
+};
+
+export type AgreementsResult = {
+    active: AgreementPayload[];
+    historical: AgreementPayload[];
+    error: AppError | null;
 };
 
 export async function fetchAgreementsForUser(userId: string, role?: string | null) {
@@ -60,6 +67,30 @@ export async function fetchAgreementsForUser(userId: string, role?: string | nul
     );
 
     return results.flat();
+}
+
+export async function loadAgreementsForUser(
+    userId: string,
+    role?: string | null,
+): Promise<AgreementsResult> {
+    try {
+        const allAgreements = await fetchAgreementsForUser(userId, role);
+        const { active, historical } = splitAgreementsByStatus(allAgreements);
+        return { active, historical, error: null };
+    } catch (error) {
+        return {
+            active: [],
+            historical: [],
+            error: normalizeError(error, {
+                code: role === "super_admin" || role === "customer" ? "API_HTTP" : "API_AUTH",
+                title: "Kunne ikke hente avtaler",
+                message:
+                    error instanceof Error && error.message
+                        ? error.message
+                        : "Ukjent feil under lasting av avtaler.",
+            }),
+        };
+    }
 }
 
 export function splitAgreementsByStatus(agreements: AgreementPayload[]) {

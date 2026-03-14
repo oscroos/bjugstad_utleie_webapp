@@ -1,10 +1,8 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import AgreementsTable, { type AgreementRow } from "./AgreementsTable";
+import AgreementsTable from "./AgreementsTable";
 import { auth } from "@/lib/auth";
 import ErrorPanel from "@/components/ErrorPanel";
-import { normalizeError, type AppError } from "@/lib/errors";
-import type { AgreementPayload } from "@/lib/agreements";
+import { loadAgreementsForUser } from "@/lib/agreements";
 
 export default async function AvtalerPage() {
   const session = await auth();
@@ -14,7 +12,10 @@ export default async function AvtalerPage() {
   }
 
   const viewer = { id: session.user?.id, role: session.user?.role };
-  const { active, historical, error, adminPlaceholderMessage } = await loadAgreements();
+  const { active, historical, error } = await loadAgreementsForUser(
+    session.user.id,
+    session.user.role,
+  );
 
   if (error) {
     return (
@@ -36,11 +37,6 @@ export default async function AvtalerPage() {
           <p className="mt-2 text-slate-600">
             Oversikt over avtaler. Tabellen viser aktive avtaler og historikk med samme oppsett som andre oversikter.
           </p>
-          {adminPlaceholderMessage && (
-            <p className="mt-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              {adminPlaceholderMessage}
-            </p>
-          )}
         </div>
       </header>
 
@@ -79,85 +75,4 @@ export default async function AvtalerPage() {
       </section>
     </main>
   );
-}
-
-async function loadAgreements(): Promise<{
-  active: AgreementRow[];
-  historical: AgreementRow[];
-  adminPlaceholderMessage?: string;
-  error: AppError | null;
-}> {
-  const cookieStore = await cookies();
-  const cookieHeader = cookieStore.toString();
-  const baseUrl = (process.env.NEXTAUTH_URL ?? "http://localhost:3000").replace(/\/$/, "");
-
-  try {
-    const response = await fetch(`${baseUrl}/api/agreements`, {
-      cache: "no-store",
-      headers: cookieHeader ? { cookie: cookieHeader } : undefined,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      return {
-        active: [],
-        historical: [],
-        error: normalizeError(
-          new Error(`Failed to load agreements: ${response.status}`),
-          {
-            code: response.status === 401 || response.status === 403 ? "API_AUTH" : "API_HTTP",
-            title: "Kunne ikke hente avtaler",
-            message: errorText || "API-et svarte med en feil mens vi hentet avtaler.",
-            details: { status: response.status, body: errorText || undefined },
-          },
-        ),
-      };
-    }
-
-    const payload = (await response.json()) as {
-      active?: AgreementPayload[];
-      historical?: AgreementPayload[];
-      placeholder?: boolean;
-      message?: string;
-    };
-
-    const active = (payload.active ?? []).map(mapAgreement);
-    const historical = (payload.historical ?? []).map(mapAgreement);
-
-    return {
-      active,
-      historical,
-      adminPlaceholderMessage: payload.placeholder ? (payload.message ?? "Avtaleoppslag for admin kommer senere.") : undefined,
-      error: null,
-    };
-  } catch (error) {
-    return {
-      active: [],
-      historical: [],
-      error: normalizeError(error, {
-        title: "Kunne ikke hente avtaler",
-        message: error instanceof Error ? error.message : "Ukjent feil under lasting av avtaler.",
-      }),
-    };
-  }
-}
-
-function mapAgreement(payload: AgreementPayload): AgreementRow {
-  return {
-    id: payload.id,
-    customer: payload.customerId || payload.customerName
-      ? {
-        id: payload.customerId,
-        name: payload.customerName ?? undefined,
-      }
-      : undefined,
-    startDate: payload.startDate ?? null,
-    endDate: payload.endDate ?? null,
-    machines:
-      payload.machines?.map((machine) => ({
-        id: machine.id,
-        name: machine.name ?? undefined,
-        make: machine.make ?? undefined,
-      })) ?? [],
-  };
 }

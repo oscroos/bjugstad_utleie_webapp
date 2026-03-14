@@ -48,9 +48,32 @@ export type MachineRow = {
     serial_number: string | null;
     name: string | null;
     oem_name: string | null;
+    model?: string | null;
+    production_year?: string | null;
+    category?: string | null;
+    registration_number?: string | null;
+    rail_control_date?: Date | null;
+    control_date?: Date | null;
+    trackunit_id?: string | null;
+    leasing_company?: string | null;
     last_pos_reported_at?: Date | null;
     last_pos_latitude?: number | null;
     last_pos_longitude?: number | null;
+    altitude?: number | null;
+    speed?: number | null;
+    heading?: number | null;
+    km?: number | null;
+};
+
+export type TrackunitTelemetryRow = {
+    trackunit_id: string;
+    last_pos_reported_at?: Date | null;
+    last_pos_latitude?: number | null;
+    last_pos_longitude?: number | null;
+    altitude?: number | null;
+    speed?: number | null;
+    heading?: number | null;
+    km?: number | null;
 };
 
 export type CustomerRow = {
@@ -85,7 +108,7 @@ export type CustomerContactRow = {
 /**
  * Bulk UPSERT machines:
  * - insert new rows with first_seen=now(), last_updated=now()
- * - update existing rows' name, oem_name and last_updated=now()
+ * - update existing identity/metadata fields and last_updated=now()
  * - update last position *only if* we get a non-null new value (avoids wiping previous known position)
  */
 export async function upsertMachines(rows: MachineRow[]): Promise<number> {
@@ -97,9 +120,21 @@ export async function upsertMachines(rows: MachineRow[]): Promise<number> {
         "serial_number",
         "name",
         "oem_name",
+        "model",
+        "production_year",
+        "category",
+        "registration_number",
+        "rail_control_date",
+        "control_date",
+        "trackunit_id",
+        "leasing_company",
         "last_pos_reported_at",
         "last_pos_latitude",
         "last_pos_longitude",
+        "altitude",
+        "speed",
+        "heading",
+        "km",
     ];
     const values: any[] = [];
     const placeholders: string[] = [];
@@ -112,12 +147,24 @@ export async function upsertMachines(rows: MachineRow[]): Promise<number> {
             r.serial_number ?? null,
             r.name ?? null,
             r.oem_name ?? null,
+            r.model ?? null,
+            r.production_year ?? null,
+            r.category ?? null,
+            r.registration_number ?? null,
+            r.rail_control_date ?? null,
+            r.control_date ?? null,
+            r.trackunit_id ?? null,
+            r.leasing_company ?? null,
             r.last_pos_reported_at ?? null,
             r.last_pos_latitude ?? null,
             r.last_pos_longitude ?? null,
+            r.altitude ?? null,
+            r.speed ?? null,
+            r.heading ?? null,
+            r.km ?? null,
         );
         placeholders.push(
-            `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8})`
+            `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9}, $${offset + 10}, $${offset + 11}, $${offset + 12}, $${offset + 13}, $${offset + 14}, $${offset + 15}, $${offset + 16}, $${offset + 17}, $${offset + 18}, $${offset + 19}, $${offset + 20})`
         );
     });
 
@@ -128,9 +175,21 @@ export async function upsertMachines(rows: MachineRow[]): Promise<number> {
       serial_number,
       name,
       oem_name,
+      model,
+      production_year,
+      category,
+      registration_number,
+      rail_control_date,
+      control_date,
+      trackunit_id,
+      leasing_company,
       last_pos_reported_at,
       last_pos_latitude,
-      last_pos_longitude
+      last_pos_longitude,
+      altitude,
+      speed,
+      heading,
+      km
     )
     VALUES ${placeholders.join(", ")}
     ON CONFLICT (id) DO UPDATE
@@ -138,14 +197,89 @@ export async function upsertMachines(rows: MachineRow[]): Promise<number> {
           serial_number = EXCLUDED.serial_number,
           name = EXCLUDED.name,
           oem_name = EXCLUDED.oem_name,
+          model = EXCLUDED.model,
+          production_year = EXCLUDED.production_year,
+          category = EXCLUDED.category,
+          registration_number = EXCLUDED.registration_number,
+          rail_control_date = EXCLUDED.rail_control_date,
+          control_date = EXCLUDED.control_date,
+          trackunit_id = EXCLUDED.trackunit_id,
+          leasing_company = EXCLUDED.leasing_company,
           last_updated = now(),
           last_pos_reported_at = COALESCE(EXCLUDED.last_pos_reported_at, machines.last_pos_reported_at),
           last_pos_latitude    = COALESCE(EXCLUDED.last_pos_latitude,    machines.last_pos_latitude),
-          last_pos_longitude   = COALESCE(EXCLUDED.last_pos_longitude,   machines.last_pos_longitude)
+          last_pos_longitude   = COALESCE(EXCLUDED.last_pos_longitude,   machines.last_pos_longitude),
+          altitude             = COALESCE(EXCLUDED.altitude,             machines.altitude),
+          speed                = COALESCE(EXCLUDED.speed,                machines.speed),
+          heading              = COALESCE(EXCLUDED.heading,              machines.heading),
+          km                   = COALESCE(EXCLUDED.km,                   machines.km)
   `;
 
     const res = await query(sql, values);
     return res.rowCount ?? rows.length;
+}
+
+export async function updateTrackunitTelemetry(rows: TrackunitTelemetryRow[]): Promise<number> {
+    if (!rows.length) return 0;
+
+    const cols = [
+        "trackunit_id",
+        "last_pos_reported_at",
+        "last_pos_latitude",
+        "last_pos_longitude",
+        "altitude",
+        "speed",
+        "heading",
+        "km",
+    ];
+
+    const values: any[] = [];
+    const placeholders: string[] = [];
+
+    rows.forEach((r, i) => {
+        const offset = i * cols.length;
+        values.push(
+            r.trackunit_id,
+            r.last_pos_reported_at ?? null,
+            r.last_pos_latitude ?? null,
+            r.last_pos_longitude ?? null,
+            r.altitude ?? null,
+            r.speed ?? null,
+            r.heading ?? null,
+            r.km ?? null,
+        );
+        placeholders.push(
+            `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8})`
+        );
+    });
+
+    const sql = `
+    UPDATE machines AS m
+       SET last_updated = now(),
+           last_pos_reported_at = COALESCE(v.last_pos_reported_at::timestamp, m.last_pos_reported_at),
+           last_pos_latitude = COALESCE(v.last_pos_latitude::double precision, m.last_pos_latitude),
+           last_pos_longitude = COALESCE(v.last_pos_longitude::double precision, m.last_pos_longitude),
+           altitude = COALESCE(v.altitude::double precision, m.altitude),
+           speed = COALESCE(v.speed::double precision, m.speed),
+           heading = COALESCE(v.heading::double precision, m.heading),
+           km = COALESCE(v.km::double precision, m.km)
+      FROM (
+        VALUES ${placeholders.join(", ")}
+      ) AS v(
+        trackunit_id,
+        last_pos_reported_at,
+        last_pos_latitude,
+        last_pos_longitude,
+        altitude,
+        speed,
+        heading,
+        km
+      )
+     WHERE m.trackunit_id = v.trackunit_id
+  `;
+
+    const res = await query(sql, values);
+    return res.rowCount ?? 0;
 }
 
 export async function upsertCustomers(rows: CustomerRow[]): Promise<number> {

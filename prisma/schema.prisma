@@ -94,11 +94,23 @@ model Machine {
   oemName           String?   @map("oem_name")
   oemId             String?   @map("oem_id")
   serialNumber      String?   @map("serial_number")
+  model             String?
+  productionYear    String?   @map("production_year")
+  category          String?
+  registrationNumber String?  @map("registration_number")
+  railControlDate   DateTime? @map("rail_control_date")
+  controlDate       DateTime? @map("control_date")
+  trackunitId       String?   @map("trackunit_id")
+  leasingCompany    String?   @map("leasing_company")
   firstSeen         DateTime  @default(now()) @map("first_seen")
   lastUpdated       DateTime  @default(now()) @updatedAt @map("last_updated")
   lastPosReportedAt DateTime? @map("last_pos_reported_at")
   lastPosLatitude   Float?    @map("last_pos_latitude")
   lastPosLongitude  Float?    @map("last_pos_longitude")
+  altitude          Float?
+  speed             Float?
+  heading           Float?
+  km                Float?
 
   @@index([lastUpdated(sort: Desc)], map: "idx_machines_last_updated")
   @@index([lastPosReportedAt(sort: Desc)], map: "idx_machines_last_pos_reported_at")

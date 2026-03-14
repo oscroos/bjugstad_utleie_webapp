@@ -107,6 +107,25 @@ export type BjugstadCustomer = {
     contactPersons?: BjugstadContactPerson[];
 };
 
+export type BjugstadMachineFull = {
+    machineId: number;
+    make?: string | null;
+    model?: string | null;
+    productionYear?: string | null;
+    number?: string | null;
+    category?: string | null;
+    registrationNumber?: string | null;
+    serialNumber?: string | null;
+    location?: string | null;
+    railControlDate?: string | null;
+    controlDate?: string | null;
+    trainingVideos?: unknown[] | null;
+    documentedTrainingVideoUri?: string | null;
+    englishDocumentedTrainingVideoUri?: string | null;
+    trackunitId?: number | null;
+    leasingCompany?: string | null;
+};
+
 export async function fetchCustomers(): Promise<BjugstadCustomer[]> {
     const data = await apiGet<unknown>("/GetCustomers");
     if (!Array.isArray(data)) {
@@ -116,4 +135,15 @@ export async function fetchCustomers(): Promise<BjugstadCustomer[]> {
     }
 
     return data as BjugstadCustomer[];
+}
+
+export async function fetchMachinesFull(): Promise<BjugstadMachineFull[]> {
+    const data = await apiGet<unknown>("/GetMachinesFull");
+    if (!Array.isArray(data)) {
+        throw new Error(
+            `Unexpected GetMachinesFull response type: ${typeof data === "object" ? "object" : typeof data}`
+        );
+    }
+
+    return data as BjugstadMachineFull[];
 }

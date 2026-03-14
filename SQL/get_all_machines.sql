@@ -1,4 +1,5 @@
 SELECT *
 FROM machines
+WHERE trackunit_id IS NOT NULL
 ORDER BY id DESC
 LIMIT 100;

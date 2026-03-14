@@ -6,8 +6,6 @@ import UsersTable from "./UsersTable";
 import ErrorPanel from "@/components/ErrorPanel";
 import { normalizeError, type AppError } from "@/lib/errors";
 
-export const revalidate = 0;
-
 export default async function BrukerePage() {
   const session = await auth();
 

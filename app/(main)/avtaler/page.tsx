@@ -6,8 +6,6 @@ import ErrorPanel from "@/components/ErrorPanel";
 import { normalizeError, type AppError } from "@/lib/errors";
 import type { AgreementPayload } from "@/lib/agreements";
 
-export const revalidate = 0;
-
 export default async function AvtalerPage() {
   const session = await auth();
 

@@ -4,8 +4,6 @@ import CustomersTable from "./CustomersTable";
 import ErrorPanel from "@/components/ErrorPanel";
 import { normalizeError, type AppError } from "@/lib/errors";
 
-export const revalidate = 0;
-
 type Customer = {
   customerId: number;
   name?: string;

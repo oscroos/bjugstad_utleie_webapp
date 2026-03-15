@@ -23,3 +23,16 @@ export type MachinesData = {
     features: MachinesFC;
     list: MachineListEntry[];
 };
+
+export type MachinePositionHistoryEntry = {
+    id: string;
+    source: string;
+    reported_at: string;
+    received_at: string;
+    lat: number;
+    lng: number;
+    altitude: number | null;
+    speed: number | null;
+    heading: number | null;
+    km: number | null;
+};

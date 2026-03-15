@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Point } from "geojson";
+import type { FeatureCollection, Geometry, Point } from "geojson";
 import maplibregl, { Map, GeoJSONSource } from "maplibre-gl";
 import type { GeoJSONSourceSpecification, LayerSpecification, StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -18,11 +18,18 @@ import {
 } from "@tabler/icons-react";
 import DataTable, { type DataColumn } from "@/components/DataTable";
 import { useMachines, useMachinesList } from "@/components/MachinesContext";
-import type { MachineFeature, MachineListEntry, MachinesFC, MachineProps } from "@/types/machines";
+import type {
+    MachineFeature,
+    MachineListEntry,
+    MachinesFC,
+    MachinePositionHistoryEntry,
+    MachineProps,
+} from "@/types/machines";
 import Image from "next/image";
 import { getOEMLogo } from "@/lib/get_OEM_logo";
 
 type Props = { features?: MachinesFC };
+type HistoryFeatureCollection = FeatureCollection<Geometry, { kind: "point" | "line"; reported_at?: string }>;
 
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 
@@ -76,6 +83,10 @@ export default function MapView({ features }: Props) {
     const [roadsVisible, setRoadsVisible] = useState(true);
     const [bordersVisible, setBordersVisible] = useState(true);
     const [selectedId, setSelectedId] = useState<string | number | null>(null);
+    const [historyEntries, setHistoryEntries] = useState<MachinePositionHistoryEntry[]>([]);
+    const [historyMachineName, setHistoryMachineName] = useState<string | null>(null);
+    const historyDataRef = useRef<HistoryFeatureCollection>(emptyHistoryFeatureCollection());
+    const historyMachineIdRef = useRef<string | null>(null);
 
     const labelLayerIds = useRef<string[]>([]);
     const roadLayerIds = useRef<string[]>([]);
@@ -341,6 +352,113 @@ export default function MapView({ features }: Props) {
         }
     }
 
+    function ensureHistoryLayers(map: Map, fc: HistoryFeatureCollection) {
+        if (!map.getSource("machine-history")) {
+            map.addSource("machine-history", {
+                type: "geojson",
+                data: fc,
+            });
+        } else {
+            (map.getSource("machine-history") as GeoJSONSource).setData(fc);
+        }
+
+        if (!map.getLayer("machine-history-line")) {
+            map.addLayer({
+                id: "machine-history-line",
+                type: "line",
+                source: "machine-history",
+                filter: ["==", ["geometry-type"], "LineString"],
+                paint: {
+                    "line-color": c.blueDark,
+                    "line-width": 3,
+                    "line-opacity": 0.75,
+                },
+            });
+        }
+
+        if (!map.getLayer("machine-history-point")) {
+            map.addLayer({
+                id: "machine-history-point",
+                type: "circle",
+                source: "machine-history",
+                filter: ["==", ["geometry-type"], "Point"],
+                paint: {
+                    "circle-color": "#ffffff",
+                    "circle-radius": 4,
+                    "circle-stroke-color": c.blueDark,
+                    "circle-stroke-width": 2,
+                },
+            });
+        }
+    }
+
+    function clearMachineHistory(map?: Map | null) {
+        historyMachineIdRef.current = null;
+        historyDataRef.current = emptyHistoryFeatureCollection();
+        setHistoryEntries([]);
+        setHistoryMachineName(null);
+
+        const activeMap = map ?? mapRef.current;
+        if (!activeMap || !loadedRef.current) return;
+
+        const src = activeMap.getSource("machine-history") as GeoJSONSource | undefined;
+        src?.setData(historyDataRef.current);
+    }
+
+    async function loadMachineHistory(
+        machineId: string,
+        machineName: string,
+        map: Map,
+        button: HTMLButtonElement,
+    ) {
+        if (historyMachineIdRef.current && historyMachineIdRef.current !== machineId) {
+            clearMachineHistory(map);
+        }
+
+        button.disabled = true;
+        button.textContent = "Laster...";
+
+        try {
+            const response = await fetch(`/api/machines/${encodeURIComponent(machineId)}/location-history`, {
+                cache: "no-store",
+            });
+            const payload = (await response.json().catch(() => ({}))) as {
+                history?: MachinePositionHistoryEntry[];
+                error?: string;
+            };
+
+            if (!response.ok) {
+                throw new Error(payload.error || "Kunne ikke hente posisjonshistorikk");
+            }
+
+            const history = payload.history ?? [];
+            const fc = buildHistoryFeatureCollection(history);
+
+            historyMachineIdRef.current = machineId;
+            historyDataRef.current = fc;
+            setHistoryEntries(history);
+            setHistoryMachineName(machineName);
+            ensureHistoryLayers(map, fc);
+            bringMachineLayersToTop(map);
+
+            if (history.length) {
+                fitMapToCoordinates(
+                    map,
+                    history.map((entry) => [entry.lng, entry.lat] as [number, number]),
+                );
+                button.textContent = "Viser siste bevegelser";
+            } else {
+                button.textContent = "Ingen bevegelser funnet";
+            }
+        } catch (error) {
+            console.error("Failed to load machine history", error);
+            clearMachineHistory(map);
+            button.textContent = "Kunne ikke hente bevegelser";
+        } finally {
+            button.disabled = false;
+        }
+    }
+
     // add near other refs
     const popupRef = useRef<maplibregl.Popup | null>(null);
 
@@ -363,7 +481,6 @@ export default function MapView({ features }: Props) {
         const lastSeenValue = formatPopupValue(
             props.last_pos_reported_at ? formatLastUpdated(props.last_pos_reported_at) : "",
         );
-        const coordsValue = `${coords[1].toFixed(5)}, ${coords[0].toFixed(5)}`;
 
         const popupContent = buildPopupContent({
             id: String(id),
@@ -374,11 +491,11 @@ export default function MapView({ features }: Props) {
             agreementStatus,
             renterValue,
             lastSeenValue,
-            coordsValue,
         });
 
         const popup = new maplibregl.Popup({
             closeOnMove: !(opts?.sticky),
+            closeOnClick: false,
             closeButton: false,
             className: "machine-popup",
             offset: 12,
@@ -391,7 +508,20 @@ export default function MapView({ features }: Props) {
             popup.remove();
         });
 
+        popupContent.querySelector<HTMLButtonElement>("[data-show-history]")?.addEventListener("click", () => {
+            popup.remove();
+            void loadMachineHistory(
+                String(id),
+                name,
+                map,
+                popupContent.querySelector<HTMLButtonElement>("[data-show-history]")!,
+            );
+        });
+
         popup.on("close", () => {
+            if (popupRef.current === popup) {
+                popupRef.current = null;
+            }
             // clear highlight only if it belonged to this popup
             setSelectedId((prev) => (String(prev) === String(id) ? null : prev));
         });
@@ -498,6 +628,7 @@ export default function MapView({ features }: Props) {
         map.on("load", () => {
             loadedRef.current = true;
             ensureDataLayers(map, safeFeatures);
+            ensureHistoryLayers(map, historyDataRef.current);
             reapplyAllVisibilities(map);
             applyLabelContrast(map, theme);
             bringMachineLayersToTop(map);
@@ -544,6 +675,7 @@ export default function MapView({ features }: Props) {
 
             const nextStyle = cloneStyle(baseStyle);
             addMachinesToStyle(nextStyle, safeFeatures);
+            addHistoryToStyle(nextStyle, historyDataRef.current);
             applyVisibilityToStyle(nextStyle, {
                 labels: labelsVisibleRef.current,
                 roads: roadsVisibleRef.current,
@@ -556,6 +688,7 @@ export default function MapView({ features }: Props) {
             // Re-attach once the new style (+glyphs) is fully ready
             stableMap.once("style.load", () => {
                 ensureDataLayers(stableMap, safeFeatures);
+                ensureHistoryLayers(stableMap, historyDataRef.current);
                 reapplyAllVisibilities(stableMap);
                 applyLabelContrast(stableMap, themeRef.current);
                 bringMachineLayersToTop(stableMap);
@@ -719,6 +852,79 @@ export default function MapView({ features }: Props) {
             {/* Map */}
             <div ref={containerRef} className="w-full" style={mapHeightStyle} />
 
+            {historyEntries.length > 0 ? (
+                <div className="pointer-events-none absolute right-3 top-3 z-10 max-h-[min(55vh,36rem)] w-[min(24rem,calc(100vw-1.5rem))]">
+                    <div className="pointer-events-auto overflow-hidden rounded-2xl border border-slate-200 bg-white/95 shadow-xl backdrop-blur">
+                        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                            <div className="min-w-0">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                    Siste bevegelser
+                                </div>
+                                <div className="truncate text-sm font-semibold text-slate-900">
+                                    {historyMachineName ?? "Maskin"}
+                                </div>
+                                <div className="text-xs text-slate-500">
+                                    {historyEntries.length} posisjoner
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => clearMachineHistory()}
+                                className="rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                                aria-label="Lukk historikk"
+                                title="Lukk historikk"
+                            >
+                                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="max-h-[min(55vh,32rem)] overflow-auto px-3 py-3">
+                            <div className="space-y-2">
+                                {historyEntries.map((entry, index) => (
+                                    <div
+                                        key={entry.id}
+                                        className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                                    Punkt {index + 1}
+                                                </div>
+                                                <div className="text-sm font-semibold text-slate-900">
+                                                    {formatLastUpdated(entry.reported_at)}
+                                                </div>
+                                            </div>
+                                            <div className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                                                {entry.source}
+                                            </div>
+                                        </div>
+                                        <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                                            <div>
+                                                <span className="font-semibold text-slate-700">Lat:</span>{" "}
+                                                {entry.lat.toFixed(5)}
+                                            </div>
+                                            <div>
+                                                <span className="font-semibold text-slate-700">Lng:</span>{" "}
+                                                {entry.lng.toFixed(5)}
+                                            </div>
+                                            <div>
+                                                <span className="font-semibold text-slate-700">Fart:</span>{" "}
+                                                {entry.speed != null ? `${entry.speed}` : "-"}
+                                            </div>
+                                            <div>
+                                                <span className="font-semibold text-slate-700">Kurs:</span>{" "}
+                                                {entry.heading != null ? `${entry.heading}` : "-"}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
             {/* Divider (click = toggle, drag = resize) - SHORTER HEIGHT */}
             <div
                 className="relative z-10 h-1.5 w-full cursor-row-resize bg-gradient-to-b from-transparent to-transparent hover:from-slate-200/60 hover:to-transparent"
@@ -874,6 +1080,19 @@ function fitToFeatures(map: Map, fc: MachinesFC, opts?: { onlyIfChanged?: boolea
     (map as any).__lastFitKey = key;
 }
 
+function fitMapToCoordinates(map: Map, coordinates: [number, number][]) {
+    if (!coordinates.length) return;
+
+    const [firstLng, firstLat] = coordinates[0];
+    const bounds = coordinates.reduce(
+        (acc, [lng, lat]) => acc.extend([lng, lat]),
+        new maplibregl.LngLatBounds([firstLng, firstLat], [firstLng, firstLat]),
+    );
+
+    map.easeTo({ duration: 400 });
+    map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 400 });
+}
+
 function applyLabelContrast(map: Map, theme: "light" | "dark") {
     const isDark = theme === "dark";
 
@@ -904,6 +1123,42 @@ function applyLabelContrast(map: Map, theme: "light" | "dark") {
 
 function cloneStyle(style: StyleSpecification) {
     return JSON.parse(JSON.stringify(style)) as StyleSpecification;
+}
+
+function emptyHistoryFeatureCollection(): HistoryFeatureCollection {
+    return { type: "FeatureCollection", features: [] };
+}
+
+function buildHistoryFeatureCollection(history: MachinePositionHistoryEntry[]): HistoryFeatureCollection {
+    if (!history.length) return emptyHistoryFeatureCollection();
+
+    const pointFeatures = history.map((entry) => ({
+        type: "Feature" as const,
+        geometry: {
+            type: "Point" as const,
+            coordinates: [entry.lng, entry.lat],
+        },
+        properties: {
+            kind: "point" as const,
+            reported_at: entry.reported_at,
+        },
+    }));
+
+    const lineFeature = {
+        type: "Feature" as const,
+        geometry: {
+            type: "LineString" as const,
+            coordinates: history.map((entry) => [entry.lng, entry.lat] as [number, number]),
+        },
+        properties: {
+            kind: "line" as const,
+        },
+    };
+
+    return {
+        type: "FeatureCollection",
+        features: history.length > 1 ? [...pointFeatures, lineFeature] : pointFeatures,
+    };
 }
 
 function addMachinesToStyle(style: StyleSpecification, data: MachinesFC) {
@@ -987,6 +1242,56 @@ function addMachinesToStyle(style: StyleSpecification, data: MachinesFC) {
     }
 }
 
+function addHistoryToStyle(style: StyleSpecification, data: HistoryFeatureCollection) {
+    style.sources = style.sources ?? {};
+
+    const sourceSpec: GeoJSONSourceSpecification = {
+        type: "geojson",
+        data,
+    };
+
+    if (!style.sources["machine-history"]) {
+        style.sources["machine-history"] = sourceSpec;
+    } else {
+        const src = style.sources["machine-history"] as GeoJSONSourceSpecification;
+        src.type = "geojson";
+        src.data = data;
+    }
+
+    style.layers = style.layers ?? [];
+    const existing = new Set(style.layers.map((layer) => layer.id));
+
+    const layersToAdd = [
+        {
+            id: "machine-history-line",
+            type: "line",
+            source: "machine-history",
+            filter: ["==", ["geometry-type"], "LineString"],
+            paint: {
+                "line-color": c.blueDark,
+                "line-width": 3,
+                "line-opacity": 0.75,
+            },
+        },
+        {
+            id: "machine-history-point",
+            type: "circle",
+            source: "machine-history",
+            filter: ["==", ["geometry-type"], "Point"],
+            paint: {
+                "circle-color": "#ffffff",
+                "circle-radius": 4,
+                "circle-stroke-color": c.blueDark,
+                "circle-stroke-width": 2,
+            },
+        },
+    ] as LayerSpecification[];
+
+    for (const layer of layersToAdd) {
+        if (!existing.has(layer.id)) style.layers.push(layer);
+    }
+}
+
 function applyVisibilityToStyle(
     style: StyleSpecification,
     opts: { labels: boolean; roads: boolean; borders: boolean }
@@ -1041,7 +1346,6 @@ function buildPopupContent({
     agreementStatus,
     renterValue,
     lastSeenValue,
-    coordsValue,
 }: {
     id: string;
     name: string;
@@ -1051,7 +1355,6 @@ function buildPopupContent({
     agreementStatus: string;
     renterValue: string;
     lastSeenValue: string;
-    coordsValue: string;
 }) {
     const container = document.createElement("div");
     const statusTone =
@@ -1070,7 +1373,7 @@ function buildPopupContent({
         <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
             <div class="flex items-start justify-between gap-2 border-b border-slate-100 px-2.5 py-2">
                 <div class="flex min-w-0 items-stretch gap-2">
-                    <div class="flex w-9 items-center justify-center rounded-lg border border-slate-200 bg-white p-0.5">
+                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white p-0.5">
                         ${logoMarkup}
                     </div>
                     <div class="min-w-0">
@@ -1113,13 +1416,14 @@ function buildPopupContent({
                         <div class="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Sist sett</div>
                         <div class="mt-0.5 text-[11px] ${lastSeenTone}">${escapeHtml(lastSeenValue)}</div>
                     </div>
-                    <div class="col-span-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
-                        <div class="text-[9px] font-semibold uppercase tracking-wide text-slate-500">
-                            Koordinater
-                        </div>
-                        <div class="mt-0.5 text-[11px] font-medium text-slate-600">${escapeHtml(coordsValue)}</div>
-                    </div>
                 </div>
+                <button
+                    type="button"
+                    data-show-history
+                    class="w-full cursor-pointer rounded-lg bg-slate-900 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-slate-800 disabled:cursor-default disabled:bg-slate-300"
+                >
+                    Se siste bevegelser
+                </button>
             </div>
         </div>
     `;

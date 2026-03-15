@@ -1,7 +1,13 @@
 // lib/machines.ts
 import { cache } from "react";
 import { query } from "@/lib/db";
-import type { MachinesFC, MachineFeature, MachineListEntry, MachinesData } from "@/types/machines";
+import type {
+    MachinesFC,
+    MachineFeature,
+    MachineListEntry,
+    MachinesData,
+    MachinePositionHistoryEntry,
+} from "@/types/machines";
 import { IS_DEV } from "./constants";
 import { fetchAgreementsForUser, splitAgreementsByStatus } from "@/lib/agreements";
 
@@ -80,6 +86,46 @@ export async function getMachineLocationById(
 
     if (!rows.length) return null;
     return toMachineListEntry(rows[0]);
+}
+
+export async function getMachineLocationHistoryById(
+    id: string | number,
+): Promise<MachinePositionHistoryEntry[]> {
+    const machineId = String(id ?? "").trim();
+    if (!machineId) return [];
+
+    const { rows } = await query(
+        `
+        SELECT
+            id,
+            source,
+            reported_at,
+            received_at,
+            latitude AS lat,
+            longitude AS lng,
+            altitude,
+            speed,
+            heading,
+            km
+        FROM machine_position_history
+        WHERE machine_id::text = $1::text
+        ORDER BY reported_at ASC, id ASC;
+        `,
+        [machineId],
+    );
+
+    return rows.map((row: any) => ({
+        id: String(row.id),
+        source: String(row.source ?? ""),
+        reported_at: new Date(row.reported_at).toISOString(),
+        received_at: new Date(row.received_at).toISOString(),
+        lat: Number(row.lat),
+        lng: Number(row.lng),
+        altitude: row.altitude != null ? Number(row.altitude) : null,
+        speed: row.speed != null ? Number(row.speed) : null,
+        heading: row.heading != null ? Number(row.heading) : null,
+        km: row.km != null ? Number(row.km) : null,
+    }));
 }
 
 const getAllMachinesList = cache(async (): Promise<MachineListEntry[]> => {

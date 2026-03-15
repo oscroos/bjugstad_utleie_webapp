@@ -27,9 +27,13 @@ import type {
 } from "@/types/machines";
 import Image from "next/image";
 import { getOEMLogo } from "@/lib/get_OEM_logo";
+import { getOemColor, getOemColorMatchEntries, OEM_COLORS } from "@/lib/oem-colors";
 
 type Props = { features?: MachinesFC };
-type HistoryFeatureCollection = FeatureCollection<Geometry, { kind: "point" | "line"; reported_at?: string }>;
+type HistoryFeatureCollection = FeatureCollection<
+    Geometry,
+    { kind: "point" | "line"; reported_at?: string; history_id?: string; selected?: boolean; is_current?: boolean }
+>;
 
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 
@@ -43,29 +47,16 @@ const c = {
     cluster3: "#486581",
 };
 
-const OEM_COLORS: Record<string, string> = {
-    hydrema: "#000000", // black
-    cat: "#F59E0B",     // orange/amber
-    default: c.blue,    // fallback
-};
-
 function buildOemColorExpression(): any[] {
-    // ["match", ["downcase", ["coalesce", ["get","oem_name"], ""]], "hydrema","#000", "cat","#F59E0B", fallback]
-    const entries: any[] = [];
-    for (const [k, v] of Object.entries(OEM_COLORS)) {
-        if (k === "default") continue;
-        entries.push(k, v);
-    }
-    return ["match", ["downcase", ["coalesce", ["get", "oem_name"], ""]], ...entries, OEM_COLORS.default];
+    return [
+        "match",
+        ["downcase", ["coalesce", ["to-string", ["get", "oem_name"]], ""]],
+        ...getOemColorMatchEntries(),
+        OEM_COLORS.default,
+    ];
 }
 
-const OEM_COLOR_EXPRESSION = ([
-    "match",
-    ["downcase", ["coalesce", ["to-string", ["get", "oem_name"]], ""]],
-    "hydrema", OEM_COLORS.hydrema,
-    "cat", OEM_COLORS.cat,
-    OEM_COLORS.default,
-] as unknown) as maplibregl.ExpressionSpecification;
+const OEM_COLOR_EXPRESSION = buildOemColorExpression() as unknown as maplibregl.ExpressionSpecification;
 
 export default function MapView({ features }: Props) {
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -86,9 +77,13 @@ export default function MapView({ features }: Props) {
     const [historyEntries, setHistoryEntries] = useState<MachinePositionHistoryEntry[]>([]);
     const [historyMachineName, setHistoryMachineName] = useState<string | null>(null);
     const [historyColor, setHistoryColor] = useState<string>(OEM_COLORS.default);
+    const [historyOverlayOpen, setHistoryOverlayOpen] = useState(false);
+    const [selectedHistoryEntryId, setSelectedHistoryEntryId] = useState<string | null>(null);
+    const [currentHistoryEntryId, setCurrentHistoryEntryId] = useState<string | null>(null);
     const historyDataRef = useRef<HistoryFeatureCollection>(emptyHistoryFeatureCollection());
     const historyMachineIdRef = useRef<string | null>(null);
     const historyColorRef = useRef<string>(OEM_COLORS.default);
+    const historyRowRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
     const labelLayerIds = useRef<string[]>([]);
     const roadLayerIds = useRef<string[]>([]);
@@ -116,6 +111,11 @@ export default function MapView({ features }: Props) {
         });
         return { type: "FeatureCollection", features: fs } as MachinesFC;
     }, [data]);
+
+    const historyEntriesDesc = useMemo(
+        () => [...historyEntries].reverse(),
+        [historyEntries],
+    );
 
     const columns: DataColumn<MachineListEntry>[] = [
         {
@@ -387,14 +387,47 @@ export default function MapView({ features }: Props) {
                 source: "machine-history",
                 filter: ["==", ["geometry-type"], "Point"],
                 paint: {
-                    "circle-color": "#ffffff",
+                    "circle-color": ["case", ["==", ["get", "is_current"], true], color, "#ffffff"],
                     "circle-radius": 4,
                     "circle-stroke-color": color,
                     "circle-stroke-width": 2,
                 },
             });
         } else {
+            map.setPaintProperty(
+                "machine-history-point",
+                "circle-color",
+                ["case", ["==", ["get", "is_current"], true], color, "#ffffff"],
+            );
             map.setPaintProperty("machine-history-point", "circle-stroke-color", color);
+        }
+
+        if (!map.getLayer("machine-history-selected")) {
+            map.addLayer({
+                id: "machine-history-selected",
+                type: "circle",
+                source: "machine-history",
+                filter: ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "selected"], true]],
+                paint: {
+                    "circle-radius": 8,
+                    "circle-color": "rgba(34, 197, 94, 0.18)",
+                    "circle-stroke-color": "#22C55E",
+                    "circle-stroke-width": 2,
+                },
+            });
+        }
+
+        if (!map.getLayer("machine-history-selected-inner")) {
+            map.addLayer({
+                id: "machine-history-selected-inner",
+                type: "circle",
+                source: "machine-history",
+                filter: ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "selected"], true]],
+                paint: {
+                    "circle-radius": 2.5,
+                    "circle-color": "#22C55E",
+                },
+            });
         }
     }
 
@@ -405,6 +438,9 @@ export default function MapView({ features }: Props) {
         setHistoryEntries([]);
         setHistoryMachineName(null);
         setHistoryColor(OEM_COLORS.default);
+        setHistoryOverlayOpen(false);
+        setSelectedHistoryEntryId(null);
+        setCurrentHistoryEntryId(null);
 
         const activeMap = map ?? mapRef.current;
         if (!activeMap || !loadedRef.current) return;
@@ -441,14 +477,23 @@ export default function MapView({ features }: Props) {
             }
 
             const history = payload.history ?? [];
-            const fc = buildHistoryFeatureCollection(history);
+            const nextCurrentHistoryEntryId = getLatestHistoryEntryId(history);
+            const nextSelectedHistoryEntryId = nextCurrentHistoryEntryId;
+            const fc = buildHistoryFeatureCollection(
+                history,
+                nextSelectedHistoryEntryId,
+                nextCurrentHistoryEntryId,
+            );
 
             historyMachineIdRef.current = machineId;
             historyDataRef.current = fc;
-            historyColorRef.current = getHistoryColor(oemName);
+            historyColorRef.current = getOemColor(oemName);
             setHistoryEntries(history);
             setHistoryMachineName(machineName);
             setHistoryColor(historyColorRef.current);
+            setHistoryOverlayOpen(true);
+            setSelectedHistoryEntryId(nextSelectedHistoryEntryId);
+            setCurrentHistoryEntryId(nextCurrentHistoryEntryId);
             ensureHistoryLayers(map, fc, historyColorRef.current);
             bringMachineLayersToTop(map);
 
@@ -597,11 +642,22 @@ export default function MapView({ features }: Props) {
             openPopupForFeature(map, f, { sticky: false });
         });
 
+        map.on("click", "machine-history-point", (e) => {
+            const feature = e.features?.[0];
+            const historyId = typeof feature?.properties?.history_id === "string"
+                ? feature.properties.history_id
+                : null;
+            if (!historyId) return;
+            setSelectedHistoryEntryId(historyId);
+        });
+
         // Cursor
         map.on("mouseenter", "clusters", () => (map.getCanvas().style.cursor = "pointer"));
         map.on("mouseleave", "clusters", () => (map.getCanvas().style.cursor = ""));
         map.on("mouseenter", "unclustered-point", () => (map.getCanvas().style.cursor = "pointer"));
         map.on("mouseleave", "unclustered-point", () => (map.getCanvas().style.cursor = ""));
+        map.on("mouseenter", "machine-history-point", () => (map.getCanvas().style.cursor = "pointer"));
+        map.on("mouseleave", "machine-history-point", () => (map.getCanvas().style.cursor = ""));
 
         (map as any)[key] = true;
     }
@@ -756,6 +812,24 @@ export default function MapView({ features }: Props) {
         }
     }, [safeFeatures]);
 
+    useEffect(() => {
+        historyDataRef.current = buildHistoryFeatureCollection(
+            historyEntries,
+            selectedHistoryEntryId,
+            currentHistoryEntryId,
+        );
+        const map = mapRef.current;
+        if (!map || !loadedRef.current) return;
+        const src = map.getSource("machine-history") as GeoJSONSource | undefined;
+        src?.setData(historyDataRef.current);
+    }, [historyEntries, selectedHistoryEntryId, currentHistoryEntryId]);
+
+    useEffect(() => {
+        if (!selectedHistoryEntryId || !historyOverlayOpen) return;
+        const row = historyRowRefs.current[selectedHistoryEntryId];
+        row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, [selectedHistoryEntryId, historyOverlayOpen]);
+
     // ---------- bottom panel size/collapse with click-or-drag divider ----------
     const [panelPx, setPanelPx] = useState<number>(280);
     const [isCollapsed, setIsCollapsed] = useState(false);
@@ -867,9 +941,9 @@ export default function MapView({ features }: Props) {
             {/* Map */}
             <div ref={containerRef} className="w-full" style={mapHeightStyle} />
 
-            {historyEntries.length > 0 ? (
+            {historyOverlayOpen ? (
                 <div
-                    className="pointer-events-none absolute right-3 z-10 w-[min(16rem,calc(100vw-1.5rem))] -translate-y-1/2"
+                    className="pointer-events-none absolute right-5 z-10 w-[min(14rem,calc(100vw-2.5rem))] -translate-y-1/2"
                     style={historyOverlayStyle}
                 >
                     <div className="pointer-events-auto overflow-hidden rounded-2xl border border-slate-200 bg-white/95 shadow-xl backdrop-blur">
@@ -882,7 +956,7 @@ export default function MapView({ features }: Props) {
                                     {historyMachineName ?? "Maskin"}
                                 </div>
                                 <div className="text-xs text-slate-500">
-                                    {historyEntries.length} posisjoner
+                                    {historyEntriesDesc.length} posisjoner
                                 </div>
                             </div>
                             <button
@@ -898,43 +972,71 @@ export default function MapView({ features }: Props) {
                             </button>
                         </div>
                         <div className="max-h-[min(42vh,24rem)] overflow-auto px-3 py-3">
-                            <div className="relative">
-                                {historyEntries.length > 1 ? (
-                                    <div
-                                        className="absolute bottom-4 left-4 top-4 w-px"
-                                        style={{ backgroundColor: historyColor }}
-                                    />
-                                ) : null}
-                                <div className="space-y-0.5">
-                                    {historyEntries.map((entry, index) => (
-                                        <div key={entry.id} className="relative pl-11 pr-1 py-1.5">
-                                            <div className="absolute left-1 top-1.5 flex w-6 justify-center">
-                                                <div
-                                                    className="h-3 w-3 rounded-full border-2 bg-white shadow-sm"
-                                                    style={{
-                                                        borderColor: historyColor,
-                                                        backgroundColor:
-                                                            index === historyEntries.length - 1 ? historyColor : "#ffffff",
-                                                    }}
-                                                />
-                                            </div>
-                                            <div className="min-w-0">
-                                                <div className="text-sm font-semibold leading-tight text-slate-900">
-                                                    {formatLastUpdated(entry.reported_at)}
-                                                </div>
-                                                {index < historyEntries.length - 1 ? (
-                                                    <div className="pt-2 text-[11px] font-medium leading-none text-slate-400">
-                                                        {formatDurationBetween(
-                                                            entry.reported_at,
-                                                            historyEntries[index + 1]?.reported_at,
-                                                        )}
+                            {historyEntriesDesc.length ? (
+                                <div className="relative">
+                                    {historyEntriesDesc.length > 1 ? (
+                                        <div
+                                            className="absolute bottom-4 left-4 top-4 w-px"
+                                            style={{ backgroundColor: historyColor }}
+                                        />
+                                    ) : null}
+                                    <div className="space-y-0.5">
+                                        {historyEntriesDesc.map((entry, index) => (
+                                            <button
+                                                key={entry.id}
+                                                type="button"
+                                                ref={(node) => {
+                                                    historyRowRefs.current[entry.id] = node;
+                                                }}
+                                                onClick={() => {
+                                                    setSelectedHistoryEntryId(entry.id);
+                                                    mapRef.current?.easeTo({
+                                                        center: [entry.lng, entry.lat],
+                                                        zoom: Math.max(mapRef.current?.getZoom() ?? 0, 14),
+                                                        duration: 400,
+                                                    });
+                                                }}
+                                                className="relative block w-full pl-11 pr-1 py-1.5 text-left"
+                                            >
+                                                <div className="absolute left-1 top-1.5 flex w-6 justify-center">
+                                                    <div
+                                                        className="relative flex h-3 w-3 items-center justify-center rounded-full border-2 bg-white shadow-sm"
+                                                        style={{
+                                                            borderColor: historyColor,
+                                                            backgroundColor:
+                                                                entry.id === currentHistoryEntryId ? historyColor : "#ffffff",
+                                                        }}
+                                                    >
+                                                        {selectedHistoryEntryId === entry.id ? (
+                                                            <>
+                                                                <span className="absolute inset-[-4px] rounded-full border-2 border-[#22C55E]" />
+                                                                <span className="h-1.5 w-1.5 rounded-full bg-[#22C55E]" />
+                                                            </>
+                                                        ) : null}
                                                     </div>
-                                                ) : null}
-                                            </div>
-                                        </div>
-                                    ))}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="text-sm font-semibold leading-tight text-slate-900">
+                                                        {formatLastUpdated(entry.reported_at)}
+                                                    </div>
+                                                    {index < historyEntriesDesc.length - 1 ? (
+                                                        <div className="pt-2 text-[11px] font-medium leading-none text-slate-400">
+                                                            {formatDurationBetween(
+                                                                entry.reported_at,
+                                                                historyEntriesDesc[index + 1]?.reported_at,
+                                                            )}
+                                                        </div>
+                                                    ) : null}
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                                    Ingen tidligere posisjoner funnet for denne maskinen.
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -1069,9 +1171,21 @@ function formatOemFilterLabel(src: string) {
     return toTitleCase(label);
 }
 
-function getHistoryColor(oemName: string | null | undefined) {
-    const normalized = String(oemName ?? "").trim().toLowerCase();
-    return OEM_COLORS[normalized] ?? OEM_COLORS.default;
+function getLatestHistoryEntryId(history: MachinePositionHistoryEntry[]) {
+    if (!history.length) return null;
+
+    return history.reduce<MachinePositionHistoryEntry | null>((latest, entry) => {
+        if (!latest) return entry;
+
+        const latestReportedAt = new Date(latest.reported_at).getTime();
+        const entryReportedAt = new Date(entry.reported_at).getTime();
+        if (entryReportedAt > latestReportedAt) return entry;
+        if (entryReportedAt < latestReportedAt) return latest;
+
+        const latestReceivedAt = new Date(latest.received_at).getTime();
+        const entryReceivedAt = new Date(entry.received_at).getTime();
+        return entryReceivedAt > latestReceivedAt ? entry : latest;
+    }, null)?.id ?? null;
 }
 
 function toTitleCase(value: string) {
@@ -1149,7 +1263,11 @@ function emptyHistoryFeatureCollection(): HistoryFeatureCollection {
     return { type: "FeatureCollection", features: [] };
 }
 
-function buildHistoryFeatureCollection(history: MachinePositionHistoryEntry[]): HistoryFeatureCollection {
+function buildHistoryFeatureCollection(
+    history: MachinePositionHistoryEntry[],
+    selectedHistoryEntryId: string | null,
+    currentHistoryEntryId: string | null,
+): HistoryFeatureCollection {
     if (!history.length) return emptyHistoryFeatureCollection();
 
     const pointFeatures = history.map((entry) => ({
@@ -1161,6 +1279,9 @@ function buildHistoryFeatureCollection(history: MachinePositionHistoryEntry[]): 
         properties: {
             kind: "point" as const,
             reported_at: entry.reported_at,
+            history_id: entry.id,
+            selected: entry.id === selectedHistoryEntryId,
+            is_current: entry.id === currentHistoryEntryId,
         },
     }));
 
@@ -1303,6 +1424,28 @@ function addHistoryToStyle(style: StyleSpecification, data: HistoryFeatureCollec
                 "circle-radius": 4,
                 "circle-stroke-color": color,
                 "circle-stroke-width": 2,
+            },
+        },
+        {
+            id: "machine-history-selected",
+            type: "circle",
+            source: "machine-history",
+            filter: ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "selected"], true]],
+            paint: {
+                "circle-radius": 8,
+                "circle-color": "rgba(34, 197, 94, 0.18)",
+                "circle-stroke-color": "#22C55E",
+                "circle-stroke-width": 2,
+            },
+        },
+        {
+            id: "machine-history-selected-inner",
+            type: "circle",
+            source: "machine-history",
+            filter: ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "selected"], true]],
+            paint: {
+                "circle-radius": 2.5,
+                "circle-color": "#22C55E",
             },
         },
     ] as LayerSpecification[];
@@ -1470,7 +1613,7 @@ function formatDurationBetween(from: string | number | undefined, to: string | n
     const toMs = new Date(to).getTime();
     if (Number.isNaN(fromMs) || Number.isNaN(toMs)) return "-";
 
-    const diffMs = Math.max(0, toMs - fromMs);
+    const diffMs = Math.abs(toMs - fromMs);
     const totalMinutes = Math.round(diffMs / 60000);
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;

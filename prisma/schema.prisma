@@ -111,10 +111,31 @@ model Machine {
   speed             Float?
   heading           Float?
   km                Float?
+  positionHistory   MachinePositionHistory[]
 
   @@index([lastUpdated(sort: Desc)], map: "idx_machines_last_updated")
   @@index([lastPosReportedAt(sort: Desc)], map: "idx_machines_last_pos_reported_at")
   @@map("machines")
+}
+
+model MachinePositionHistory {
+  id          BigInt   @id @default(autoincrement())
+  machineId   String   @map("machine_id")
+  source      String
+  reportedAt  DateTime @map("reported_at")
+  receivedAt  DateTime @default(now()) @map("received_at")
+  latitude    Float
+  longitude   Float
+  altitude    Float?
+  speed       Float?
+  heading     Float?
+  km          Float?
+  machine     Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@unique([machineId, source, reportedAt], map: "uq_machine_position_history_machine_source_reported_at")
+  @@index([machineId, reportedAt(sort: Desc)], map: "idx_machine_position_history_machine_reported_at")
+  @@index([reportedAt(sort: Desc)], map: "idx_machine_position_history_reported_at")
+  @@map("machine_position_history")
 }
 
 model Customer {

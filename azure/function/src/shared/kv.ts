@@ -33,7 +33,7 @@ export async function getConfig(name: string): Promise<string> {
     const client = getClient();
     if (!client) {
         throw new Error(
-            `Config "${name}" not found in env and KEY_VAULT_URL is not set.`
+            `Config "${name}" not found in env or KEY_VAULT_URL is not set.`
         );
     }
 

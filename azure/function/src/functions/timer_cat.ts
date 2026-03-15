@@ -48,6 +48,7 @@ app.timer("timer_cat", {
                         serial_number: serialNumber,
                         name: serialNumber ?? equipmentId,
                         oem_name: equipmentHeader.OEMName ?? "CAT",
+                        telemetry_source: "cat",
                         last_pos_reported_at: last_pos_reported_at,
                         last_pos_latitude: loc?.Latitude ?? null,
                         last_pos_longitude: loc?.Longitude ?? null,

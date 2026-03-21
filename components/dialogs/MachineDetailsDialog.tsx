@@ -65,7 +65,6 @@ const OEM_COLORS: Record<string, string> = {
   cat: "#F59E0B",
   default: "#3B82F6",
 };
-const SAS_TOKEN_PLACEHOLDER = "<SAS_TOKEN>";
 
 export type MachineDialogState = {
   open: boolean;
@@ -520,7 +519,7 @@ function AttachmentsSection({ state }: { state: AttachmentsState }) {
                   </p>
                 </div>
                 <a
-                  href={`${attachment.filePath}${attachment.filePath.includes("?") ? "&" : "?"}${SAS_TOKEN_PLACEHOLDER}`}
+                  href={attachment.filePath}
                   className="group inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 transition hover:border-blue-300"
                   target="_blank"
                   rel="noreferrer"

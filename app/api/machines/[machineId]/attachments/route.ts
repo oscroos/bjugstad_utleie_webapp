@@ -17,6 +17,30 @@ type AttachmentResponse = {
   type: string | null;
 };
 
+function buildDownloadPath(
+  filePath: string,
+  name?: string | null,
+  attachmentType?: string | null,
+) {
+  const params = new URLSearchParams({ filePath });
+
+  if (name?.trim()) {
+    params.set("name", name.trim());
+  }
+
+  params.set("sasSource", attachmentType == null ? "default" : "rail");
+
+  return `/api/machines/attachments/download?${params.toString()}`;
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  return "Ukjent feil";
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ machineId: string }> },
@@ -69,21 +93,38 @@ export async function GET(
         response.status,
         body,
       );
+
+      const errorMessage =
+        response.status === 404
+          ? `Fant ingen vedlegg for maskin ${normalizedId}.`
+          : response.status === 401 || response.status === 403
+            ? `Tilgang nektet ved henting av vedlegg for maskin ${normalizedId}. Kontroller API-nokkel og rettigheter.`
+            : `Bjugstad API svarte med status ${response.status} ved henting av vedlegg for maskin ${normalizedId}.`;
+
       return NextResponse.json(
-        { error: "Kunne ikke hente vedlegg" },
+        { error: errorMessage },
         { status: response.status === 404 ? 404 : 502 },
       );
     }
 
-    const attachments = ((await response.json()) as AttachmentResponse[]).filter(
-      (item) => item && item.internal === false,
-    );
+    const attachments = ((await response.json()) as AttachmentResponse[])
+      .filter((item) => item && item.internal === false)
+      .map((item) => ({
+        ...item,
+        filePath: buildDownloadPath(
+          item.filePath,
+          item.name || item.fileName,
+          item.type,
+        ),
+      }));
 
     return NextResponse.json({ attachments });
   } catch (error) {
     console.error("Unexpected error while fetching machine attachments", error);
     return NextResponse.json(
-      { error: "Uventet feil ved henting av vedlegg" },
+      {
+        error: `Uventet feil ved henting av vedlegg for maskin ${normalizedId}: ${getErrorMessage(error)}`,
+      },
       { status: 500 },
     );
   }

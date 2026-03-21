@@ -11,11 +11,20 @@ export type RentalDetails = {
   startDate?: string | Date | null;
   endDate?: string | Date | null;
   createdBy?: string | null;
-  weInsure?: boolean | null;
+  createdByTelephoneNumber?: string | null;
+  insuranceIncluded?: boolean | null;
   projectNumber?: string | null;
   location?: string | null;
   machineOperator?: string | null;
   comment?: string | null;
+  contractPrice?: boolean | null;
+  contactPersonName?: string | null;
+  contactPersonTelephoneNumber?: string | null;
+  contactPersonEmail?: string | null;
+  customerContactPersonId?: string | number | null;
+  customerContactPersonName?: string | null;
+  customerContactPersonTelephoneNumber?: string | null;
+  customerContactPersonEmail?: string | null;
   machines?: Array<{ id?: string | number; name?: string | null; make?: string | null }> | null;
 };
 
@@ -102,7 +111,6 @@ export default function RentalDetailsDialog({
           ) : localRental ? (
             <>
               <RentalOverview rental={localRental} onCustomerClick={onCustomerClick} />
-              <ContactPersonCard />
               <MachinesIncludedCard
                 machines={localRental.machines ?? []}
                 renter={localRental.customerName ?? null}
@@ -133,11 +141,42 @@ function RentalOverview({
     { label: "Startdato", value: formatDateOnly(rental.startDate) },
     { label: "Sluttdato", value: formatDateOnly(rental.endDate) },
     { label: "Opprettet av", value: rental.createdBy },
-    { label: "Vi forsikrer", value: rental.weInsure === null || rental.weInsure === undefined ? "-" : rental.weInsure ? "Ja" : "Nei" },
+    {
+      label: "Vi forsikrer",
+      value:
+        rental.insuranceIncluded === null || rental.insuranceIncluded === undefined
+          ? "-"
+          : rental.insuranceIncluded
+            ? "Ja"
+            : "Nei",
+    },
+    {
+      label: "Kontraktpris",
+      value:
+        rental.contractPrice === null || rental.contractPrice === undefined
+          ? "-"
+          : rental.contractPrice
+            ? "Ja"
+            : "Nei",
+    },
     { label: "Projektnummer", value: rental.projectNumber },
     { label: "Plassering", value: rental.location },
     { label: "Maskinfører", value: rental.machineOperator },
   ];
+  const contactPersons = [
+    {
+      typeLabel: "avtalekontakt",
+      name: rental.contactPersonName,
+      phone: rental.contactPersonTelephoneNumber,
+      email: rental.contactPersonEmail,
+    },
+    {
+      typeLabel: "kundekontakt",
+      name: rental.customerContactPersonName,
+      phone: rental.customerContactPersonTelephoneNumber,
+      email: rental.customerContactPersonEmail,
+    },
+  ].filter((person) => person.name || person.phone || person.email);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
@@ -153,10 +192,10 @@ function RentalOverview({
             </p>
             <div className="mt-1 text-sm font-medium text-slate-900">
               {row.label === "Kunde" &&
-              rental.customerId !== null &&
-              rental.customerId !== undefined &&
-              rental.customerName &&
-              onCustomerClick ? (
+                rental.customerId !== null &&
+                rental.customerId !== undefined &&
+                rental.customerName &&
+                onCustomerClick ? (
                 <button
                   type="button"
                   onClick={() => onCustomerClick(rental.customerId, rental.customerName)}
@@ -181,36 +220,35 @@ function RentalOverview({
           </p>
         </div>
       </div>
-    </div>
-  );
-}
-
-function ContactPersonCard() {
-  const contact = {
-    name: "Kontaktperson Navn",
-    phone: "+47 900 00 000",
-    email: "kontakt@example.com",
-  };
-
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-      <h3 className="text-sm font-semibold text-slate-900">Kontaktperson</h3>
-      <div className="mt-3 grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-        {[
-          { label: "Navn", value: contact.name },
-          { label: "Telefon", value: contact.phone },
-          { label: "E-post", value: contact.email },
-        ].map((row) => (
-          <div
-            key={row.label}
-            className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 shadow-sm"
-          >
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              {row.label}
-            </p>
-            <p className="mt-1 text-sm font-medium text-slate-900">{formatValue(row.value)}</p>
-          </div>
-        ))}
+      <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 shadow-sm">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          Kontaktpersoner
+        </p>
+        <div className="mt-2">
+          {contactPersons.length ? (
+            <ul className="space-y-2 text-sm text-slate-700">
+              {contactPersons.map((person, index) => (
+                <li key={`${person.typeLabel}-${index}`} className="rounded border border-slate-200 bg-white px-3 py-2">
+                  <div className="text-slate-900">
+                    <span className="font-semibold">{formatValue(person.name)}</span>
+                    <span className="ml-1 font-normal text-slate-500">({person.typeLabel})</span>
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    {person.phone ? <span>{person.phone}</span> : null}
+                    {person.email ? (
+                      <>
+                        {person.phone ? <span className="text-slate-300">&middot;</span> : null}
+                        <span className="truncate">{person.email}</span>
+                      </>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-600">Ingen avtale- eller kundekontakt registrert.</p>
+          )}
+        </div>
       </div>
     </div>
   );

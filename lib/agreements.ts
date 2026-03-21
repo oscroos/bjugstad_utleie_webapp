@@ -15,6 +15,20 @@ type Rental = {
     startDate?: string | null;
     endDate?: string | null;
     machines?: RentalMachine[] | null;
+    comments?: string | null;
+    projectNumber?: string | null;
+    contactPerson?: string | null;
+    contactPersonTelephoneNumber?: string | null;
+    contactPersonEmail?: string | null;
+    userTelephoneNumber?: string | null;
+    userName?: string | null;
+    location?: string | null;
+    insuranceIncluded?: boolean | null;
+    contractPrice?: boolean | null;
+    customerContactPersonId?: number | null;
+    customerContactPersonName?: string | null;
+    customerContactPersonTelephoneNumber?: string | null;
+    customerContactPersonEmail?: string | null;
 };
 
 export type AgreementPayload = {
@@ -24,6 +38,20 @@ export type AgreementPayload = {
     startDate?: string | null;
     endDate?: string | null;
     machines?: Array<{ id?: string; name?: string | null; make?: string | null }>;
+    comment?: string | null;
+    projectNumber?: string | null;
+    contactPersonName?: string | null;
+    contactPersonTelephoneNumber?: string | null;
+    contactPersonEmail?: string | null;
+    customerContactPersonId?: number | null;
+    customerContactPersonName?: string | null;
+    customerContactPersonTelephoneNumber?: string | null;
+    customerContactPersonEmail?: string | null;
+    insuranceIncluded?: boolean | null;
+    contractPrice?: boolean | null;
+    location?: string | null;
+    createdBy?: string | null;
+    createdByTelephoneNumber?: string | null;
 };
 
 export type AgreementsResult = {
@@ -152,6 +180,20 @@ function mapRentalToAgreement(rental: Rental, fallbackCustomerId?: number): Agre
         customerName: rental.customerName ?? null,
         startDate: rental.startDate ?? null,
         endDate: rental.endDate ?? null,
+        comment: rental.comments ?? null,
+        projectNumber: rental.projectNumber ?? null,
+        contactPersonName: rental.contactPerson ?? null,
+        contactPersonTelephoneNumber: rental.contactPersonTelephoneNumber ?? null,
+        contactPersonEmail: rental.contactPersonEmail ?? null,
+        customerContactPersonId: rental.customerContactPersonId ?? null,
+        customerContactPersonName: rental.customerContactPersonName ?? null,
+        customerContactPersonTelephoneNumber: rental.customerContactPersonTelephoneNumber ?? null,
+        customerContactPersonEmail: rental.customerContactPersonEmail ?? null,
+        insuranceIncluded: rental.insuranceIncluded ?? null,
+        contractPrice: rental.contractPrice ?? null,
+        location: rental.location ?? null,
+        createdBy: rental.userName ?? null,
+        createdByTelephoneNumber: rental.userTelephoneNumber ?? null,
         machines: (rental.machines ?? []).map((machine) => ({
             id: machine.machineId !== undefined ? String(machine.machineId) : undefined,
             name: formatMachineLabel(machine),

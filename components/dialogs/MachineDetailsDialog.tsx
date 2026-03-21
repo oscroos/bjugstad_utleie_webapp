@@ -66,6 +66,20 @@ type MachineAgreementSummary = {
   startDate?: string | null;
   endDate?: string | null;
   isActive: boolean;
+  comment?: string | null;
+  projectNumber?: string | null;
+  contactPersonName?: string | null;
+  contactPersonTelephoneNumber?: string | null;
+  contactPersonEmail?: string | null;
+  customerContactPersonId?: string | number | null;
+  customerContactPersonName?: string | null;
+  customerContactPersonTelephoneNumber?: string | null;
+  customerContactPersonEmail?: string | null;
+  insuranceIncluded?: boolean | null;
+  contractPrice?: boolean | null;
+  location?: string | null;
+  createdBy?: string | null;
+  createdByTelephoneNumber?: string | null;
 };
 
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
@@ -289,6 +303,20 @@ export default function MachineDetailsDialog({
             customerName?: string | null;
             startDate?: string | null;
             endDate?: string | null;
+            comment?: string | null;
+            projectNumber?: string | null;
+            contactPersonName?: string | null;
+            contactPersonTelephoneNumber?: string | null;
+            contactPersonEmail?: string | null;
+            customerContactPersonId?: number | null;
+            customerContactPersonName?: string | null;
+            customerContactPersonTelephoneNumber?: string | null;
+            customerContactPersonEmail?: string | null;
+            insuranceIncluded?: boolean | null;
+            contractPrice?: boolean | null;
+            location?: string | null;
+            createdBy?: string | null;
+            createdByTelephoneNumber?: string | null;
             machines?: Array<{ id?: string; name?: string | null; make?: string | null }>;
           }>;
           historical?: Array<{
@@ -297,6 +325,20 @@ export default function MachineDetailsDialog({
             customerName?: string | null;
             startDate?: string | null;
             endDate?: string | null;
+            comment?: string | null;
+            projectNumber?: string | null;
+            contactPersonName?: string | null;
+            contactPersonTelephoneNumber?: string | null;
+            contactPersonEmail?: string | null;
+            customerContactPersonId?: number | null;
+            customerContactPersonName?: string | null;
+            customerContactPersonTelephoneNumber?: string | null;
+            customerContactPersonEmail?: string | null;
+            insuranceIncluded?: boolean | null;
+            contractPrice?: boolean | null;
+            location?: string | null;
+            createdBy?: string | null;
+            createdByTelephoneNumber?: string | null;
             machines?: Array<{ id?: string; name?: string | null; make?: string | null }>;
           }>;
           error?: string;
@@ -327,6 +369,20 @@ export default function MachineDetailsDialog({
             startDate: agreement.startDate ?? null,
             endDate: agreement.endDate ?? null,
             isActive: agreement.isActive,
+            comment: agreement.comment ?? null,
+            projectNumber: agreement.projectNumber ?? null,
+            contactPersonName: agreement.contactPersonName ?? null,
+            contactPersonTelephoneNumber: agreement.contactPersonTelephoneNumber ?? null,
+            contactPersonEmail: agreement.contactPersonEmail ?? null,
+            customerContactPersonId: agreement.customerContactPersonId ?? null,
+            customerContactPersonName: agreement.customerContactPersonName ?? null,
+            customerContactPersonTelephoneNumber: agreement.customerContactPersonTelephoneNumber ?? null,
+            customerContactPersonEmail: agreement.customerContactPersonEmail ?? null,
+            insuranceIncluded: agreement.insuranceIncluded ?? null,
+            contractPrice: agreement.contractPrice ?? null,
+            location: agreement.location ?? null,
+            createdBy: agreement.createdBy ?? null,
+            createdByTelephoneNumber: agreement.createdByTelephoneNumber ?? null,
           }));
 
         const sortedAgreements = agreements.sort(compareMachineAgreements);

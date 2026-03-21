@@ -22,6 +22,20 @@ export type AgreementRow = {
   customer?: { id?: string | number; name?: string | null } | null;
   startDate?: string | Date | null;
   endDate?: string | Date | null;
+  comment?: string | null;
+  projectNumber?: string | null;
+  contactPersonName?: string | null;
+  contactPersonTelephoneNumber?: string | null;
+  contactPersonEmail?: string | null;
+  customerContactPersonId?: string | number | null;
+  customerContactPersonName?: string | null;
+  customerContactPersonTelephoneNumber?: string | null;
+  customerContactPersonEmail?: string | null;
+  insuranceIncluded?: boolean | null;
+  contractPrice?: boolean | null;
+  location?: string | null;
+  createdBy?: string | null;
+  createdByTelephoneNumber?: string | null;
   machines?: Array<{ id?: string | number; name?: string | null; make?: string | null }> | null;
 };
 
@@ -221,6 +235,20 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
         customerName: agreement.customer?.name ?? null,
         startDate: agreement.startDate ?? null,
         endDate: agreement.endDate ?? null,
+        comment: agreement.comment ?? null,
+        projectNumber: agreement.projectNumber ?? null,
+        contactPersonName: agreement.contactPersonName ?? null,
+        contactPersonTelephoneNumber: agreement.contactPersonTelephoneNumber ?? null,
+        contactPersonEmail: agreement.contactPersonEmail ?? null,
+        customerContactPersonId: agreement.customerContactPersonId ?? null,
+        customerContactPersonName: agreement.customerContactPersonName ?? null,
+        customerContactPersonTelephoneNumber: agreement.customerContactPersonTelephoneNumber ?? null,
+        customerContactPersonEmail: agreement.customerContactPersonEmail ?? null,
+        insuranceIncluded: agreement.insuranceIncluded ?? null,
+        contractPrice: agreement.contractPrice ?? null,
+        location: agreement.location ?? null,
+        createdBy: agreement.createdBy ?? null,
+        createdByTelephoneNumber: agreement.createdByTelephoneNumber ?? null,
         machines: agreement.machines ?? [],
       },
     });
@@ -368,6 +396,20 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
                   : undefined,
               startDate: agreement.startDate ?? null,
               endDate: agreement.endDate ?? null,
+              comment: agreement.comment ?? null,
+              projectNumber: agreement.projectNumber ?? null,
+              contactPersonName: agreement.contactPersonName ?? null,
+              contactPersonTelephoneNumber: agreement.contactPersonTelephoneNumber ?? null,
+              contactPersonEmail: agreement.contactPersonEmail ?? null,
+              customerContactPersonId: agreement.customerContactPersonId ?? null,
+              customerContactPersonName: agreement.customerContactPersonName ?? null,
+              customerContactPersonTelephoneNumber: agreement.customerContactPersonTelephoneNumber ?? null,
+              customerContactPersonEmail: agreement.customerContactPersonEmail ?? null,
+              insuranceIncluded: agreement.insuranceIncluded ?? null,
+              contractPrice: agreement.contractPrice ?? null,
+              location: agreement.location ?? null,
+              createdBy: agreement.createdBy ?? null,
+              createdByTelephoneNumber: agreement.createdByTelephoneNumber ?? null,
               machines: [],
             },
             { fromMachine: true },

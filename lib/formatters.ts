@@ -50,7 +50,7 @@ export function formatDisplay(value?: string | null, fallback = "-") {
 
 export function formatDate(
   value?: string | Date | null,
-  options?: { multiline?: boolean },
+  options?: { multiline?: boolean; showTime?: boolean },
 ): string | undefined {
   if (!value) return undefined;
   const date = value instanceof Date ? value : new Date(value);
@@ -59,6 +59,9 @@ export function formatDate(
   const day = pad(date.getDate());
   const month = pad(date.getMonth() + 1);
   const year = date.getFullYear();
+  if (options?.showTime === false) {
+    return `${day}.${month}.${year}`;
+  }
   const hours = pad(date.getHours());
   const minutes = pad(date.getMinutes());
   const separator = options?.multiline ? "\n" : " ";

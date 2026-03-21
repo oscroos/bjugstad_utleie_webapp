@@ -248,7 +248,7 @@ export function DataTable<T>({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filters, data, columns, pageSize]);
+  }, [filters, pageSize]);
 
   const totalRows = sortedRows.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));

@@ -38,6 +38,7 @@ export default function RentalDetailsDialog({
   onMachineClick?: (
     machine: { id?: string | number; name?: string | null; make?: string | null },
     renter?: string | null,
+    renterId?: string | number | null,
   ) => void;
 }) {
   const { open, loading, error, rental } = state;
@@ -91,6 +92,7 @@ export default function RentalDetailsDialog({
               <MachinesIncludedCard
                 machines={localRental.machines ?? []}
                 renter={localRental.customerName ?? null}
+                renterId={localRental.customerId ?? null}
                 onMachineClick={onMachineClick}
               />
             </>
@@ -203,13 +205,16 @@ function ContactPersonCard() {
 function MachinesIncludedCard({
   machines,
   renter,
+  renterId,
   onMachineClick,
 }: {
   machines: Array<{ id?: string | number; name?: string | null; make?: string | null }>;
   renter?: string | null;
+  renterId?: string | number | null;
   onMachineClick?: (
     machine: { id?: string | number; name?: string | null; make?: string | null },
     renter?: string | null,
+    renterId?: string | number | null,
   ) => void;
 }) {
   return (
@@ -248,7 +253,7 @@ function MachinesIncludedCard({
                     type="button"
                     onClick={
                       onMachineClick
-                        ? () => onMachineClick(machine, renter ?? null)
+                        ? () => onMachineClick(machine, renter ?? null, renterId ?? null)
                         : undefined
                     }
                     className="group inline-flex max-w-full cursor-pointer items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-left text-xs font-medium text-blue-800 transition hover:border-blue-300"

@@ -74,18 +74,21 @@ export type MachineDialogState = {
   machineId: number | null;
   machineLabel: string;
   currentRenter?: string | null;
+  currentRenterId?: string | number | null;
 };
 
 export default function MachineDetailsDialog({
   state,
   onClose,
   onBack,
+  onCustomerClick,
 }: {
   state: MachineDialogState;
   onClose: () => void;
   onBack?: () => void;
+  onCustomerClick?: (customerId?: string | number | null, customerName?: string | null) => void;
 }) {
-  const { open, loading, error, machine, machineId, machineLabel, currentRenter } = state;
+  const { open, loading, error, machine, machineId, machineLabel, currentRenter, currentRenterId } = state;
   const [localMachine, setLocalMachine] = useState<MachineDetails | null>(machine);
   const [localError, setLocalError] = useState<string | null>(error);
   const [locationState, setLocationState] = useState<LocationState>({
@@ -272,7 +275,12 @@ export default function MachineDetailsDialog({
             </div>
           ) : localMachine ? (
             <>
-              <MachineOverview machine={localMachine} currentRenter={currentRenter} />
+              <MachineOverview
+                machine={localMachine}
+                currentRenter={currentRenter}
+                currentRenterId={currentRenterId}
+                onCustomerClick={onCustomerClick}
+              />
               <TrainingVideosSection machine={localMachine} />
               <AttachmentsSection state={attachmentsState} />
               <LocationMap machineLabel={machineLabel} state={locationState} />
@@ -291,9 +299,13 @@ export default function MachineDetailsDialog({
 function MachineOverview({
   machine,
   currentRenter,
+  currentRenterId,
+  onCustomerClick,
 }: {
   machine: MachineDetails;
   currentRenter?: string | null;
+  currentRenterId?: string | number | null;
+  onCustomerClick?: (customerId?: string | number | null, customerName?: string | null) => void;
 }) {
   const infoRows = [
     { label: "Merke", value: machine.make },
@@ -321,7 +333,23 @@ function MachineOverview({
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               {row.label}
             </p>
-            <p className="mt-1 text-sm font-medium text-slate-900">{formatValue(row.value)}</p>
+            <div className="mt-1 text-sm font-medium text-slate-900">
+              {row.label === "Aktuell leietaker" &&
+              currentRenterId !== null &&
+              currentRenterId !== undefined &&
+              currentRenter &&
+              onCustomerClick ? (
+                <button
+                  type="button"
+                  onClick={() => onCustomerClick(currentRenterId, currentRenter)}
+                  className="group inline-flex max-w-full cursor-pointer items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-left text-xs font-medium text-blue-800 transition hover:border-blue-300"
+                >
+                  <span className="truncate font-semibold">{currentRenter}</span>
+                </button>
+              ) : (
+                formatValue(row.value)
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -423,8 +451,7 @@ function TrainingVideosSection({ machine }: { machine: MachineDetails }) {
       <h3 className="text-sm font-semibold text-slate-900">Opplæringsvideoer</h3>
       {hasVideos ? (
         <div
-          className="mt-2 max-h-[240px] overflow-y-scroll pr-3"
-          style={{ scrollbarGutter: "stable" }}
+          className="mt-2 max-h-[240px] overflow-y-auto pr-3"
         >
           <ul className="divide-y divide-slate-100 text-sm text-blue-700">
             {trainingVideos.map((link, index) => {

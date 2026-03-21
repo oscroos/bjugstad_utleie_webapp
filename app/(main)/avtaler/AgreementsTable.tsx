@@ -40,6 +40,7 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
   const [rentalDialogState, setRentalDialogState] =
     useState<RentalDialogState>(createInitialRentalState);
   const [customerBackToRental, setCustomerBackToRental] = useState(false);
+  const [customerBackToMachine, setCustomerBackToMachine] = useState(false);
   const [machineBackToRental, setMachineBackToRental] = useState(false);
 
   const columns: DataColumn<AgreementRow>[] = [
@@ -82,32 +83,32 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
     {
       id: "startDate",
       header: "Startdato",
-      accessor: (agreement) => formatDate(agreement.startDate, { multiline: true }) ?? "",
+      accessor: (agreement) => formatDate(agreement.startDate, { showTime: false }) ?? "",
       filterType: "date-range",
       dateValue: (agreement) => agreement.startDate,
       cell: (agreement) => (
-        <span className="whitespace-pre-line tabular-nums text-slate-700">
-          {formatDate(agreement.startDate, { multiline: true }) ?? "-"}
+        <span className="tabular-nums text-slate-700">
+          {formatDate(agreement.startDate, { showTime: false }) ?? "-"}
         </span>
       ),
       sortValue: (agreement) => toTimestamp(agreement.startDate),
-      filterValue: (agreement) => formatDate(agreement.startDate, { multiline: true }) ?? "-",
-      cellClassName: "tabular-nums whitespace-pre-line",
+      filterValue: (agreement) => formatDate(agreement.startDate, { showTime: false }) ?? "-",
+      cellClassName: "tabular-nums whitespace-nowrap",
     },
     {
       id: "endDate",
       header: "Sluttdato",
-      accessor: (agreement) => formatDate(agreement.endDate, { multiline: true }) ?? "",
+      accessor: (agreement) => formatDate(agreement.endDate, { showTime: false }) ?? "",
       filterType: "date-range",
       dateValue: (agreement) => agreement.endDate,
       cell: (agreement) => (
-        <span className="whitespace-pre-line tabular-nums text-slate-700">
-          {formatDate(agreement.endDate, { multiline: true }) ?? "-"}
+        <span className="tabular-nums text-slate-700">
+          {formatDate(agreement.endDate, { showTime: false }) ?? "-"}
         </span>
       ),
       sortValue: (agreement) => toTimestamp(agreement.endDate),
-      filterValue: (agreement) => formatDate(agreement.endDate, { multiline: true }) ?? "-",
-      cellClassName: "tabular-nums whitespace-pre-line",
+      filterValue: (agreement) => formatDate(agreement.endDate, { showTime: false }) ?? "-",
+      cellClassName: "tabular-nums whitespace-nowrap",
     },
     {
       id: "machines",
@@ -151,11 +152,15 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
 
   async function handleCustomerClick(
     customer?: AgreementRow["customer"],
-    opts?: { fromRental?: boolean },
+    opts?: { fromRental?: boolean; fromMachine?: boolean },
   ) {
     setCustomerBackToRental(Boolean(opts?.fromRental));
+    setCustomerBackToMachine(Boolean(opts?.fromMachine));
     if (opts?.fromRental) {
       setRentalDialogState((prev) => ({ ...prev, open: false }));
+    }
+    if (opts?.fromMachine) {
+      setMachineDialogState((prev) => ({ ...prev, open: false }));
     }
     const rawId = customer?.id;
     const customerId =
@@ -218,18 +223,23 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
 
   function handleMachineClick(agreement: AgreementRow, machine?: { id?: string | number; name?: string | null; make?: string | null }) {
     setMachineBackToRental(false);
-    openMachineDialog(machine, agreement.customer?.name ?? null);
+    openMachineDialog(machine, agreement.customer?.name ?? null, agreement.customer?.id ?? null);
   }
 
-  function handleMachineClickFromRental(machine?: { id?: string | number; name?: string | null; make?: string | null }, renter?: string | null) {
+  function handleMachineClickFromRental(
+    machine?: { id?: string | number; name?: string | null; make?: string | null },
+    renter?: string | null,
+    renterId?: string | number | null,
+  ) {
     setRentalDialogState((prev) => ({ ...prev, open: false }));
     setMachineBackToRental(true);
-    openMachineDialog(machine, renter ?? null);
+    openMachineDialog(machine, renter ?? null, renterId ?? null);
   }
 
   async function openMachineDialog(
     machine?: { id?: string | number; name?: string | null; make?: string | null },
     renter?: string | null,
+    renterId?: string | number | null,
   ) {
     const rawId = machine?.id;
     const machineId =
@@ -251,6 +261,7 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
       machineId,
       machineLabel,
       currentRenter: renter ?? null,
+      currentRenterId: renterId ?? null,
     });
 
     try {
@@ -274,6 +285,7 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
     setDialogState(createInitialDialogState());
     setDialogPermissions(undefined);
     setCustomerBackToRental(false);
+    setCustomerBackToMachine(false);
   }
 
   function resetMachineDialog() {
@@ -288,6 +300,11 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
   function handleCustomerBack() {
     resetDialog();
     setRentalDialogState((prev) => ({ ...prev, open: true }));
+  }
+
+  function handleCustomerBackToMachine() {
+    resetDialog();
+    setMachineDialogState((prev) => ({ ...prev, open: true }));
   }
 
   function handleMachineBack() {
@@ -307,13 +324,25 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
       <CustomerAccessDialog
         state={dialogState}
         onClose={resetDialog}
-        onBack={customerBackToRental ? handleCustomerBack : undefined}
+        onBack={
+          customerBackToMachine
+            ? handleCustomerBackToMachine
+            : customerBackToRental
+              ? handleCustomerBack
+              : undefined
+        }
         permissions={dialogPermissions}
       />
       <MachineDetailsDialog
         state={machineDialogState}
         onClose={resetMachineDialog}
         onBack={machineBackToRental ? handleMachineBack : undefined}
+        onCustomerClick={(customerId, customerName) =>
+          handleCustomerClick(
+            { id: customerId ?? undefined, name: customerName ?? undefined },
+            { fromMachine: true },
+          )
+        }
       />
       <RentalDetailsDialog
         state={rentalDialogState}
@@ -369,6 +398,7 @@ function createInitialMachineState(): MachineDialogState {
     machineId: null,
     machineLabel: "",
     currentRenter: null,
+    currentRenterId: null,
   };
 }
 

@@ -236,17 +236,21 @@ function CustomerOverview({ customer }: { customer: CustomerDetails | null }) {
   const contactListScrollable = contactPersons.length > 4;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <h3 className="text-sm font-semibold text-slate-900">Generelt</h3>
+      <div className="mt-3 grid gap-4 sm:grid-cols-2 md:grid-cols-3">
         {infoRows.map((row) => (
-          <div key={row.label} className="rounded-lg bg-white px-3 py-2 shadow-sm">
+          <div
+            key={row.label}
+            className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 shadow-sm"
+          >
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               {row.label}
             </p>
             <p className="mt-1 text-sm font-medium text-slate-900">{row.value || "-"}</p>
           </div>
         ))}
-        <div className="rounded-lg bg-white px-3 py-2 shadow-sm sm:col-span-2 md:col-span-3">
+        <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 shadow-sm sm:col-span-2 md:col-span-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
             Adresse
           </p>
@@ -261,14 +265,17 @@ function CustomerOverview({ customer }: { customer: CustomerDetails | null }) {
       </div>
 
       {contactPersons.length ? (
-        <div className="mt-4 rounded-lg bg-white px-3 py-2 shadow-sm">
+        <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 shadow-sm">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
             Kontaktpersoner
           </p>
           <div className={contactListScrollable ? "mt-2 max-h-64 overflow-y-auto pr-2" : "mt-2"}>
             <ul className="space-y-2 text-sm text-slate-700">
               {contactPersons.map((person) => (
-                <li key={person.contactPersonId} className="rounded border border-slate-200 px-3 py-2">
+                <li
+                  key={person.contactPersonId}
+                  className="rounded border border-slate-200 bg-white px-3 py-2"
+                >
                   <div className="font-semibold text-slate-900">{formatDisplay(person.name, "Ukjent navn")}</div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                   {person.telephoneNumber ? (
@@ -307,26 +314,26 @@ function CustomerAccessList({
   const { canEditRoles, canRemoveUsers } = permissions;
 
   return (
-    <div className="space-y-3">
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-900">Brukertilganger</h3>
+        <h3 className="text-sm font-semibold text-slate-900">Brukertilganger</h3>
         <span className="text-sm text-slate-500">
           {accesses.length} bruker{accesses.length === 1 ? "" : "e"}
         </span>
       </div>
 
       {accesses.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
           Ingen registrerte tilganger for denne kunden.
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="mt-3 space-y-3">
           {accesses.map((access) => (
             <div
               key={access.userId}
               className="flex items-center gap-3"
             >
-              <div className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <div className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 shadow-sm">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-slate-900">
                     {access.name || "Ukjent bruker"}

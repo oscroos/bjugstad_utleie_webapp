@@ -603,52 +603,59 @@ function CustomerAgreementsSection({
       ) : (
         <div className={state.agreements.length > 4 ? "mt-3 max-h-[14rem] overflow-y-auto pr-2" : "mt-3"}>
           <table className="min-w-full border-separate border-spacing-y-0 text-sm">
-            <thead className="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-3 py-2">Maskiner</th>
-                <th className="px-3 py-2">Leieavtale</th>
-                <th className="px-3 py-2">Startdato</th>
-                <th className="px-3 py-2">Sluttdato</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.agreements.map((agreement) => (
-                <tr key={agreement.id}>
-                  <td className="border-b border-slate-100 bg-white px-3 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      {agreement.machines.length ? (
-                        agreement.machines.map((machine, index) => (
-                          <button
-                            key={`${agreement.id}-machine-${machine.id ?? index}`}
-                            type="button"
-                            onClick={() => onMachineClick?.(machine)}
-                            className={`inline-flex max-w-full items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800 ${onMachineClick ? "cursor-pointer" : "cursor-default"}`}
-                            disabled={!onMachineClick}
-                          >
-                            <span className="truncate font-semibold">
-                              {machine.name?.trim() || (machine.id ? `Maskin ${machine.id}` : "Maskin")}
-                            </span>
-                          </button>
-                        ))
-                      ) : (
-                        <span className="text-slate-500">Ingen maskiner</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="border-b border-slate-100 bg-white px-3 py-3 text-slate-900">
-                    <button
-                      type="button"
-                      onClick={() => onAgreementClick?.(agreement)}
-                      className={`inline-flex max-w-full items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-left text-xs font-medium text-blue-800 ${onAgreementClick ? "cursor-pointer" : "cursor-default"}`}
-                      disabled={!onAgreementClick}
-                    >
-                      <span className="truncate font-semibold">{agreement.id}</span>
-                    </button>
-                  </td>
-                  <td className="border-b border-slate-100 bg-white px-3 py-3 text-slate-700">
+              <thead className="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Leieavtale</th>
+                  <th className="px-3 py-2">Maskiner</th>
+                  <th className="py-2 pr-0.5 text-right">Startdato</th>
+                  <th className="w-px px-1 py-2" aria-label="Varighet" />
+                  <th className="py-2 pl-0.5 text-left">Sluttdato</th>
+                </tr>
+              </thead>
+              <tbody>
+                {state.agreements.map((agreement) => (
+                  <tr key={agreement.id}>
+                    <td className="border-b border-slate-100 bg-white px-3 py-3 text-slate-900">
+                      <button
+                        type="button"
+                        onClick={() => onAgreementClick?.(agreement)}
+                        className={`inline-flex max-w-full items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-left text-xs font-medium text-blue-800 ${onAgreementClick ? "cursor-pointer" : "cursor-default"}`}
+                        disabled={!onAgreementClick}
+                      >
+                        <span className="truncate font-semibold">{agreement.id}</span>
+                      </button>
+                    </td>
+                    <td className="border-b border-slate-100 bg-white px-3 py-3">
+                      <div className="flex flex-wrap gap-2">
+                        {agreement.machines.length ? (
+                          agreement.machines.map((machine, index) => (
+                            <button
+                              key={`${agreement.id}-machine-${machine.id ?? "unknown"}-${index}`}
+                              type="button"
+                              onClick={() => onMachineClick?.(machine)}
+                              className={`inline-flex max-w-full items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800 ${onMachineClick ? "cursor-pointer" : "cursor-default"}`}
+                              disabled={!onMachineClick}
+                            >
+                              <span className="truncate font-semibold">
+                                {machine.name?.trim() || (machine.id ? `Maskin ${machine.id}` : "Maskin")}
+                              </span>
+                            </button>
+                          ))
+                        ) : (
+                          <span className="text-slate-500">Ingen maskiner</span>
+                        )}
+                      </div>
+                    </td>
+                  <td className="border-b border-slate-100 bg-white py-3 pr-0.5 text-right text-slate-700 whitespace-nowrap">
                     {formatDateOnly(agreement.startDate)}
                   </td>
-                  <td className="border-b border-slate-100 bg-white px-3 py-3 text-slate-700">
+                  <td className="w-px border-b border-slate-100 bg-white px-1 py-3">
+                    <AgreementDurationIndicator
+                      startDate={agreement.startDate}
+                      endDate={agreement.endDate}
+                    />
+                  </td>
+                  <td className="border-b border-slate-100 bg-white py-3 pl-0.5 text-left text-slate-700 whitespace-nowrap">
                     {agreement.endDate ? (
                       <div className="flex flex-wrap items-center gap-2">
                         <span>{formatDateOnly(agreement.endDate)}</span>
@@ -729,4 +736,53 @@ function formatDateOnly(value?: string | Date | null) {
   if (Number.isNaN(date.getTime())) return "-";
   const pad = (n: number) => n.toString().padStart(2, "0");
   return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}`;
+}
+
+function formatAgreementDuration(startDate?: string | Date | null, endDate?: string | Date | null) {
+  if (!startDate || !endDate) return null;
+
+  const start = startDate instanceof Date ? startDate : new Date(startDate);
+  const end = endDate instanceof Date ? endDate : new Date(endDate);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+
+  const startOfDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const endOfDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  const diffInDays = Math.max(
+    0,
+    Math.round((endOfDay.getTime() - startOfDay.getTime()) / millisecondsPerDay),
+  );
+
+  return `-> ${diffInDays} ${diffInDays === 1 ? "dag" : "dager"}`;
+}
+
+function AgreementDurationIndicator({
+  startDate,
+  endDate,
+}: {
+  startDate?: string | Date | null;
+  endDate?: string | Date | null;
+}) {
+  const label = formatAgreementDuration(startDate, endDate);
+  const hasDuration = Boolean(label);
+  const durationLabel = label?.replace("-> ", "") ?? "";
+
+  return (
+    <div className="flex justify-center">
+      {hasDuration ? (
+        <div className="flex w-[5.5rem] items-center gap-0 text-slate-400">
+          <div className="h-px w-2.5 bg-slate-200" />
+          <div className="shrink-0 rounded-full border border-slate-100 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+            {durationLabel}
+          </div>
+          <div className="relative h-px w-2.5 bg-slate-200">
+            <span className="absolute -right-px -top-[2px] h-0 w-0 border-b-[3px] border-l-[5px] border-t-[3px] border-b-transparent border-l-slate-200 border-t-transparent" />
+          </div>
+        </div>
+      ) : (
+        <span />
+      )}
+    </div>
+  );
 }

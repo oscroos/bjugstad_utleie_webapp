@@ -352,12 +352,13 @@ export default function CustomerAccessDialog({
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
               {error}
             </div>
-          ) : (
-            <>
-              <CustomerOverview customer={customer} />
-              <CustomerAgreementsSection
-                state={agreementsState}
-                onAgreementClick={onAgreementClick}
+            ) : (
+              <>
+                <CustomerOverview customer={customer} />
+                <CustomerContactPersonsSection customer={customer} />
+                <CustomerAgreementsSection
+                  state={agreementsState}
+                  onAgreementClick={onAgreementClick}
                 onMachineClick={onMachineClick}
               />
               <CustomerAccessList
@@ -420,9 +421,6 @@ function CustomerOverview({ customer }: { customer: CustomerDetails | null }) {
     { label: "E-post", value: formatDisplay(customer.email) },
   ];
 
-  const contactPersons = customer.contactPersons ?? [];
-  const contactListScrollable = contactPersons.length > 4;
-
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
       <h3 className="text-sm font-semibold text-slate-900">Generelt</h3>
@@ -451,39 +449,61 @@ function CustomerOverview({ customer }: { customer: CustomerDetails | null }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
 
-      {contactPersons.length ? (
-        <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 shadow-sm">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            Kontaktpersoner
-          </p>
-          <div className={contactListScrollable ? "mt-2 max-h-64 overflow-y-auto pr-2" : "mt-2"}>
-            <ul className="space-y-2 text-sm text-slate-700">
-              {contactPersons.map((person) => (
-                <li
-                  key={person.contactPersonId}
-                  className="rounded border border-slate-200 bg-white px-3 py-2"
-                >
-                  <div className="font-semibold text-slate-900">{formatDisplay(person.name, "Ukjent navn")}</div>
+function CustomerContactPersonsSection({ customer }: { customer: CustomerDetails | null }) {
+  const contactPersons = customer?.contactPersons ?? [];
+  const contactListScrollable = contactPersons.length > 4;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-900">Kontaktpersoner</h3>
+        <span className="text-sm text-slate-500">
+          {contactPersons.length} kontakt{contactPersons.length === 1 ? "" : "er"}
+        </span>
+      </div>
+
+      {contactPersons.length === 0 ? (
+        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          Ingen kontaktpersoner registrert.
+        </div>
+      ) : (
+        <div
+          className={
+            contactListScrollable
+              ? "mt-3 max-h-64 space-y-3 overflow-y-auto pr-2"
+              : "mt-3 space-y-3"
+          }
+        >
+          {contactPersons.map((person) => (
+            <div key={person.contactPersonId} className="flex items-center gap-3">
+              <div className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 shadow-sm">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-slate-900">
+                    {formatDisplay(person.name, "Ukjent navn")}
+                  </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                  {person.telephoneNumber ? (
-                    <span>
-                      {formatPhone(normalizePhone(person.telephoneNumber) ?? person.telephoneNumber)}
-                    </span>
-                  ) : null}
+                    {person.telephoneNumber ? (
+                      <span>
+                        {formatPhone(normalizePhone(person.telephoneNumber) ?? person.telephoneNumber)}
+                      </span>
+                    ) : null}
                     {formatDisplay(person.email) !== "-" ? (
                       <>
-                        <span className="text-slate-300">&middot;</span>
+                        {person.telephoneNumber ? <span className="text-slate-300">&middot;</span> : null}
                         <span className="truncate">{formatDisplay(person.email)}</span>
                       </>
                     ) : null}
                   </div>
-                </li>
-              ))}
-            </ul>
-          </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -653,6 +673,7 @@ function CustomerAgreementsSection({
                     <AgreementDurationIndicator
                       startDate={agreement.startDate}
                       endDate={agreement.endDate}
+                      isActive={agreement.isActive}
                     />
                   </td>
                   <td className="border-b border-slate-100 bg-white py-3 pl-0.5 text-left text-slate-700 whitespace-nowrap">
@@ -738,13 +759,23 @@ function formatDateOnly(value?: string | Date | null) {
   return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}`;
 }
 
-function formatAgreementDuration(startDate?: string | Date | null, endDate?: string | Date | null) {
-  if (!startDate || !endDate) return null;
+function formatAgreementDuration(
+  startDate?: string | Date | null,
+  endDate?: string | Date | null,
+  isActive?: boolean,
+) {
+  if (!startDate) return null;
 
   const start = startDate instanceof Date ? startDate : new Date(startDate);
-  const end = endDate instanceof Date ? endDate : new Date(endDate);
+  const end = endDate
+    ? endDate instanceof Date
+      ? endDate
+      : new Date(endDate)
+    : isActive
+      ? new Date()
+      : null;
 
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  if (Number.isNaN(start.getTime()) || !end || Number.isNaN(end.getTime())) return null;
 
   const startOfDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
   const endOfDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
@@ -754,17 +785,20 @@ function formatAgreementDuration(startDate?: string | Date | null, endDate?: str
     Math.round((endOfDay.getTime() - startOfDay.getTime()) / millisecondsPerDay),
   );
 
-  return `-> ${diffInDays} ${diffInDays === 1 ? "dag" : "dager"}`;
+  const suffix = endDate ? "" : isActive ? "+" : "";
+  return `-> ${diffInDays}${suffix} ${diffInDays === 1 ? "dag" : "dager"}`;
 }
 
 function AgreementDurationIndicator({
   startDate,
   endDate,
+  isActive,
 }: {
   startDate?: string | Date | null;
   endDate?: string | Date | null;
+  isActive?: boolean;
 }) {
-  const label = formatAgreementDuration(startDate, endDate);
+  const label = formatAgreementDuration(startDate, endDate, isActive);
   const hasDuration = Boolean(label);
   const durationLabel = label?.replace("-> ", "") ?? "";
 
@@ -773,8 +807,8 @@ function AgreementDurationIndicator({
       {hasDuration ? (
         <div className="flex w-[5.5rem] items-center gap-0 text-slate-400">
           <div className="h-px w-2.5 bg-slate-200" />
-          <div className="shrink-0 rounded-full border border-slate-100 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-            {durationLabel}
+          <div className="w-[4.1rem] shrink-0 rounded-full border border-slate-100 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+            <span className="block truncate text-center">{durationLabel}</span>
           </div>
           <div className="relative h-px w-2.5 bg-slate-200">
             <span className="absolute -right-px -top-[2px] h-0 w-0 border-b-[3px] border-l-[5px] border-t-[3px] border-b-transparent border-l-slate-200 border-t-transparent" />

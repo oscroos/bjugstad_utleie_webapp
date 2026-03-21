@@ -415,7 +415,7 @@ export default function MachineDetailsDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 px-4 py-8">
-      <div className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10">
+      <div className="flex min-h-[40rem] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10">
         <div className="flex items-start justify-between border-b border-slate-100 px-6 py-4">
           <div className="flex items-start gap-3">
             {onBack ? (
@@ -435,15 +435,15 @@ export default function MachineDetailsDialog({
             </div>
           </div>
           <div className="flex items-start gap-4">
-            {logoSrc ? (
-              <div className="flex items-start">
+            <div className="flex h-16 w-[140px] items-start justify-end">
+              {logoSrc ? (
                 <img
                   src={logoSrc}
                   alt={(localMachine?.make ?? machineLabel ?? "OEM") + " logo"}
                   className="h-16 w-auto max-w-[140px] object-contain"
                 />
-              </div>
-            ) : null}
+              ) : null}
+            </div>
             <button
               type="button"
               onClick={onClose}
@@ -549,9 +549,11 @@ function MachineAgreementsSection({
     <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
       <h3 className="text-sm font-semibold text-slate-900">Tilknyttede leieavtaler</h3>
       {state.status === "loading" ? (
-        <div className="mt-2 inline-flex items-center gap-2 text-xs text-slate-500">
-          <IconLoader2 className="h-4 w-4 animate-spin text-blue-600" />
-          Laster leieavtaler...
+        <div className="mt-3 min-h-[10.5rem] rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+          <div className="inline-flex items-center gap-2 text-xs text-slate-500">
+            <IconLoader2 className="h-4 w-4 animate-spin text-blue-600" />
+            Laster leieavtaler...
+          </div>
         </div>
       ) : state.status === "error" ? (
         <p className="mt-1 text-xs text-slate-500">{state.error ?? "Kunne ikke hente leieavtaler"}</p>
@@ -610,6 +612,7 @@ function MachineAgreementsSection({
                       <AgreementDurationIndicator
                         startDate={agreement.startDate}
                         endDate={agreement.endDate}
+                        isActive={agreement.isActive}
                       />
                     </td>
                     <td className="border-b border-slate-100 bg-white py-3 pl-0.5 text-left text-slate-700 whitespace-nowrap">
@@ -1132,13 +1135,23 @@ function formatDateOnly(value?: string | Date | null) {
   return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}`;
 }
 
-function formatAgreementDuration(startDate?: string | Date | null, endDate?: string | Date | null) {
-  if (!startDate || !endDate) return null;
+function formatAgreementDuration(
+  startDate?: string | Date | null,
+  endDate?: string | Date | null,
+  isActive?: boolean,
+) {
+  if (!startDate) return null;
 
   const start = startDate instanceof Date ? startDate : new Date(startDate);
-  const end = endDate instanceof Date ? endDate : new Date(endDate);
+  const end = endDate
+    ? endDate instanceof Date
+      ? endDate
+      : new Date(endDate)
+    : isActive
+      ? new Date()
+      : null;
 
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  if (Number.isNaN(start.getTime()) || !end || Number.isNaN(end.getTime())) return null;
 
   const startOfDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
   const endOfDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
@@ -1148,17 +1161,20 @@ function formatAgreementDuration(startDate?: string | Date | null, endDate?: str
     Math.round((endOfDay.getTime() - startOfDay.getTime()) / millisecondsPerDay),
   );
 
-  return `-> ${diffInDays} ${diffInDays === 1 ? "dag" : "dager"}`;
+  const suffix = endDate ? "" : isActive ? "+" : "";
+  return `-> ${diffInDays}${suffix} ${diffInDays === 1 ? "dag" : "dager"}`;
 }
 
 function AgreementDurationIndicator({
   startDate,
   endDate,
+  isActive,
 }: {
   startDate?: string | Date | null;
   endDate?: string | Date | null;
+  isActive?: boolean;
 }) {
-  const label = formatAgreementDuration(startDate, endDate);
+  const label = formatAgreementDuration(startDate, endDate, isActive);
   const hasDuration = Boolean(label);
   const durationLabel = label?.replace("-> ", "") ?? "";
 
@@ -1167,8 +1183,8 @@ function AgreementDurationIndicator({
       {hasDuration ? (
         <div className="flex w-[5.5rem] items-center gap-0 text-slate-400">
           <div className="h-px w-2.5 bg-slate-200" />
-          <div className="shrink-0 rounded-full border border-slate-100 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-            {durationLabel}
+          <div className="w-[4.1rem] shrink-0 rounded-full border border-slate-100 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+            <span className="block truncate text-center">{durationLabel}</span>
           </div>
           <div className="relative h-px w-2.5 bg-slate-200">
             <span className="absolute -right-px -top-[2px] h-0 w-0 border-b-[3px] border-l-[5px] border-t-[3px] border-b-transparent border-l-slate-200 border-t-transparent" />

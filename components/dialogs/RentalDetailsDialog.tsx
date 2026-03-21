@@ -3,6 +3,7 @@
 import { IconChevronLeft, IconLoader2, IconX } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { getOEMLogo } from "@/lib/get_OEM_logo";
+import { formatPhone, normalizePhone } from "@/lib/formatters";
 
 export type RentalDetails = {
   rentalId: string | number | null;
@@ -67,7 +68,7 @@ export default function RentalDetailsDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 px-4 py-8">
-      <div className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10">
+      <div className="flex min-h-[40rem] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10">
         <div className="flex items-start justify-between border-b border-slate-100 px-6 py-4">
           <div className="flex items-start gap-3">
             {onBack ? (
@@ -111,6 +112,7 @@ export default function RentalDetailsDialog({
           ) : localRental ? (
             <>
               <RentalOverview rental={localRental} onCustomerClick={onCustomerClick} />
+              <RentalContactPersonsSection rental={localRental} />
               <MachinesIncludedCard
                 machines={localRental.machines ?? []}
                 renter={localRental.customerName ?? null}
@@ -163,21 +165,6 @@ function RentalOverview({
     { label: "Plassering", value: rental.location },
     { label: "Maskinfører", value: rental.machineOperator },
   ];
-  const contactPersons = [
-    {
-      typeLabel: "avtalekontakt",
-      name: rental.contactPersonName,
-      phone: rental.contactPersonTelephoneNumber,
-      email: rental.contactPersonEmail,
-    },
-    {
-      typeLabel: "kundekontakt",
-      name: rental.customerContactPersonName,
-      phone: rental.customerContactPersonTelephoneNumber,
-      email: rental.customerContactPersonEmail,
-    },
-  ].filter((person) => person.name || person.phone || person.email);
-
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
       <h3 className="text-sm font-semibold text-slate-900">Generelt</h3>
@@ -220,21 +207,49 @@ function RentalOverview({
           </p>
         </div>
       </div>
-      <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 shadow-sm">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          Kontaktpersoner
-        </p>
-        <div className="mt-2">
-          {contactPersons.length ? (
-            <ul className="space-y-2 text-sm text-slate-700">
-              {contactPersons.map((person, index) => (
-                <li key={`${person.typeLabel}-${index}`} className="rounded border border-slate-200 bg-white px-3 py-2">
-                  <div className="text-slate-900">
+    </div>
+  );
+}
+
+function RentalContactPersonsSection({ rental }: { rental: RentalDetails }) {
+  const contactPersons = [
+    {
+      typeLabel: "avtalekontakt",
+      name: rental.contactPersonName,
+      phone: rental.contactPersonTelephoneNumber,
+      email: rental.contactPersonEmail,
+    },
+    {
+      typeLabel: "kundekontakt",
+      name: rental.customerContactPersonName,
+      phone: rental.customerContactPersonTelephoneNumber,
+      email: rental.customerContactPersonEmail,
+    },
+  ].filter((person) => person.name || person.phone || person.email);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-900">Kontaktpersoner</h3>
+        <span className="text-sm text-slate-500">
+          {contactPersons.length} kontakt{contactPersons.length === 1 ? "" : "er"}
+        </span>
+      </div>
+
+      {contactPersons.length ? (
+        <div className="mt-3 space-y-3">
+          {contactPersons.map((person, index) => (
+            <div key={`${person.typeLabel}-${index}`} className="flex items-center gap-3">
+              <div className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 shadow-sm">
+                <div className="min-w-0">
+                  <div className="truncate text-sm text-slate-900">
                     <span className="font-semibold">{formatValue(person.name)}</span>
                     <span className="ml-1 font-normal text-slate-500">({person.typeLabel})</span>
                   </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                    {person.phone ? <span>{person.phone}</span> : null}
+                    {person.phone ? (
+                      <span>{formatPhone(normalizePhone(person.phone) ?? person.phone)}</span>
+                    ) : null}
                     {person.email ? (
                       <>
                         {person.phone ? <span className="text-slate-300">&middot;</span> : null}
@@ -242,14 +257,16 @@ function RentalOverview({
                       </>
                     ) : null}
                   </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-slate-600">Ingen avtale- eller kundekontakt registrert.</p>
-          )}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
+      ) : (
+        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          Ingen avtale- eller kundekontakt registrert.
+        </div>
+      )}
     </div>
   );
 }

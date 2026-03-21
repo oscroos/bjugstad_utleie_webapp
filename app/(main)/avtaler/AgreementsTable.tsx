@@ -56,7 +56,9 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
   const [customerBackToRental, setCustomerBackToRental] = useState(false);
   const [customerBackToMachine, setCustomerBackToMachine] = useState(false);
   const [machineBackToRental, setMachineBackToRental] = useState(false);
+  const [machineBackToCustomer, setMachineBackToCustomer] = useState(false);
   const [rentalBackToMachine, setRentalBackToMachine] = useState(false);
+  const [rentalBackToCustomer, setRentalBackToCustomer] = useState(false);
 
   const columns: DataColumn<AgreementRow>[] = [
     {
@@ -221,6 +223,7 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
   }
 
   function handleAgreementClick(agreement: AgreementRow, opts?: { fromMachine?: boolean }) {
+    setRentalBackToCustomer(false);
     setRentalBackToMachine(Boolean(opts?.fromMachine));
     if (opts?.fromMachine) {
       setMachineDialogState((prev) => ({ ...prev, open: false }));
@@ -256,6 +259,7 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
 
   function handleMachineClick(agreement: AgreementRow, machine?: { id?: string | number; name?: string | null; make?: string | null }) {
     setMachineBackToRental(false);
+    setMachineBackToCustomer(false);
     openMachineDialog(machine, agreement.customer?.name ?? null, agreement.customer?.id ?? null);
   }
 
@@ -265,8 +269,81 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
     renterId?: string | number | null,
   ) {
     setRentalDialogState((prev) => ({ ...prev, open: false }));
+    setMachineBackToCustomer(false);
     setMachineBackToRental(true);
     openMachineDialog(machine, renter ?? null, renterId ?? null);
+  }
+
+  function handleAgreementClickFromCustomer(agreement: {
+    id: string;
+    customerId?: number | null;
+    customerName?: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
+    comment?: string | null;
+    projectNumber?: string | null;
+    contactPersonName?: string | null;
+    contactPersonTelephoneNumber?: string | null;
+    contactPersonEmail?: string | null;
+    customerContactPersonId?: string | number | null;
+    customerContactPersonName?: string | null;
+    customerContactPersonTelephoneNumber?: string | null;
+    customerContactPersonEmail?: string | null;
+    insuranceIncluded?: boolean | null;
+    contractPrice?: boolean | null;
+    location?: string | null;
+    createdBy?: string | null;
+    createdByTelephoneNumber?: string | null;
+    machines?: Array<{ id?: string | number; name?: string | null; make?: string | null }> | null;
+  }) {
+    setDialogState((prev) => ({ ...prev, open: false }));
+    setRentalBackToMachine(false);
+    setRentalBackToCustomer(true);
+    setRentalDialogState({
+      open: true,
+      loading: false,
+      error: null,
+      rental: {
+        rentalId: agreement.id ?? null,
+        customerId: agreement.customerId ?? null,
+        customerName: agreement.customerName ?? null,
+        startDate: agreement.startDate ?? null,
+        endDate: agreement.endDate ?? null,
+        comment: agreement.comment ?? null,
+        projectNumber: agreement.projectNumber ?? null,
+        contactPersonName: agreement.contactPersonName ?? null,
+        contactPersonTelephoneNumber: agreement.contactPersonTelephoneNumber ?? null,
+        contactPersonEmail: agreement.contactPersonEmail ?? null,
+        customerContactPersonId: agreement.customerContactPersonId ?? null,
+        customerContactPersonName: agreement.customerContactPersonName ?? null,
+        customerContactPersonTelephoneNumber: agreement.customerContactPersonTelephoneNumber ?? null,
+        customerContactPersonEmail: agreement.customerContactPersonEmail ?? null,
+        insuranceIncluded: agreement.insuranceIncluded ?? null,
+        contractPrice: agreement.contractPrice ?? null,
+        location: agreement.location ?? null,
+        createdBy: agreement.createdBy ?? null,
+        createdByTelephoneNumber: agreement.createdByTelephoneNumber ?? null,
+        machines: agreement.machines ?? [],
+      },
+    });
+  }
+
+  function handleMachineClickFromCustomer(
+    machine?: { id?: string | number | null; name?: string | null; make?: string | null },
+  ) {
+    const customer = dialogState.customer ?? null;
+    const machineCustomerId = dialogState.customerId;
+    const machineCustomerName = dialogState.customerName || customer?.name || null;
+    const normalizedMachine = machine
+      ? {
+          ...machine,
+          id: machine.id ?? undefined,
+        }
+      : undefined;
+    setDialogState((prev) => ({ ...prev, open: false }));
+    setMachineBackToRental(false);
+    setMachineBackToCustomer(true);
+    openMachineDialog(normalizedMachine, machineCustomerName, machineCustomerId);
   }
 
   async function openMachineDialog(
@@ -324,11 +401,13 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
   function resetMachineDialog() {
     setMachineDialogState(createInitialMachineState());
     setMachineBackToRental(false);
+    setMachineBackToCustomer(false);
   }
 
   function resetRentalDialog() {
     setRentalDialogState(createInitialRentalState());
     setRentalBackToMachine(false);
+    setRentalBackToCustomer(false);
   }
 
   function handleCustomerBack() {
@@ -346,9 +425,19 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
     setRentalDialogState((prev) => ({ ...prev, open: true }));
   }
 
+  function handleMachineBackToCustomer() {
+    resetMachineDialog();
+    setDialogState((prev) => ({ ...prev, open: true }));
+  }
+
   function handleRentalBackToMachine() {
     resetRentalDialog();
     setMachineDialogState((prev) => ({ ...prev, open: true }));
+  }
+
+  function handleRentalBackToCustomer() {
+    resetRentalDialog();
+    setDialogState((prev) => ({ ...prev, open: true }));
   }
 
   return (
@@ -371,11 +460,19 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
               : undefined
         }
         permissions={dialogPermissions}
+        onAgreementClick={handleAgreementClickFromCustomer}
+        onMachineClick={handleMachineClickFromCustomer}
       />
       <MachineDetailsDialog
         state={machineDialogState}
         onClose={resetMachineDialog}
-        onBack={machineBackToRental ? handleMachineBack : undefined}
+        onBack={
+          machineBackToCustomer
+            ? handleMachineBackToCustomer
+            : machineBackToRental
+              ? handleMachineBack
+              : undefined
+        }
         viewerRole={viewer?.role}
         onCustomerClick={(customerId, customerName) =>
           handleCustomerClick(
@@ -419,7 +516,13 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
       <RentalDetailsDialog
         state={rentalDialogState}
         onClose={resetRentalDialog}
-        onBack={rentalBackToMachine ? handleRentalBackToMachine : undefined}
+        onBack={
+          rentalBackToCustomer
+            ? handleRentalBackToCustomer
+            : rentalBackToMachine
+              ? handleRentalBackToMachine
+              : undefined
+        }
         onCustomerClick={(customerId, customerName) =>
           handleCustomerClick(
             { id: customerId ?? undefined, name: customerName ?? undefined },

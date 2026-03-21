@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { IconChevronLeft, IconLoader2, IconX } from "@tabler/icons-react";
 import { formatDisplay, formatPhone, normalizePhone } from "@/lib/formatters";
 
@@ -49,19 +49,61 @@ export type AccessDialogState = {
   accesses: CustomerAccessEntry[];
 };
 
+type CustomerAgreementSummary = {
+  id: string;
+  customerId?: number | null;
+  customerName?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  isActive: boolean;
+  comment?: string | null;
+  projectNumber?: string | null;
+  contactPersonName?: string | null;
+  contactPersonTelephoneNumber?: string | null;
+  contactPersonEmail?: string | null;
+  customerContactPersonId?: string | number | null;
+  customerContactPersonName?: string | null;
+  customerContactPersonTelephoneNumber?: string | null;
+  customerContactPersonEmail?: string | null;
+  insuranceIncluded?: boolean | null;
+  contractPrice?: boolean | null;
+  location?: string | null;
+  createdBy?: string | null;
+  createdByTelephoneNumber?: string | null;
+  machines: Array<{ id?: string; name?: string | null; make?: string | null }>;
+};
+
 export default function CustomerAccessDialog({
   state,
   onClose,
   permissions,
   onBack,
+  onAgreementClick,
+  onMachineClick,
 }: {
   state: AccessDialogState;
   onClose: () => void;
   permissions?: AccessPermissions;
   onBack?: () => void;
+  onAgreementClick?: (agreement: CustomerAgreementSummary) => void;
+  onMachineClick?: (machine: {
+    id?: string | number | null;
+    name?: string | null;
+    make?: string | null;
+  }) => void;
 }) {
   const { open, loading, error, customer, accesses, customerId, customerName } = state;
   const [entries, setEntries] = useState<CustomerAccessEntry[]>(accesses);
+  const agreementsCacheRef = useRef<Record<number, CustomerAgreementSummary[]>>({});
+  const [agreementsState, setAgreementsState] = useState<{
+    status: "idle" | "loading" | "ready" | "error";
+    agreements: CustomerAgreementSummary[];
+    error: string | null;
+  }>({
+    status: "idle",
+    agreements: [],
+    error: null,
+  });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const effectivePermissions = permissions ?? {
@@ -75,6 +117,147 @@ export default function CustomerAccessDialog({
     setSaveError(null);
     setSaving(false);
   }, [accesses, state.open]);
+
+  useEffect(() => {
+    if (!customerId) {
+      setAgreementsState({ status: "idle", agreements: [], error: null });
+      return;
+    }
+    if (!open) return;
+
+    const currentCustomerId = customerId;
+
+    if (agreementsCacheRef.current[currentCustomerId]) {
+      setAgreementsState({
+        status: "ready",
+        agreements: agreementsCacheRef.current[currentCustomerId],
+        error: null,
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    let isCancelled = false;
+
+    async function fetchAgreements() {
+      setAgreementsState({ status: "loading", agreements: [], error: null });
+
+      try {
+        const response = await fetch("/api/agreements", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const payload = (await response.json().catch(() => ({}))) as {
+          active?: Array<{
+            id: string;
+            customerId?: number;
+            customerName?: string | null;
+            startDate?: string | null;
+            endDate?: string | null;
+            comment?: string | null;
+            projectNumber?: string | null;
+            contactPersonName?: string | null;
+            contactPersonTelephoneNumber?: string | null;
+            contactPersonEmail?: string | null;
+            customerContactPersonId?: string | number | null;
+            customerContactPersonName?: string | null;
+            customerContactPersonTelephoneNumber?: string | null;
+            customerContactPersonEmail?: string | null;
+            insuranceIncluded?: boolean | null;
+            contractPrice?: boolean | null;
+            location?: string | null;
+            createdBy?: string | null;
+            createdByTelephoneNumber?: string | null;
+            machines?: Array<{ id?: string; name?: string | null; make?: string | null }>;
+          }>;
+          historical?: Array<{
+            id: string;
+            customerId?: number;
+            customerName?: string | null;
+            startDate?: string | null;
+            endDate?: string | null;
+            comment?: string | null;
+            projectNumber?: string | null;
+            contactPersonName?: string | null;
+            contactPersonTelephoneNumber?: string | null;
+            contactPersonEmail?: string | null;
+            customerContactPersonId?: string | number | null;
+            customerContactPersonName?: string | null;
+            customerContactPersonTelephoneNumber?: string | null;
+            customerContactPersonEmail?: string | null;
+            insuranceIncluded?: boolean | null;
+            contractPrice?: boolean | null;
+            location?: string | null;
+            createdBy?: string | null;
+            createdByTelephoneNumber?: string | null;
+            machines?: Array<{ id?: string; name?: string | null; make?: string | null }>;
+          }>;
+          error?: string;
+        };
+
+        if (isCancelled) return;
+
+        if (!response.ok) {
+          setAgreementsState({
+            status: "error",
+            agreements: [],
+            error: payload.error ?? "Kunne ikke hente leieavtaler",
+          });
+          return;
+        }
+
+        const agreements = [
+          ...(payload.active ?? []).map((agreement) => ({ ...agreement, isActive: true })),
+          ...(payload.historical ?? []).map((agreement) => ({ ...agreement, isActive: false })),
+        ]
+          .filter((agreement) => agreement.customerId === currentCustomerId)
+          .map((agreement) => ({
+            id: agreement.id,
+            customerId: agreement.customerId ?? null,
+            customerName: agreement.customerName ?? null,
+            startDate: agreement.startDate ?? null,
+            endDate: agreement.endDate ?? null,
+            isActive: agreement.isActive,
+            comment: agreement.comment ?? null,
+            projectNumber: agreement.projectNumber ?? null,
+            contactPersonName: agreement.contactPersonName ?? null,
+            contactPersonTelephoneNumber: agreement.contactPersonTelephoneNumber ?? null,
+            contactPersonEmail: agreement.contactPersonEmail ?? null,
+            customerContactPersonId: agreement.customerContactPersonId ?? null,
+            customerContactPersonName: agreement.customerContactPersonName ?? null,
+            customerContactPersonTelephoneNumber:
+              agreement.customerContactPersonTelephoneNumber ?? null,
+            customerContactPersonEmail: agreement.customerContactPersonEmail ?? null,
+            insuranceIncluded: agreement.insuranceIncluded ?? null,
+            contractPrice: agreement.contractPrice ?? null,
+            location: agreement.location ?? null,
+            createdBy: agreement.createdBy ?? null,
+            createdByTelephoneNumber: agreement.createdByTelephoneNumber ?? null,
+            machines: agreement.machines ?? [],
+          }))
+          .sort(compareCustomerAgreements);
+
+        agreementsCacheRef.current[currentCustomerId] = agreements;
+        setAgreementsState({
+          status: "ready",
+          agreements,
+          error: null,
+        });
+      } catch (err) {
+        if (isCancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        const message = err instanceof Error ? err.message : "Kunne ikke hente leieavtaler";
+        setAgreementsState({ status: "error", agreements: [], error: message });
+      }
+    }
+
+    fetchAgreements();
+
+    return () => {
+      isCancelled = true;
+      controller.abort();
+    };
+  }, [open, customerId]);
 
   const isDirty = useMemo(() => {
     if (entries.length !== accesses.length) return true;
@@ -172,6 +355,11 @@ export default function CustomerAccessDialog({
           ) : (
             <>
               <CustomerOverview customer={customer} />
+              <CustomerAgreementsSection
+                state={agreementsState}
+                onAgreementClick={onAgreementClick}
+                onMachineClick={onMachineClick}
+              />
               <CustomerAccessList
                 accesses={entries}
                 onToggleRole={toggleRole}
@@ -387,6 +575,107 @@ function CustomerAccessList({
   );
 }
 
+function CustomerAgreementsSection({
+  state,
+  onAgreementClick,
+  onMachineClick,
+}: {
+  state: { status: "idle" | "loading" | "ready" | "error"; agreements: CustomerAgreementSummary[]; error: string | null };
+  onAgreementClick?: (agreement: CustomerAgreementSummary) => void;
+  onMachineClick?: (machine: {
+    id?: string | number | null;
+    name?: string | null;
+    make?: string | null;
+  }) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <h3 className="text-sm font-semibold text-slate-900">Tilknyttede leieavtaler</h3>
+      {state.status === "loading" ? (
+        <div className="mt-2 inline-flex items-center gap-2 text-xs text-slate-500">
+          <IconLoader2 className="h-4 w-4 animate-spin text-blue-600" />
+          Laster leieavtaler...
+        </div>
+      ) : state.status === "error" ? (
+        <p className="mt-1 text-xs text-slate-500">{state.error ?? "Kunne ikke hente leieavtaler"}</p>
+      ) : state.agreements.length === 0 ? (
+        <p className="mt-1 text-xs text-slate-500">Ingen leieavtaler funnet for denne kunden.</p>
+      ) : (
+        <div className={state.agreements.length > 4 ? "mt-3 max-h-[14rem] overflow-y-auto pr-2" : "mt-3"}>
+          <table className="min-w-full border-separate border-spacing-y-0 text-sm">
+            <thead className="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-3 py-2">Maskiner</th>
+                <th className="px-3 py-2">Leieavtale</th>
+                <th className="px-3 py-2">Startdato</th>
+                <th className="px-3 py-2">Sluttdato</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.agreements.map((agreement) => (
+                <tr key={agreement.id}>
+                  <td className="border-b border-slate-100 bg-white px-3 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      {agreement.machines.length ? (
+                        agreement.machines.map((machine, index) => (
+                          <button
+                            key={`${agreement.id}-machine-${machine.id ?? index}`}
+                            type="button"
+                            onClick={() => onMachineClick?.(machine)}
+                            className={`inline-flex max-w-full items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800 ${onMachineClick ? "cursor-pointer" : "cursor-default"}`}
+                            disabled={!onMachineClick}
+                          >
+                            <span className="truncate font-semibold">
+                              {machine.name?.trim() || (machine.id ? `Maskin ${machine.id}` : "Maskin")}
+                            </span>
+                          </button>
+                        ))
+                      ) : (
+                        <span className="text-slate-500">Ingen maskiner</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="border-b border-slate-100 bg-white px-3 py-3 text-slate-900">
+                    <button
+                      type="button"
+                      onClick={() => onAgreementClick?.(agreement)}
+                      className={`inline-flex max-w-full items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-left text-xs font-medium text-blue-800 ${onAgreementClick ? "cursor-pointer" : "cursor-default"}`}
+                      disabled={!onAgreementClick}
+                    >
+                      <span className="truncate font-semibold">{agreement.id}</span>
+                    </button>
+                  </td>
+                  <td className="border-b border-slate-100 bg-white px-3 py-3 text-slate-700">
+                    {formatDateOnly(agreement.startDate)}
+                  </td>
+                  <td className="border-b border-slate-100 bg-white px-3 py-3 text-slate-700">
+                    {agreement.endDate ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>{formatDateOnly(agreement.endDate)}</span>
+                        {agreement.isActive ? (
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-100">
+                            Aktiv
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : agreement.isActive ? (
+                      <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-100">
+                        Aktiv
+                      </span>
+                    ) : (
+                      <span>-</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function formatCustomerAddress(customer: Pick<CustomerDetails, "address" | "postalCode" | "city">) {
   const lines: string[] = [];
   if (customer.address) {
@@ -419,4 +708,25 @@ function formatCompanyRole(role: string) {
     default:
       return role || "Ukjent";
   }
+}
+
+function compareCustomerAgreements(a: CustomerAgreementSummary, b: CustomerAgreementSummary) {
+  if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+  const byStart = (toTimestamp(b.startDate) ?? 0) - (toTimestamp(a.startDate) ?? 0);
+  if (byStart !== 0) return byStart;
+  return (toTimestamp(b.endDate) ?? 0) - (toTimestamp(a.endDate) ?? 0);
+}
+
+function toTimestamp(value?: string | Date | null) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.getTime();
+}
+
+function formatDateOnly(value?: string | Date | null) {
+  if (!value) return "-";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}`;
 }

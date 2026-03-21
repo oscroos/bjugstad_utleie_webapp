@@ -149,11 +149,12 @@ export default function MachineDetailsDialog({
 
   useEffect(() => {
     if (!open || !machineId) return;
+    const currentMachineId = machineId;
 
-    if (machineId in locationCacheRef.current) {
+    if (currentMachineId in locationCacheRef.current) {
       setLocationState({
         status: "ready",
-        location: locationCacheRef.current[machineId],
+        location: locationCacheRef.current[currentMachineId],
         error: null,
       });
       return;
@@ -166,7 +167,7 @@ export default function MachineDetailsDialog({
       setLocationState({ status: "loading", location: null, error: null });
 
       try {
-        const response = await fetch(`/api/machines/${machineId}/location`, {
+        const response = await fetch(`/api/machines/${currentMachineId}/location`, {
           cache: "no-store",
           signal: controller.signal,
         });
@@ -186,7 +187,7 @@ export default function MachineDetailsDialog({
           return;
         }
 
-        locationCacheRef.current[machineId] = payload.location ?? null;
+        locationCacheRef.current[currentMachineId] = payload.location ?? null;
         setLocationState({
           status: "ready",
           location: payload.location ?? null,
@@ -210,11 +211,12 @@ export default function MachineDetailsDialog({
 
   useEffect(() => {
     if (!open || !machineId) return;
+    const currentMachineId = machineId;
 
-    if (attachmentsCacheRef.current[machineId]) {
+    if (attachmentsCacheRef.current[currentMachineId]) {
       setAttachmentsState({
         status: "ready",
-        attachments: attachmentsCacheRef.current[machineId],
+        attachments: attachmentsCacheRef.current[currentMachineId],
         error: null,
       });
       return;
@@ -226,7 +228,7 @@ export default function MachineDetailsDialog({
     async function fetchAttachments() {
       setAttachmentsState({ status: "loading", attachments: [], error: null });
       try {
-        const response = await fetch(`/api/machines/${machineId}/attachments`, {
+        const response = await fetch(`/api/machines/${currentMachineId}/attachments`, {
           cache: "no-store",
           signal: controller.signal,
         });
@@ -251,7 +253,7 @@ export default function MachineDetailsDialog({
             sensitivity: "base",
           }),
         );
-        attachmentsCacheRef.current[machineId] = attachments;
+        attachmentsCacheRef.current[currentMachineId] = attachments;
         setAttachmentsState({
           status: "ready",
           attachments,
@@ -275,11 +277,12 @@ export default function MachineDetailsDialog({
 
   useEffect(() => {
     if (!open || !machineId) return;
+    const currentMachineId = machineId;
 
-    if (agreementsCacheRef.current[machineId]) {
+    if (agreementsCacheRef.current[currentMachineId]) {
       setAgreementsState({
         status: "ready",
-        agreements: agreementsCacheRef.current[machineId],
+        agreements: agreementsCacheRef.current[currentMachineId],
         error: null,
       });
       return;
@@ -360,7 +363,7 @@ export default function MachineDetailsDialog({
           ...(payload.historical ?? []).map((agreement) => ({ ...agreement, isActive: false })),
         ]
           .filter((agreement) =>
-            (agreement.machines ?? []).some((linkedMachine) => Number(linkedMachine.id) === machineId),
+            (agreement.machines ?? []).some((linkedMachine) => Number(linkedMachine.id) === currentMachineId),
           )
           .map((agreement) => ({
             id: agreement.id,
@@ -386,7 +389,7 @@ export default function MachineDetailsDialog({
           }));
 
         const sortedAgreements = agreements.sort(compareMachineAgreements);
-        agreementsCacheRef.current[machineId] = sortedAgreements;
+        agreementsCacheRef.current[currentMachineId] = sortedAgreements;
         setAgreementsState({
           status: "ready",
           agreements: sortedAgreements,

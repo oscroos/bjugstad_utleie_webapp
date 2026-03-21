@@ -1,6 +1,6 @@
 "use client";
 
-import { IconLoader2, IconX } from "@tabler/icons-react";
+import { IconChevronLeft, IconLoader2, IconX } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { getOEMLogo } from "@/lib/get_OEM_logo";
 
@@ -29,11 +29,13 @@ export type RentalDialogState = {
 export default function RentalDetailsDialog({
   state,
   onClose,
+  onBack,
   onCustomerClick,
   onMachineClick,
 }: {
   state: RentalDialogState;
   onClose: () => void;
+  onBack?: () => void;
   onCustomerClick?: (customerId?: string | number | null, customerName?: string | null) => void;
   onMachineClick?: (
     machine: { id?: string | number; name?: string | null; make?: string | null },
@@ -58,12 +60,24 @@ export default function RentalDetailsDialog({
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 px-4 py-8">
       <div className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10">
         <div className="flex items-start justify-between border-b border-slate-100 px-6 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Avtale</p>
-            <h2 className="text-2xl font-semibold text-slate-900">{headerTitle || "Avtale"}</h2>
-            {localRental?.rentalId ? (
-              <p className="text-sm text-slate-500">ID: {localRental.rentalId}</p>
+          <div className="flex items-start gap-3">
+            {onBack ? (
+              <button
+                type="button"
+                onClick={onBack}
+                className="mt-1 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+                aria-label="Tilbake"
+              >
+                <IconChevronLeft className="h-4 w-4" />
+              </button>
             ) : null}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Avtale</p>
+              <h2 className="text-2xl font-semibold text-slate-900">{headerTitle || "Avtale"}</h2>
+              {localRental?.rentalId ? (
+                <p className="text-sm text-slate-500">ID: {localRental.rentalId}</p>
+              ) : null}
+            </div>
           </div>
           <button
             type="button"

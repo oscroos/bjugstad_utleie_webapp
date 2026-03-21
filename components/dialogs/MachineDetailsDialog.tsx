@@ -59,6 +59,15 @@ type VideoMetadata = {
   thumbnail: string | null;
 };
 
+type MachineAgreementSummary = {
+  id: string;
+  customerId?: string | number | null;
+  customerName?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  isActive: boolean;
+};
+
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 const OEM_COLORS: Record<string, string> = {
   hydrema: "#000000",
@@ -82,15 +91,22 @@ export default function MachineDetailsDialog({
   onClose,
   onBack,
   onCustomerClick,
+  onAgreementClick,
+  viewerRole,
 }: {
   state: MachineDialogState;
   onClose: () => void;
   onBack?: () => void;
   onCustomerClick?: (customerId?: string | number | null, customerName?: string | null) => void;
+  onAgreementClick?: (agreement: MachineAgreementSummary) => void;
+  viewerRole?: string | null;
 }) {
-  const { open, loading, error, machine, machineId, machineLabel, currentRenter, currentRenterId } = state;
+  const { open, loading, error, machine, machineId, machineLabel } = state;
   const [localMachine, setLocalMachine] = useState<MachineDetails | null>(machine);
   const [localError, setLocalError] = useState<string | null>(error);
+  const locationCacheRef = useRef<Record<number, MachineLocation | null>>({});
+  const attachmentsCacheRef = useRef<Record<number, MachineAttachment[]>>({});
+  const agreementsCacheRef = useRef<Record<number, MachineAgreementSummary[]>>({});
   const [locationState, setLocationState] = useState<LocationState>({
     status: "idle",
     location: null,
@@ -101,6 +117,15 @@ export default function MachineDetailsDialog({
     attachments: [],
     error: null,
   });
+  const [agreementsState, setAgreementsState] = useState<{
+    status: "idle" | "loading" | "ready" | "error";
+    agreements: MachineAgreementSummary[];
+    error: string | null;
+  }>({
+    status: "idle",
+    agreements: [],
+    error: null,
+  });
   const logoSrc = getOEMLogo(localMachine?.make ?? machineLabel);
 
   useEffect(() => {
@@ -109,8 +134,14 @@ export default function MachineDetailsDialog({
   }, [machine, error, open]);
 
   useEffect(() => {
-    if (!open || !machineId) {
-      setLocationState({ status: "idle", location: null, error: null });
+    if (!open || !machineId) return;
+
+    if (machineId in locationCacheRef.current) {
+      setLocationState({
+        status: "ready",
+        location: locationCacheRef.current[machineId],
+        error: null,
+      });
       return;
     }
 
@@ -141,6 +172,7 @@ export default function MachineDetailsDialog({
           return;
         }
 
+        locationCacheRef.current[machineId] = payload.location ?? null;
         setLocationState({
           status: "ready",
           location: payload.location ?? null,
@@ -163,8 +195,14 @@ export default function MachineDetailsDialog({
   }, [open, machineId]);
 
   useEffect(() => {
-    if (!open || !machineId) {
-      setAttachmentsState({ status: "idle", attachments: [], error: null });
+    if (!open || !machineId) return;
+
+    if (attachmentsCacheRef.current[machineId]) {
+      setAttachmentsState({
+        status: "ready",
+        attachments: attachmentsCacheRef.current[machineId],
+        error: null,
+      });
       return;
     }
 
@@ -194,13 +232,15 @@ export default function MachineDetailsDialog({
           return;
         }
 
+        const attachments = (payload.attachments ?? []).sort((a, b) =>
+          (a.description || a.name || "").localeCompare(b.description || b.name || "", "nb-NO", {
+            sensitivity: "base",
+          }),
+        );
+        attachmentsCacheRef.current[machineId] = attachments;
         setAttachmentsState({
           status: "ready",
-          attachments: (payload.attachments ?? []).sort((a, b) =>
-            (a.description || a.name || "").localeCompare(b.description || b.name || "", "nb-NO", {
-              sensitivity: "base",
-            }),
-          ),
+          attachments,
           error: null,
         });
       } catch (err) {
@@ -212,6 +252,99 @@ export default function MachineDetailsDialog({
     }
 
     fetchAttachments();
+
+    return () => {
+      isCancelled = true;
+      controller.abort();
+    };
+  }, [open, machineId]);
+
+  useEffect(() => {
+    if (!open || !machineId) return;
+
+    if (agreementsCacheRef.current[machineId]) {
+      setAgreementsState({
+        status: "ready",
+        agreements: agreementsCacheRef.current[machineId],
+        error: null,
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    let isCancelled = false;
+
+    async function fetchAgreements() {
+      setAgreementsState({ status: "loading", agreements: [], error: null });
+
+      try {
+        const response = await fetch("/api/agreements", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const payload = (await response.json().catch(() => ({}))) as {
+          active?: Array<{
+            id: string;
+            customerId?: number;
+            customerName?: string | null;
+            startDate?: string | null;
+            endDate?: string | null;
+            machines?: Array<{ id?: string; name?: string | null; make?: string | null }>;
+          }>;
+          historical?: Array<{
+            id: string;
+            customerId?: number;
+            customerName?: string | null;
+            startDate?: string | null;
+            endDate?: string | null;
+            machines?: Array<{ id?: string; name?: string | null; make?: string | null }>;
+          }>;
+          error?: string;
+        };
+
+        if (isCancelled) return;
+
+        if (!response.ok) {
+          setAgreementsState({
+            status: "error",
+            agreements: [],
+            error: payload.error ?? "Kunne ikke hente leieavtaler",
+          });
+          return;
+        }
+
+        const agreements = [
+          ...(payload.active ?? []).map((agreement) => ({ ...agreement, isActive: true })),
+          ...(payload.historical ?? []).map((agreement) => ({ ...agreement, isActive: false })),
+        ]
+          .filter((agreement) =>
+            (agreement.machines ?? []).some((linkedMachine) => Number(linkedMachine.id) === machineId),
+          )
+          .map((agreement) => ({
+            id: agreement.id,
+            customerId: agreement.customerId ?? null,
+            customerName: agreement.customerName ?? null,
+            startDate: agreement.startDate ?? null,
+            endDate: agreement.endDate ?? null,
+            isActive: agreement.isActive,
+          }));
+
+        const sortedAgreements = agreements.sort(compareMachineAgreements);
+        agreementsCacheRef.current[machineId] = sortedAgreements;
+        setAgreementsState({
+          status: "ready",
+          agreements: sortedAgreements,
+          error: null,
+        });
+      } catch (err) {
+        if (isCancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        const message = err instanceof Error ? err.message : "Kunne ikke hente leieavtaler";
+        setAgreementsState({ status: "error", agreements: [], error: message });
+      }
+    }
+
+    fetchAgreements();
 
     return () => {
       isCancelled = true;
@@ -277,9 +410,12 @@ export default function MachineDetailsDialog({
             <>
               <MachineOverview
                 machine={localMachine}
-                currentRenter={currentRenter}
-                currentRenterId={currentRenterId}
+              />
+              <MachineAgreementsSection
+                state={agreementsState}
+                viewerRole={viewerRole}
                 onCustomerClick={onCustomerClick}
+                onAgreementClick={onAgreementClick}
               />
               <TrainingVideosSection machine={localMachine} />
               <AttachmentsSection state={attachmentsState} />
@@ -298,14 +434,8 @@ export default function MachineDetailsDialog({
 
 function MachineOverview({
   machine,
-  currentRenter,
-  currentRenterId,
-  onCustomerClick,
 }: {
   machine: MachineDetails;
-  currentRenter?: string | null;
-  currentRenterId?: string | number | null;
-  onCustomerClick?: (customerId?: string | number | null, customerName?: string | null) => void;
 }) {
   const infoRows = [
     { label: "Merke", value: machine.make },
@@ -318,7 +448,6 @@ function MachineOverview({
     { label: "Lokasjon (tekst)", value: machine.location },
     { label: "Siste jernbanekontroll", value: formatDateTime(machine.railControlDate) },
     { label: "Kontrolldato", value: formatDateTime(machine.controlDate) },
-    { label: "Aktuell leietaker", value: currentRenter },
   ];
 
   return (
@@ -333,26 +462,114 @@ function MachineOverview({
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               {row.label}
             </p>
-            <div className="mt-1 text-sm font-medium text-slate-900">
-              {row.label === "Aktuell leietaker" &&
-              currentRenterId !== null &&
-              currentRenterId !== undefined &&
-              currentRenter &&
-              onCustomerClick ? (
-                <button
-                  type="button"
-                  onClick={() => onCustomerClick(currentRenterId, currentRenter)}
-                  className="group inline-flex max-w-full cursor-pointer items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-left text-xs font-medium text-blue-800 transition hover:border-blue-300"
-                >
-                  <span className="truncate font-semibold">{currentRenter}</span>
-                </button>
-              ) : (
-                formatValue(row.value)
-              )}
-            </div>
+            <p className="mt-1 text-sm font-medium text-slate-900">{formatValue(row.value)}</p>
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function MachineAgreementsSection({
+  state,
+  viewerRole,
+  onCustomerClick,
+  onAgreementClick,
+}: {
+  state: { status: "idle" | "loading" | "ready" | "error"; agreements: MachineAgreementSummary[]; error: string | null };
+  viewerRole?: string | null;
+  onCustomerClick?: (customerId?: string | number | null, customerName?: string | null) => void;
+  onAgreementClick?: (agreement: MachineAgreementSummary) => void;
+}) {
+  const isAdmin = viewerRole === "super_admin";
+  const agreements = isAdmin
+    ? state.agreements
+    : state.agreements.filter((agreement) => agreement.isActive).slice(0, 1);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <h3 className="text-sm font-semibold text-slate-900">Tilknyttede leieavtaler</h3>
+      {state.status === "loading" ? (
+        <div className="mt-2 inline-flex items-center gap-2 text-xs text-slate-500">
+          <IconLoader2 className="h-4 w-4 animate-spin text-blue-600" />
+          Laster leieavtaler...
+        </div>
+      ) : state.status === "error" ? (
+        <p className="mt-1 text-xs text-slate-500">{state.error ?? "Kunne ikke hente leieavtaler"}</p>
+      ) : agreements.length === 0 ? (
+        <p className="mt-1 text-xs text-slate-500">
+          {isAdmin
+            ? "Ingen leieavtaler funnet for denne maskinen."
+            : "Ingen aktiv leieavtale funnet for denne maskinen."}
+        </p>
+      ) : (
+        <div
+          className={agreements.length > 4 ? "mt-3 max-h-[14rem] overflow-y-auto pr-2" : "mt-3"}
+        >
+          <table className="min-w-full border-separate border-spacing-y-0 text-sm">
+            <thead className="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-3 py-2">Leietaker</th>
+                <th className="px-3 py-2">Leieavtale</th>
+                <th className="px-3 py-2">Startdato</th>
+                <th className="px-3 py-2">Sluttdato</th>
+              </tr>
+            </thead>
+            <tbody>
+              {agreements.map((agreement) => (
+                <tr key={agreement.id}>
+                  <td className="border-b border-slate-100 bg-white px-3 py-3">
+                    {agreement.customerId !== null &&
+                    agreement.customerId !== undefined &&
+                    agreement.customerName &&
+                    onCustomerClick ? (
+                      <button
+                        type="button"
+                        onClick={() => onCustomerClick(agreement.customerId, agreement.customerName)}
+                        className="group inline-flex max-w-full cursor-pointer items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-left text-xs font-medium text-blue-800 transition hover:border-blue-300"
+                      >
+                        <span className="truncate font-semibold">{agreement.customerName}</span>
+                      </button>
+                    ) : (
+                      <span className="text-slate-900">{formatValue(agreement.customerName)}</span>
+                    )}
+                  </td>
+                  <td className="border-b border-slate-100 bg-white px-3 py-3">
+                    <button
+                      type="button"
+                      onClick={() => onAgreementClick?.(agreement)}
+                      className="group inline-flex max-w-full cursor-pointer items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-left text-xs font-medium text-blue-800 transition hover:border-blue-300"
+                    >
+                      <span className="truncate font-semibold">{agreement.id}</span>
+                    </button>
+                  </td>
+                  <td className="border-b border-slate-100 bg-white px-3 py-3 text-slate-700">
+                    {formatDateOnly(agreement.startDate)}
+                  </td>
+                  <td className="border-b border-slate-100 bg-white px-3 py-3 text-slate-700">
+                    {agreement.endDate ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>{formatDateOnly(agreement.endDate)}</span>
+                        {agreement.isActive ? (
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-100">
+                            Aktiv
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : agreement.isActive ? (
+                      <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-100">
+                        Aktiv
+                      </span>
+                    ) : (
+                      <span>-</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -839,4 +1056,43 @@ function formatDateTime(value?: string | Date | null) {
   const hours = pad(date.getHours());
   const minutes = pad(date.getMinutes());
   return `${day}.${month}.${year} kl. ${hours}:${minutes}`;
+}
+
+function formatDateOnly(value?: string | Date | null) {
+  if (!value) return "-";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}`;
+}
+
+function isAgreementCurrent(agreement: MachineAgreementSummary) {
+  return agreement.isActive;
+}
+
+function compareMachineAgreements(a: MachineAgreementSummary, b: MachineAgreementSummary) {
+  const aCurrent = isAgreementCurrent(a);
+  const bCurrent = isAgreementCurrent(b);
+  if (aCurrent !== bCurrent) return aCurrent ? -1 : 1;
+
+  const byStart = (toTimestamp(b.startDate, "start") ?? 0) - (toTimestamp(a.startDate, "start") ?? 0);
+  if (byStart !== 0) return byStart;
+
+  return (toTimestamp(b.endDate, "end") ?? 0) - (toTimestamp(a.endDate, "end") ?? 0);
+}
+
+function toTimestamp(value?: string | Date | null, boundary: "start" | "end" = "start") {
+  if (!value) return null;
+  const date = value instanceof Date ? new Date(value) : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    if (boundary === "end") {
+      date.setHours(23, 59, 59, 999);
+    } else {
+      date.setHours(0, 0, 0, 0);
+    }
+  }
+
+  return date.getTime();
 }

@@ -2,7 +2,13 @@ import { Suspense } from "react";
 import SideNav from "@/components/Navbar";
 import Spinner from "@/components/Spinner";
 
-export default function AppShell({ children }: { children: React.ReactNode }) {
+export default function AppShell({
+  children,
+  contentClassName = "",
+}: {
+  children: React.ReactNode;
+  contentClassName?: string;
+}) {
   return (
     <>
       <SideNav />
@@ -13,7 +19,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </main>
         }
       >
-        <main className="md:ml-56 min-h-screen overflow-y-auto">{children}</main>
+        <main className={`md:ml-56 min-h-screen overflow-y-auto ${contentClassName}`.trim()}>
+          {children}
+        </main>
       </Suspense>
     </>
   );

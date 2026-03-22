@@ -65,6 +65,7 @@ export default function MapView({ features }: Props) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const bottomPanelRef = useRef<HTMLDivElement | null>(null);
     const historyOverlayRef = useRef<HTMLDivElement | null>(null);
+    const resizeOverlayRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<Map | null>(null);
     const loadedRef = useRef(false);
     const appliedThemeRef = useRef<"light" | "dark">("light");
@@ -847,7 +848,10 @@ export default function MapView({ features }: Props) {
     const [panelPx, setPanelPx] = useState<number>(280);
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [isDraggingPanel, setIsDraggingPanel] = useState(false);
+    const [isHoldingDivider, setIsHoldingDivider] = useState(false);
+    const [isWindowResizing, setIsWindowResizing] = useState(false);
     const draggingRef = useRef(false);
+    const resizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const dragStartYRef = useRef(0);
     const panelStartRef = useRef(panelPx);
     const panelPxRef = useRef(280);
@@ -862,6 +866,12 @@ export default function MapView({ features }: Props) {
 
         if (containerRef.current) {
             containerRef.current.style.height = nextCollapsed ? "100vh" : `calc(100vh - ${nextPanelPx}px)`;
+        }
+
+        if (resizeOverlayRef.current) {
+            resizeOverlayRef.current.style.height = nextCollapsed
+                ? "100vh"
+                : `calc(100vh - ${nextPanelPx}px)`;
         }
 
         if (bottomPanelRef.current) {
@@ -894,6 +904,7 @@ export default function MapView({ features }: Props) {
             if (!draggingRef.current) return;
             draggingRef.current = false;
             setIsDraggingPanel(false);
+            setIsHoldingDivider(false);
             let nextPanelPx = panelPxRef.current;
             let nextCollapsed = collapsedRef.current;
             // If mouse didn't move → treat as click toggle
@@ -921,10 +932,32 @@ export default function MapView({ features }: Props) {
         };
     }, []);
 
+    useEffect(() => {
+        function handleWindowResize() {
+            setIsWindowResizing(true);
+            if (resizeTimeoutRef.current) {
+                clearTimeout(resizeTimeoutRef.current);
+            }
+            resizeTimeoutRef.current = setTimeout(() => {
+                setIsWindowResizing(false);
+                resizeTimeoutRef.current = null;
+            }, 140);
+        }
+
+        window.addEventListener("resize", handleWindowResize);
+        return () => {
+            window.removeEventListener("resize", handleWindowResize);
+            if (resizeTimeoutRef.current) {
+                clearTimeout(resizeTimeoutRef.current);
+            }
+        };
+    }, []);
+
     const mapHeightStyle = isCollapsed ? { height: "100vh" } : { height: `calc(100vh - ${panelPx}px)` };
     const historyOverlayStyle = {
         top: isCollapsed ? "50vh" : `calc((100vh - ${panelPx}px) / 2)`,
     };
+    const shouldShowResizeOverlay = isHoldingDivider || isWindowResizing;
 
     return (
         <DialogFlowHost viewer={session?.user}>
@@ -988,7 +1021,30 @@ export default function MapView({ features }: Props) {
             </div>
 
             {/* Map */}
-            <div ref={containerRef} className="w-full" style={mapHeightStyle} />
+            <div
+                ref={containerRef}
+                className={`w-full transition-opacity duration-75 ${shouldShowResizeOverlay ? "opacity-0" : "opacity-100"}`}
+                style={mapHeightStyle}
+            />
+            {shouldShowResizeOverlay ? (
+                <div
+                    ref={resizeOverlayRef}
+                    className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-center bg-slate-900/12 backdrop-blur-[2px]"
+                    style={mapHeightStyle}
+                    aria-hidden="true"
+                >
+                    <div className="rounded-2xl border border-white/50 bg-white/80 px-6 py-5 shadow-lg backdrop-blur-md">
+                        <Image
+                            src="/bjugstad-logos/horizontal/Color.png"
+                            alt="Bjugstad Utleie"
+                            width={220}
+                            height={56}
+                            className="h-12 w-auto object-contain"
+                            priority={false}
+                        />
+                    </div>
+                </div>
+            ) : null}
 
             {historyOverlayOpen ? (
                 <div
@@ -1098,6 +1154,7 @@ export default function MapView({ features }: Props) {
                 onMouseDown={(e) => {
                     draggingRef.current = true;
                     setIsDraggingPanel(true);
+                    setIsHoldingDivider(true);
                     dragStartYRef.current = e.clientY;
                     panelStartRef.current = panelPxRef.current;
                     movedRef.current = false;

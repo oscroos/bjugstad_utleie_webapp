@@ -1,6 +1,8 @@
 // components/TermsDialog.tsx
 "use client";
 
+import { standardButtonClass } from "@/lib/buttonStyles";
+
 export default function TermsDialog({
   open,
   onClose,
@@ -38,7 +40,7 @@ export default function TermsDialog({
         <div className="px-5 py-4 border-t flex justify-end">
           <button
             onClick={onClose}
-            className="rounded-lg px-4 py-2 bg-slate-900 text-white hover:bg-slate-800 cursor-pointer"
+            className={standardButtonClass}
           >
             Lukk
           </button>

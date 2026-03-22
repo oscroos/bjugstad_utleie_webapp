@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
+import { standardButtonClass } from "@/lib/buttonStyles";
 
 type TabCard = {
   href: string;
@@ -122,7 +123,7 @@ export default async function HomePage() {
               <div className="pt-4">
                 <Link
                   href={card.href}
-                  className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                  className={standardButtonClass}
                 >
                   Gå til {card.title.toLowerCase()}
                 </Link>

@@ -13,6 +13,7 @@ import { useSession } from "next-auth/react"; // reads session shaped by callbac
 import { useSearchParams, useRouter } from "next/navigation";
 import { signIn } from "next-auth/react"; // client helper that talks to /api/auth/* (handlers from lib/auth.ts)
 import { IS_DEV, USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY } from "@/lib/constants";
+import { standardButtonClass } from "@/lib/buttonStyles";
 
 export default function LoginPage() {
   // If middleware redirected here, it'll attach ?callbackUrl=...
@@ -107,7 +108,7 @@ export default function LoginPage() {
         <button
           onClick={handleLogin}
           disabled={loading}
-          className="w-full rounded-xl bg-orange-500 hover:bg-orange-600 transition py-3 font-medium disabled:opacity-60 cursor-pointer"
+          className={`${standardButtonClass} w-full`}
         >
           {loading ? "Åpner Vipps…" : "Logg inn med Vipps"}
         </button>

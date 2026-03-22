@@ -28,6 +28,7 @@ import type {
     MachineProps,
 } from "@/types/machines";
 import Image from "next/image";
+import { standardButtonCompactClass } from "@/lib/buttonStyles";
 import { getOEMLogo } from "@/lib/get_OEM_logo";
 import { getOemColor, getOemColorMatchEntries, OEM_COLORS } from "@/lib/oem-colors";
 
@@ -1637,14 +1638,14 @@ function buildPopupContent({
                 <button
                     type="button"
                     data-show-history
-                    class="w-full cursor-pointer rounded-lg bg-slate-900 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-slate-800 disabled:cursor-default disabled:bg-slate-300"
+                    class="${standardButtonCompactClass.replace("text-sm", "text-[11px]")} w-full"
                 >
                     Se siste bevegelser
                 </button>
                 <button
                     type="button"
                     data-show-details
-                    class="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
+                    class="${standardButtonCompactClass.replace("text-sm", "text-[11px]")} w-full"
                 >
                     Vis detaljer
                 </button>

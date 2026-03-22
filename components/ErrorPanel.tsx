@@ -5,6 +5,7 @@ import { useState } from "react";
 import { signOut } from "next-auth/react";
 import { AppError, isAppError } from "@/lib/errors";
 import { IconRefresh, IconLogout, IconAlertTriangle, IconChevronDown } from "@tabler/icons-react";
+import { standardButtonClass } from "@/lib/buttonStyles";
 
 export default function ErrorPanel({
     error,
@@ -57,7 +58,7 @@ export default function ErrorPanel({
                     {onRetry && (
                         <button
                             onClick={onRetry}
-                            className="cursor-pointer inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 transition"
+                            className={standardButtonClass}
                         >
                             <IconRefresh className="h-5 w-5" />
                             Prøv igjen
@@ -66,7 +67,7 @@ export default function ErrorPanel({
 
                     <button
                         onClick={() => signOut({ callbackUrl: "/login" })}
-                        className="cursor-pointer inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-slate-800 hover:bg-slate-200 transition"
+                        className={standardButtonClass}
                     >
                         <IconLogout className="h-5 w-5" />
                         Logg ut

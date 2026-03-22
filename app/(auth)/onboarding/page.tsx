@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import TermsDialog from "@/components/TermsDialog";
+import { standardButtonClass, standardButtonCompactClass } from "@/lib/buttonStyles";
 import { LATEST_TERMS_VERSION } from "@/lib/constants";
 
 type CompanyInfo = {
@@ -139,7 +140,7 @@ export default function OnboardingPage() {
                             <button
                                 type="button"
                                 onClick={loadProfile}
-                                className="mt-3 inline-flex items-center rounded-md bg-white/10 px-3 py-1 text-xs font-medium text-white hover:bg-white/20 cursor-pointer"
+                                className={`mt-3 ${standardButtonCompactClass}`}
                             >
                                 Prøv igjen
                             </button>
@@ -226,7 +227,7 @@ export default function OnboardingPage() {
                     <button
                         type="submit"
                         disabled={!canSubmit}
-                        className="w-full rounded-xl bg-orange-500 hover:bg-orange-600 transition py-3 font-medium disabled:opacity-60 disabled:hover:bg-orange-500 cursor-pointer"
+                        className={`${standardButtonClass} w-full`}
                     >
                         {submitting ? "Lagrer…" : "Fortsett"}
                     </button>

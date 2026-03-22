@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { IconLoader2, IconCircleMinus, IconPlus, IconX } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
+import {
+  destructiveButtonClass,
+  destructiveButtonCompactClass,
+  standardButtonClass,
+} from "@/lib/buttonStyles";
 import { formatDisplay, formatPhone, formatDate } from "@/lib/formatters";
 
 type UserAccess = {
@@ -300,7 +305,7 @@ export default function UserAccessDialog({ userId, initialUser, onClose, onChang
                   type="button"
                   onClick={handleSave}
                   disabled={!isDirty || saving}
-                  className="inline-flex items-center justify-center bg-blue-600 gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow cursor-pointer hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-400"
+                  className={standardButtonClass}
                 >
                   {saving ? (
                     <>
@@ -316,7 +321,7 @@ export default function UserAccessDialog({ userId, initialUser, onClose, onChang
                   type="button"
                   onClick={handleDelete}
                   disabled={saving}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 shadow hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-70 cursor-pointer"
+                  className={destructiveButtonClass}
                 >
                   Slett bruker
                 </button>
@@ -450,7 +455,7 @@ function UserAccessList({
                   <button
                     type="button"
                     onClick={() => onRemove(access.customerId)}
-                    className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 hover:text-red-600 cursor-pointer"
+                    className={destructiveButtonCompactClass}
                   >
                     <IconCircleMinus className="h-5 w-5" />
                     Fjern
@@ -576,7 +581,7 @@ function AddAccessForm({
             type="button"
             onClick={handleAdd}
             disabled={disabled}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-400 cursor-pointer"
+            className={standardButtonClass}
           >
             <IconPlus className="h-4 w-4" />
             Legg til kundetilgang

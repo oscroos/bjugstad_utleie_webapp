@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IconLoader2, IconCircleMinus, IconPlus, IconX } from "@tabler/icons-react";
+import {
+  destructiveButtonCompactClass,
+  standardButtonClass,
+} from "@/lib/buttonStyles";
 
 type RoleOption = "customer" | "super_admin";
 type CompanyRole = "selskapsadmin" | "selskapsbruker";
@@ -230,7 +234,7 @@ export default function AddUserDialog() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-500 cursor-pointer"
+        className={standardButtonClass}
       >
         <IconPlus className="h-5 w-5" />
         Legg til bruker
@@ -337,7 +341,7 @@ export default function AddUserDialog() {
                           <div aria-hidden="true" className="h-0 overflow-hidden">
                             <button
                               type="button"
-                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium cursor-pointer"
+                              className={destructiveButtonCompactClass}
                             >
                               <IconCircleMinus className="h-5 w-5" />
                               Fjern
@@ -424,7 +428,7 @@ export default function AddUserDialog() {
                                 <button
                                   type="button"
                                   onClick={() => removeRelationship(rel.id)}
-                                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-slate-500 hover:text-red-600 cursor-pointer"
+                                  className={destructiveButtonCompactClass}
                                 >
                                   <IconCircleMinus className="h-5 w-5" />
                                   Fjern
@@ -439,7 +443,7 @@ export default function AddUserDialog() {
                     <button
                       type="button"
                       onClick={addRelationship}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-500 cursor-pointer"
+                      className={standardButtonClass}
                     >
                       <IconPlus className="h-4 w-4" />
                       Legg til selskapsrelasjon
@@ -456,14 +460,14 @@ export default function AddUserDialog() {
                   <button
                     type="button"
                     onClick={closeDialog}
-                    className="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                    className={standardButtonClass}
                   >
                     Avbryt
                   </button>
                   <button
                     type="submit"
                     disabled={!canSubmit}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white shadow hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-400 cursor-pointer"
+                    className={standardButtonClass}
                   >
                     {submitting ? (
                       <>

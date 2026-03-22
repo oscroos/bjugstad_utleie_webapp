@@ -12,13 +12,16 @@ import {
 } from "@tabler/icons-react";
 import type {
   CustomerAccessEntry,
-  CustomerDetails,
 } from "@/components/dialogs/CustomerAccessDialog";
 import {
   formatCustomerAddress,
   formatDisplay,
   formatPhone,
 } from "@/lib/formatters";
+import {
+  destructiveButtonCompactClass,
+  standardButtonClass,
+} from "@/lib/buttonStyles";
 import type { CompanyCardState } from "./profileTypes";
 
 type ProfileRowEntry = {
@@ -327,7 +330,7 @@ function CompanyProfileCard({
                     <button
                       type="button"
                       onClick={() => removeEntry(entry.userId)}
-                      className="cursor-pointer rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                      className={destructiveButtonCompactClass}
                     >
                       Fjern
                     </button>
@@ -349,11 +352,7 @@ function CompanyProfileCard({
                 type="button"
                 onClick={handleSave}
                 disabled={!isDirty || saving}
-                className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow ${
-                  !isDirty || saving
-                    ? "cursor-not-allowed bg-blue-300"
-                    : "cursor-pointer bg-blue-600 hover:bg-blue-500"
-                }`}
+                className={standardButtonClass}
               >
                 {saving ? (
                   <>

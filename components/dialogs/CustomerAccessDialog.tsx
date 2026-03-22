@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { IconChevronLeft, IconLoader2, IconX } from "@tabler/icons-react";
+import {
+  destructiveButtonCompactClass,
+  standardButtonClass,
+} from "@/lib/buttonStyles";
 import { formatDisplay, formatPhone, normalizePhone } from "@/lib/formatters";
 
 export type CustomerContactPerson = {
@@ -398,10 +402,7 @@ export default function CustomerAccessDialog({
                     type="button"
                     onClick={handleSave}
                     disabled={!isDirty || saving}
-                    className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow cursor-pointer ${!isDirty || saving
-                      ? "cursor-not-allowed bg-blue-300"
-                      : "bg-blue-600 hover:bg-blue-500"
-                      }`}
+                    className={standardButtonClass}
                   >
                     {saving ? (
                       <>
@@ -602,7 +603,7 @@ function CustomerAccessList({
                 <button
                   type="button"
                   onClick={() => onRemove(access.userId)}
-                  className="cursor-pointer rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                  className={destructiveButtonCompactClass}
                 >
                   Fjern
                 </button>

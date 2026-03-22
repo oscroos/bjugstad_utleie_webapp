@@ -44,6 +44,7 @@ type MachineAttachment = {
   name: string;
   description: string | null;
   filePath: string;
+  internal?: boolean;
 };
 
 type AttachmentsState = {
@@ -840,11 +841,18 @@ function AttachmentsSection({ state }: { state: AttachmentsState }) {
               key={attachment.id}
               className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 shadow-sm"
             >
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-900">
-                      {attachment.description || attachment.name || "Vedlegg"}
-                    </p>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-medium text-slate-900">
+                        {attachment.description || attachment.name || "Vedlegg"}
+                      </p>
+                      {attachment.internal ? (
+                        <span className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 ring-1 ring-slate-200">
+                          Intern
+                        </span>
+                      ) : null}
+                    </div>
                   <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">
                     {attachment.name || "Ingen navn"}
                   </p>

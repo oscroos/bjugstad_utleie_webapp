@@ -46,6 +46,7 @@ export async function GET(
   { params }: { params: Promise<{ machineId: string }> },
 ) {
   const session = await auth();
+  const isAdmin = session?.user?.role === "super_admin";
 
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -108,7 +109,7 @@ export async function GET(
     }
 
     const attachments = ((await response.json()) as AttachmentResponse[])
-      .filter((item) => item && item.internal === false)
+      .filter((item) => item && (isAdmin || item.internal === false))
       .map((item) => ({
         ...item,
         filePath: buildDownloadPath(

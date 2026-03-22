@@ -16,7 +16,9 @@ import {
     IconWriting,
     IconWritingOff,
 } from "@tabler/icons-react";
+import { useSession } from "next-auth/react";
 import DataTable, { type DataColumn } from "@/components/DataTable";
+import DialogFlowHost from "@/components/dialogs/DialogFlowHost";
 import { useMachines, useMachinesList } from "@/components/MachinesContext";
 import type {
     MachineFeature,
@@ -67,6 +69,8 @@ export default function MapView({ features }: Props) {
     const appliedThemeRef = useRef<"light" | "dark">("light");
     const themeRef = useRef<"light" | "dark">("light");
     const styleCacheRef = useRef<{ light?: StyleSpecification; dark?: StyleSpecification }>({});
+    const { data: session } = useSession();
+    const openMachineDialogRef = useRef<((machineId: number, machineLabel: string) => void) | null>(null);
 
     // UI theme
     const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -577,6 +581,13 @@ export default function MapView({ features }: Props) {
             );
         });
 
+        popupContent.querySelector<HTMLButtonElement>("[data-show-details]")?.addEventListener("click", () => {
+            popup.remove();
+            const numericMachineId = Number(id);
+            if (!Number.isFinite(numericMachineId)) return;
+            openMachineDialogRef.current?.(numericMachineId, name);
+        });
+
         popup.on("close", () => {
             if (popupRef.current === popup) {
                 popupRef.current = null;
@@ -604,7 +615,6 @@ export default function MapView({ features }: Props) {
         // open popup when movement is done so it doesn't auto-close
         map.once("moveend", () => openPopupForFeature(map, f, { sticky: true }));
     }
-
 
     // Keep machine layers on top & ensure interactions once
     function bringMachineLayersToTop(map: Map) {
@@ -916,7 +926,14 @@ export default function MapView({ features }: Props) {
     };
 
     return (
-        <div className="relative flex h-screen w-full flex-col">
+        <DialogFlowHost viewer={session?.user}>
+            {({ openMachine }) => {
+                openMachineDialogRef.current = (machineId, machineLabel) => {
+                    void openMachine({ id: machineId, name: machineLabel });
+                };
+
+                return (
+                    <div className="relative flex h-screen w-full flex-col">
             {/* Controls (top-left stack) */}
             <div className="pointer-events-none absolute left-3 top-3 z-10 flex flex-col gap-2">
                 <div className="pointer-events-auto">
@@ -1125,7 +1142,10 @@ export default function MapView({ features }: Props) {
                     />
                 </div>
             </div>
-        </div>
+                    </div>
+                );
+            }}
+        </DialogFlowHost>
     );
 }
 
@@ -1620,6 +1640,13 @@ function buildPopupContent({
                     class="w-full cursor-pointer rounded-lg bg-slate-900 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-slate-800 disabled:cursor-default disabled:bg-slate-300"
                 >
                     Se siste bevegelser
+                </button>
+                <button
+                    type="button"
+                    data-show-details
+                    class="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
+                >
+                    Vis detaljer
                 </button>
             </div>
         </div>

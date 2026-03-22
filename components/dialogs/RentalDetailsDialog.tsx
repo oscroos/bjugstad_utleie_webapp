@@ -42,6 +42,7 @@ export default function RentalDetailsDialog({
   onBack,
   onCustomerClick,
   onMachineClick,
+  breadcrumbs,
 }: {
   state: RentalDialogState;
   onClose: () => void;
@@ -52,6 +53,7 @@ export default function RentalDetailsDialog({
     renter?: string | null,
     renterId?: string | number | null,
   ) => void;
+  breadcrumbs?: Array<{ label: string; onClick?: () => void }>;
 }) {
   const { open, loading, error, rental } = state;
   const [localRental, setLocalRental] = useState<RentalDetails | null>(rental);
@@ -71,17 +73,36 @@ export default function RentalDetailsDialog({
       <div className="flex min-h-[40rem] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10">
         <div className="flex items-start justify-between border-b border-slate-100 px-6 py-4">
           <div className="flex items-start gap-3">
-            {onBack ? (
-              <button
-                type="button"
-                onClick={onBack}
-                className="mt-1 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-slate-50"
-                aria-label="Tilbake"
-              >
-                <IconChevronLeft className="h-4 w-4" />
-              </button>
-            ) : null}
             <div>
+              {breadcrumbs?.length ? (
+                <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    disabled={!onBack}
+                    className={`flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 transition ${onBack ? "cursor-pointer text-slate-500 hover:bg-slate-50 hover:text-slate-700" : "cursor-default text-slate-300"}`}
+                    aria-label="Tilbake"
+                  >
+                    <IconChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+                  {breadcrumbs.map((item, index) => (
+                    <div key={`${item.label}-${index}`} className="flex items-center gap-1">
+                      {item.onClick ? (
+                        <button
+                          type="button"
+                          onClick={item.onClick}
+                          className="cursor-pointer text-slate-400 transition hover:text-slate-600"
+                        >
+                          {item.label}
+                        </button>
+                      ) : (
+                        <span className="text-slate-500">{item.label}</span>
+                      )}
+                      {index < breadcrumbs.length - 1 ? <span>/</span> : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Avtale</p>
               <h2 className="text-2xl font-semibold text-slate-900">{headerTitle || "Avtale"}</h2>
               {localRental?.rentalId ? (

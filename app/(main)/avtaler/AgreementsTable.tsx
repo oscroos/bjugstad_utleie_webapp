@@ -45,14 +45,64 @@ type AgreementsTableProps = {
   viewer?: { id?: string | null; role?: string | null };
 };
 
+type CustomerDialogSnapshot = {
+  state: AccessDialogState;
+  permissions?: AccessPermissions;
+};
+
+type RentalDialogSnapshot = {
+  state: RentalDialogState;
+  backToMachine: boolean;
+  backToCustomer: boolean;
+};
+
+type MachineDialogSnapshot = {
+  state: MachineDialogState;
+  backToRental: boolean;
+  backToCustomer: boolean;
+};
+
+type DialogHistoryEntry =
+  | {
+      type: "customer";
+      label: string;
+      state: AccessDialogState;
+      permissions?: AccessPermissions;
+      backToRental: boolean;
+      backToMachine: boolean;
+    }
+  | {
+      type: "rental";
+      label: string;
+      state: RentalDialogState;
+      backToMachine: boolean;
+      backToCustomer: boolean;
+    }
+  | {
+      type: "machine";
+      label: string;
+      state: MachineDialogState;
+      backToRental: boolean;
+      backToCustomer: boolean;
+    };
+
+type BreadcrumbItem = {
+  label: string;
+  onClick?: () => void;
+};
+
 export default function AgreementsTable({ agreements, emptyMessage, viewer }: AgreementsTableProps) {
   const [dialogState, setDialogState] = useState<AccessDialogState>(createInitialDialogState);
   const [dialogPermissions, setDialogPermissions] = useState<AccessPermissions | undefined>();
+  const [dialogHistory, setDialogHistory] = useState<DialogHistoryEntry[]>([]);
+  const [customerDialogStack, setCustomerDialogStack] = useState<CustomerDialogSnapshot[]>([]);
   const [machineDialogState, setMachineDialogState] = useState<MachineDialogState>(
     createInitialMachineState,
   );
+  const [machineDialogStack, setMachineDialogStack] = useState<MachineDialogSnapshot[]>([]);
   const [rentalDialogState, setRentalDialogState] =
     useState<RentalDialogState>(createInitialRentalState);
+  const [rentalDialogStack, setRentalDialogStack] = useState<RentalDialogSnapshot[]>([]);
   const [customerBackToRental, setCustomerBackToRental] = useState(false);
   const [customerBackToMachine, setCustomerBackToMachine] = useState(false);
   const [machineBackToRental, setMachineBackToRental] = useState(false);
@@ -167,10 +217,117 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
     },
   ];
 
+  function buildCustomerLabel(state: AccessDialogState) {
+    return state.customerName?.trim() || "Kunde";
+  }
+
+  function buildRentalLabel(state: RentalDialogState) {
+    const customerName = state.rental?.customerName?.trim() || "Avtale";
+    const startDate = formatDate(state.rental?.startDate, { showTime: false });
+    return startDate ? `${customerName} - ${startDate}` : customerName;
+  }
+
+  function buildMachineLabel(state: MachineDialogState) {
+    return state.machineLabel?.trim() || "Maskin";
+  }
+
+  function pushCurrentDialogToHistory() {
+    if (dialogState.open) {
+      setDialogHistory((prev) => [
+        ...prev,
+        {
+          type: "customer",
+          label: buildCustomerLabel(dialogState),
+          state: { ...dialogState, open: false },
+          permissions: dialogPermissions,
+          backToRental: customerBackToRental,
+          backToMachine: customerBackToMachine,
+        },
+      ]);
+      return;
+    }
+
+    if (rentalDialogState.open) {
+      setDialogHistory((prev) => [
+        ...prev,
+        {
+          type: "rental",
+          label: buildRentalLabel(rentalDialogState),
+          state: { ...rentalDialogState, open: false },
+          backToMachine: rentalBackToMachine,
+          backToCustomer: rentalBackToCustomer,
+        },
+      ]);
+      return;
+    }
+
+    if (machineDialogState.open) {
+      setDialogHistory((prev) => [
+        ...prev,
+        {
+          type: "machine",
+          label: buildMachineLabel(machineDialogState),
+          state: { ...machineDialogState, open: false },
+          backToRental: machineBackToRental,
+          backToCustomer: machineBackToCustomer,
+        },
+      ]);
+    }
+  }
+
+  function restoreDialogFromHistory(entry: DialogHistoryEntry, nextHistory: DialogHistoryEntry[]) {
+    setDialogHistory(nextHistory);
+
+    setDialogState(
+      entry.type === "customer" ? { ...entry.state, open: true } : createInitialDialogState(),
+    );
+    setDialogPermissions(entry.type === "customer" ? entry.permissions : undefined);
+    setCustomerBackToRental(entry.type === "customer" ? entry.backToRental : false);
+    setCustomerBackToMachine(entry.type === "customer" ? entry.backToMachine : false);
+
+    setRentalDialogState(
+      entry.type === "rental" ? { ...entry.state, open: true } : createInitialRentalState(),
+    );
+    setRentalBackToMachine(entry.type === "rental" ? entry.backToMachine : false);
+    setRentalBackToCustomer(entry.type === "rental" ? entry.backToCustomer : false);
+
+    setMachineDialogState(
+      entry.type === "machine" ? { ...entry.state, open: true } : createInitialMachineState(),
+    );
+    setMachineBackToRental(entry.type === "machine" ? entry.backToRental : false);
+    setMachineBackToCustomer(entry.type === "machine" ? entry.backToCustomer : false);
+  }
+
+  function restorePreviousDialogFromHistory() {
+    const previousEntry = dialogHistory[dialogHistory.length - 1];
+    if (!previousEntry) return;
+    restoreDialogFromHistory(previousEntry, dialogHistory.slice(0, -1));
+  }
+
+  function getCurrentBreadcrumbs(): BreadcrumbItem[] {
+    const items = dialogHistory.map((entry, index) => ({
+      label: entry.label,
+      onClick: () => restoreDialogFromHistory(entry, dialogHistory.slice(0, index)),
+    }));
+
+    if (dialogState.open) {
+      items.push({ label: buildCustomerLabel(dialogState), onClick: () => undefined });
+    } else if (rentalDialogState.open) {
+      items.push({ label: buildRentalLabel(rentalDialogState), onClick: () => undefined });
+    } else if (machineDialogState.open) {
+      items.push({ label: buildMachineLabel(machineDialogState), onClick: () => undefined });
+    }
+
+    return items;
+  }
+
   async function handleCustomerClick(
     customer?: AgreementRow["customer"],
     opts?: { fromRental?: boolean; fromMachine?: boolean },
   ) {
+    if (opts?.fromRental || opts?.fromMachine) {
+      pushCurrentDialogToHistory();
+    }
     setCustomerBackToRental(Boolean(opts?.fromRental));
     setCustomerBackToMachine(Boolean(opts?.fromMachine));
     if (opts?.fromRental) {
@@ -185,6 +342,16 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
 
     if (!customerId || Number.isNaN(customerId)) {
       return;
+    }
+
+    if (dialogState.customerId !== null && dialogState.customerId !== customerId) {
+      setCustomerDialogStack((prev) => [
+        ...prev,
+        {
+          state: { ...dialogState, open: false },
+          permissions: dialogPermissions,
+        },
+      ]);
     }
 
     setDialogState({
@@ -223,6 +390,23 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
   }
 
   function handleAgreementClick(agreement: AgreementRow, opts?: { fromMachine?: boolean }) {
+    if (opts?.fromMachine) {
+      pushCurrentDialogToHistory();
+    }
+    if (
+      rentalDialogState.rental?.rentalId !== null &&
+      rentalDialogState.rental?.rentalId !== undefined &&
+      rentalDialogState.rental.rentalId !== agreement.id
+    ) {
+      setRentalDialogStack((prev) => [
+        ...prev,
+        {
+          state: { ...rentalDialogState, open: false },
+          backToMachine: rentalBackToMachine,
+          backToCustomer: rentalBackToCustomer,
+        },
+      ]);
+    }
     setRentalBackToCustomer(false);
     setRentalBackToMachine(Boolean(opts?.fromMachine));
     if (opts?.fromMachine) {
@@ -258,8 +442,6 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
   }
 
   function handleMachineClick(agreement: AgreementRow, machine?: { id?: string | number; name?: string | null; make?: string | null }) {
-    setMachineBackToRental(false);
-    setMachineBackToCustomer(false);
     openMachineDialog(machine, agreement.customer?.name ?? null, agreement.customer?.id ?? null);
   }
 
@@ -269,9 +451,7 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
     renterId?: string | number | null,
   ) {
     setRentalDialogState((prev) => ({ ...prev, open: false }));
-    setMachineBackToCustomer(false);
-    setMachineBackToRental(true);
-    openMachineDialog(machine, renter ?? null, renterId ?? null);
+    openMachineDialog(machine, renter ?? null, renterId ?? null, { fromRental: true });
   }
 
   function handleAgreementClickFromCustomer(agreement: {
@@ -296,6 +476,21 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
     createdByTelephoneNumber?: string | null;
     machines?: Array<{ id?: string | number; name?: string | null; make?: string | null }> | null;
   }) {
+    pushCurrentDialogToHistory();
+    if (
+      rentalDialogState.rental?.rentalId !== null &&
+      rentalDialogState.rental?.rentalId !== undefined &&
+      rentalDialogState.rental.rentalId !== agreement.id
+    ) {
+      setRentalDialogStack((prev) => [
+        ...prev,
+        {
+          state: { ...rentalDialogState, open: false },
+          backToMachine: rentalBackToMachine,
+          backToCustomer: rentalBackToCustomer,
+        },
+      ]);
+    }
     setDialogState((prev) => ({ ...prev, open: false }));
     setRentalBackToMachine(false);
     setRentalBackToCustomer(true);
@@ -341,15 +536,16 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
         }
       : undefined;
     setDialogState((prev) => ({ ...prev, open: false }));
-    setMachineBackToRental(false);
-    setMachineBackToCustomer(true);
-    openMachineDialog(normalizedMachine, machineCustomerName, machineCustomerId);
+    openMachineDialog(normalizedMachine, machineCustomerName, machineCustomerId, {
+      fromCustomer: true,
+    });
   }
 
   async function openMachineDialog(
     machine?: { id?: string | number; name?: string | null; make?: string | null },
     renter?: string | null,
     renterId?: string | number | null,
+    opts?: { fromRental?: boolean; fromCustomer?: boolean },
   ) {
     const rawId = machine?.id;
     const machineId =
@@ -362,6 +558,28 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
     const machineLabel =
       machine?.name?.trim() ||
       (machineId !== undefined ? `Maskin ${machineId}` : "Maskin");
+
+    if (opts?.fromRental || opts?.fromCustomer) {
+      pushCurrentDialogToHistory();
+    }
+
+    if (
+      machineDialogState.machineId !== null &&
+      machineDialogState.machineId !== undefined &&
+      machineDialogState.machineId !== machineId
+    ) {
+      setMachineDialogStack((prev) => [
+        ...prev,
+        {
+          state: { ...machineDialogState, open: false },
+          backToRental: machineBackToRental,
+          backToCustomer: machineBackToCustomer,
+        },
+      ]);
+    }
+
+    setMachineBackToRental(Boolean(opts?.fromRental));
+    setMachineBackToCustomer(Boolean(opts?.fromCustomer));
 
     setMachineDialogState({
       open: true,
@@ -394,11 +612,45 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
   function resetDialog() {
     setDialogState(createInitialDialogState());
     setDialogPermissions(undefined);
+    setDialogHistory([]);
+    setCustomerDialogStack([]);
     setCustomerBackToRental(false);
     setCustomerBackToMachine(false);
   }
 
+  function restorePreviousCustomerSnapshot() {
+    const previousSnapshot = customerDialogStack[customerDialogStack.length - 1];
+
+    if (previousSnapshot) {
+      setCustomerDialogStack((prev) => prev.slice(0, -1));
+      setDialogState({ ...previousSnapshot.state, open: false });
+      setDialogPermissions(previousSnapshot.permissions);
+      return;
+    }
+
+    setDialogState(createInitialDialogState());
+    setDialogPermissions(undefined);
+  }
+
   function resetMachineDialog() {
+    setMachineDialogState(createInitialMachineState());
+    setDialogHistory([]);
+    setMachineDialogStack([]);
+    setMachineBackToRental(false);
+    setMachineBackToCustomer(false);
+  }
+
+  function restorePreviousMachineSnapshot() {
+    const previousSnapshot = machineDialogStack[machineDialogStack.length - 1];
+
+    if (previousSnapshot) {
+      setMachineDialogStack((prev) => prev.slice(0, -1));
+      setMachineDialogState({ ...previousSnapshot.state, open: false });
+      setMachineBackToRental(previousSnapshot.backToRental);
+      setMachineBackToCustomer(previousSnapshot.backToCustomer);
+      return;
+    }
+
     setMachineDialogState(createInitialMachineState());
     setMachineBackToRental(false);
     setMachineBackToCustomer(false);
@@ -406,39 +658,53 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
 
   function resetRentalDialog() {
     setRentalDialogState(createInitialRentalState());
+    setDialogHistory([]);
+    setRentalDialogStack([]);
+    setRentalBackToMachine(false);
+    setRentalBackToCustomer(false);
+  }
+
+  function restorePreviousRentalSnapshot() {
+    const previousSnapshot = rentalDialogStack[rentalDialogStack.length - 1];
+
+    if (previousSnapshot) {
+      setRentalDialogStack((prev) => prev.slice(0, -1));
+      setRentalDialogState({ ...previousSnapshot.state, open: false });
+      setRentalBackToMachine(previousSnapshot.backToMachine);
+      setRentalBackToCustomer(previousSnapshot.backToCustomer);
+      return;
+    }
+
+    setRentalDialogState(createInitialRentalState());
     setRentalBackToMachine(false);
     setRentalBackToCustomer(false);
   }
 
   function handleCustomerBack() {
-    resetDialog();
-    setRentalDialogState((prev) => ({ ...prev, open: true }));
+    restorePreviousDialogFromHistory();
   }
 
   function handleCustomerBackToMachine() {
-    resetDialog();
-    setMachineDialogState((prev) => ({ ...prev, open: true }));
+    restorePreviousDialogFromHistory();
   }
 
   function handleMachineBack() {
-    resetMachineDialog();
-    setRentalDialogState((prev) => ({ ...prev, open: true }));
+    restorePreviousDialogFromHistory();
   }
 
   function handleMachineBackToCustomer() {
-    resetMachineDialog();
-    setDialogState((prev) => ({ ...prev, open: true }));
+    restorePreviousDialogFromHistory();
   }
 
   function handleRentalBackToMachine() {
-    resetRentalDialog();
-    setMachineDialogState((prev) => ({ ...prev, open: true }));
+    restorePreviousDialogFromHistory();
   }
 
   function handleRentalBackToCustomer() {
-    resetRentalDialog();
-    setDialogState((prev) => ({ ...prev, open: true }));
+    restorePreviousDialogFromHistory();
   }
+
+  const breadcrumbs = getCurrentBreadcrumbs();
 
   return (
     <>
@@ -462,6 +728,7 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
         permissions={dialogPermissions}
         onAgreementClick={handleAgreementClickFromCustomer}
         onMachineClick={handleMachineClickFromCustomer}
+        breadcrumbs={breadcrumbs}
       />
       <MachineDetailsDialog
         state={machineDialogState}
@@ -474,6 +741,7 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
               : undefined
         }
         viewerRole={viewer?.role}
+        breadcrumbs={breadcrumbs}
         onCustomerClick={(customerId, customerName) =>
           handleCustomerClick(
             { id: customerId ?? undefined, name: customerName ?? undefined },
@@ -523,6 +791,7 @@ export default function AgreementsTable({ agreements, emptyMessage, viewer }: Ag
               ? handleRentalBackToMachine
               : undefined
         }
+        breadcrumbs={breadcrumbs}
         onCustomerClick={(customerId, customerName) =>
           handleCustomerClick(
             { id: customerId ?? undefined, name: customerName ?? undefined },

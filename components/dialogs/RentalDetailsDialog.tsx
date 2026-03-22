@@ -67,57 +67,70 @@ export default function RentalDetailsDialog({
   const companyName = localRental?.customerName?.trim() || "Kunde";
   const startLabel = formatDateOnly(localRental?.startDate);
   const headerTitle = startLabel ? `${companyName} - ${startLabel}` : companyName;
+  const isActive = localRental ? isRentalActive(localRental) : false;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 px-4 py-8">
       <div className="flex min-h-[40rem] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10">
-        <div className="flex items-start justify-between border-b border-slate-100 px-6 py-4">
-          <div className="flex items-start gap-3">
-            <div>
-              {breadcrumbs?.length ? (
-                <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                  <button
-                    type="button"
-                    onClick={onBack}
-                    disabled={!onBack}
-                    className={`flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 transition ${onBack ? "cursor-pointer text-slate-500 hover:bg-slate-50 hover:text-slate-700" : "cursor-default text-slate-300"}`}
-                    aria-label="Tilbake"
-                  >
-                    <IconChevronLeft className="h-3.5 w-3.5" />
-                  </button>
-                  {breadcrumbs.map((item, index) => (
-                    <div key={`${item.label}-${index}`} className="flex items-center gap-1">
-                      {item.onClick ? (
-                        <button
-                          type="button"
-                          onClick={item.onClick}
-                          className="cursor-pointer text-slate-400 transition hover:text-slate-600"
-                        >
-                          {item.label}
-                        </button>
-                      ) : (
-                        <span className="text-slate-500">{item.label}</span>
-                      )}
-                      {index < breadcrumbs.length - 1 ? <span>/</span> : null}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Avtale</p>
-              <h2 className="text-2xl font-semibold text-slate-900">{headerTitle || "Avtale"}</h2>
-              {localRental?.rentalId ? (
-                <p className="text-sm text-slate-500">ID: {localRental.rentalId}</p>
-              ) : null}
-            </div>
-          </div>
+        <div className="relative border-b border-slate-100 px-6 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="cursor-pointer rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            className="absolute right-6 top-4 cursor-pointer rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
             aria-label="Lukk dialog"
           >
             <IconX className="h-5 w-5" />
           </button>
+          <div className="pointer-events-none absolute right-20 top-[3rem] flex h-10 items-center justify-end">
+            {localRental ? (
+              <span
+                className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ${
+                  isActive
+                    ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+                    : "bg-slate-100 text-slate-600 ring-slate-200"
+                }`}
+              >
+                {isActive ? "Aktiv" : "Inaktiv"}
+              </span>
+            ) : null}
+          </div>
+          <div className="pr-28">
+            {breadcrumbs?.length ? (
+              <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                <button
+                  type="button"
+                  onClick={onBack ?? onClose}
+                  className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+                  aria-label="Tilbake"
+                >
+                  <IconChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                {breadcrumbs.map((item, index) => (
+                  <div key={`${item.label}-${index}`} className="flex items-center gap-1">
+                    {item.onClick ? (
+                      <button
+                        type="button"
+                        onClick={item.onClick}
+                        className="cursor-pointer text-slate-400 transition hover:text-slate-600"
+                      >
+                        {item.label}
+                      </button>
+                    ) : (
+                      <span className="text-slate-500">{item.label}</span>
+                    )}
+                    {index < breadcrumbs.length - 1 ? <span>/</span> : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Avtale</p>
+            <h2 className="pr-[120px] text-2xl font-semibold text-slate-900">
+              {headerTitle || "Avtale"}
+            </h2>
+            {localRental?.rentalId ? (
+              <p className="text-sm text-slate-500">ID: {localRental.rentalId}</p>
+            ) : null}
+          </div>
         </div>
 
         <div className="space-y-5 px-6 py-5">
@@ -377,4 +390,33 @@ function formatValue(value?: string | number | null) {
     return "-";
   }
   return value;
+}
+
+function isRentalActive(rental: RentalDetails) {
+  const now = new Date();
+  const start = toBoundaryDate(rental.startDate, "start");
+  const end = toBoundaryDate(rental.endDate, "end");
+
+  if (start && now < start) return false;
+  if (end && now > end) return false;
+  return true;
+}
+
+function toBoundaryDate(
+  value?: string | Date | null,
+  boundary: "start" | "end" = "start",
+) {
+  if (!value) return null;
+  const date = value instanceof Date ? new Date(value) : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    if (boundary === "end") {
+      date.setHours(23, 59, 59, 999);
+    } else {
+      date.setHours(0, 0, 0, 0);
+    }
+  }
+
+  return date;
 }

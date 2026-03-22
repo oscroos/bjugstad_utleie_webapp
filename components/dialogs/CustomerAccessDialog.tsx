@@ -323,9 +323,8 @@ export default function CustomerAccessDialog({
                 <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                   <button
                     type="button"
-                    onClick={onBack}
-                    disabled={!onBack}
-                    className={`flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 transition ${onBack ? "cursor-pointer text-slate-500 hover:bg-slate-50 hover:text-slate-700" : "cursor-default text-slate-300"}`}
+                    onClick={onBack ?? onClose}
+                    className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
                     aria-label="Tilbake"
                   >
                     <IconChevronLeft className="h-3.5 w-3.5" />

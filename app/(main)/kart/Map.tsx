@@ -60,6 +60,8 @@ const OEM_COLOR_EXPRESSION = buildOemColorExpression() as unknown as maplibregl.
 
 export default function MapView({ features }: Props) {
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const bottomPanelRef = useRef<HTMLDivElement | null>(null);
+    const historyOverlayRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<Map | null>(null);
     const loadedRef = useRef(false);
     const appliedThemeRef = useRef<"light" | "dark">("light");
@@ -833,12 +835,37 @@ export default function MapView({ features }: Props) {
     // ---------- bottom panel size/collapse with click-or-drag divider ----------
     const [panelPx, setPanelPx] = useState<number>(280);
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isDraggingPanel, setIsDraggingPanel] = useState(false);
     const draggingRef = useRef(false);
     const dragStartYRef = useRef(0);
     const panelStartRef = useRef(panelPx);
+    const panelPxRef = useRef(280);
+    const collapsedRef = useRef(false);
     const movedRef = useRef(false);
     const lastNonZeroRef = useRef(280);
     const CLICK_THRESHOLD_PX = 5;
+
+    function applyPanelLayout(nextPanelPx: number, nextCollapsed: boolean) {
+        panelPxRef.current = nextPanelPx;
+        collapsedRef.current = nextCollapsed;
+
+        if (containerRef.current) {
+            containerRef.current.style.height = nextCollapsed ? "100vh" : `calc(100vh - ${nextPanelPx}px)`;
+        }
+
+        if (bottomPanelRef.current) {
+            bottomPanelRef.current.style.height = nextCollapsed ? "0px" : `${nextPanelPx}px`;
+        }
+
+        if (historyOverlayRef.current) {
+            historyOverlayRef.current.style.top = nextCollapsed ? "50vh" : `calc((100vh - ${nextPanelPx}px) / 2)`;
+        }
+    }
+
+    useEffect(() => {
+        applyPanelLayout(panelPx, isCollapsed);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [panelPx, isCollapsed]);
 
     useEffect(() => {
         function onMove(e: MouseEvent) {
@@ -846,30 +873,34 @@ export default function MapView({ features }: Props) {
             const dy = dragStartYRef.current - e.clientY;
             if (Math.abs(dy) > CLICK_THRESHOLD_PX) movedRef.current = true;
             const next = Math.max(0, panelStartRef.current + dy);
-            setPanelPx(next);
+            const nextCollapsed = next === 0;
             if (next > 0) {
                 lastNonZeroRef.current = next;
-                if (isCollapsed) setIsCollapsed(false);
-            } else {
-                setIsCollapsed(true);
             }
-            mapRef.current?.resize();
+            applyPanelLayout(next, nextCollapsed);
         }
         function onUp() {
             if (!draggingRef.current) return;
             draggingRef.current = false;
+            setIsDraggingPanel(false);
+            let nextPanelPx = panelPxRef.current;
+            let nextCollapsed = collapsedRef.current;
             // If mouse didn't move → treat as click toggle
             if (!movedRef.current) {
-                if (isCollapsed) {
+                if (collapsedRef.current) {
                     const h = Math.max(120, lastNonZeroRef.current || 280);
-                    setPanelPx(h);
-                    setIsCollapsed(false);
+                    nextPanelPx = h;
+                    nextCollapsed = false;
                 } else {
-                    setIsCollapsed(true);
-                    setPanelPx(0);
+                    nextPanelPx = 0;
+                    nextCollapsed = true;
                 }
-                setTimeout(() => mapRef.current?.resize(), 170);
+
+                applyPanelLayout(nextPanelPx, nextCollapsed);
             }
+
+            setPanelPx(nextPanelPx);
+            setIsCollapsed(nextCollapsed);
         }
         window.addEventListener("mousemove", onMove);
         window.addEventListener("mouseup", onUp);
@@ -877,7 +908,7 @@ export default function MapView({ features }: Props) {
             window.removeEventListener("mousemove", onMove);
             window.removeEventListener("mouseup", onUp);
         };
-    }, [isCollapsed]);
+    }, []);
 
     const mapHeightStyle = isCollapsed ? { height: "100vh" } : { height: `calc(100vh - ${panelPx}px)` };
     const historyOverlayStyle = {
@@ -943,6 +974,7 @@ export default function MapView({ features }: Props) {
 
             {historyOverlayOpen ? (
                 <div
+                    ref={historyOverlayRef}
                     className="pointer-events-none absolute right-5 z-10 w-[min(14rem,calc(100vw-2.5rem))] -translate-y-1/2"
                     style={historyOverlayStyle}
                 >
@@ -1047,8 +1079,9 @@ export default function MapView({ features }: Props) {
                 className="relative z-10 h-1.5 w-full cursor-row-resize bg-gradient-to-b from-transparent to-transparent hover:from-slate-200/60 hover:to-transparent"
                 onMouseDown={(e) => {
                     draggingRef.current = true;
+                    setIsDraggingPanel(true);
                     dragStartYRef.current = e.clientY;
-                    panelStartRef.current = panelPx;
+                    panelStartRef.current = panelPxRef.current;
                     movedRef.current = false;
                 }}
                 title="Klikk for å skjule/vise, dra for å endre høyde"
@@ -1061,7 +1094,8 @@ export default function MapView({ features }: Props) {
 
             {/* Bottom panel (all machines) */}
             <div
-                className={`w-full border-t border-slate-200 bg-white transition-[height] duration-150 ${isCollapsed ? "h-0 overflow-hidden" : "overflow-hidden"
+                ref={bottomPanelRef}
+                className={`w-full border-t border-slate-200 bg-white ${isDraggingPanel ? "transition-none" : "transition-[height] duration-150"} ${isCollapsed ? "h-0 overflow-hidden" : "overflow-hidden"
                     }`}
                 style={{ height: isCollapsed ? 0 : panelPx }}
             >

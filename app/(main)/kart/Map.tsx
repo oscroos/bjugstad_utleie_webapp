@@ -1,7 +1,7 @@
 // app/(main)/kart/Map.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FeatureCollection, Geometry, Point } from "geojson";
 import maplibregl, { Map, GeoJSONSource } from "maplibre-gl";
 import type { GeoJSONSourceSpecification, LayerSpecification, StyleSpecification } from "maplibre-gl";
@@ -104,6 +104,7 @@ export default function MapView({ features }: Props) {
     const ctx = useMachines();
     const machineList = useMachinesList();
     const data: MachinesFC = features ?? ctx;
+    const [visibleMachineIds, setVisibleMachineIds] = useState<string[] | null>(null);
 
     // Validate incoming features
     const safeFeatures = useMemo(() => {
@@ -119,6 +120,31 @@ export default function MapView({ features }: Props) {
         });
         return { type: "FeatureCollection", features: fs } as MachinesFC;
     }, [data]);
+
+    const visibleFeatures = useMemo(() => {
+        if (visibleMachineIds === null) return safeFeatures;
+        const idSet = new Set(visibleMachineIds.map(String));
+        return {
+            type: "FeatureCollection",
+            features: safeFeatures.features.filter((feature) =>
+                idSet.has(String(feature.properties?.id)),
+            ),
+        } as MachinesFC;
+    }, [safeFeatures, visibleMachineIds]);
+
+    const handleVisibleRowsChange = useCallback((rows: MachineListEntry[]) => {
+        const nextIds = rows.map((machine) => String(machine.id ?? ""));
+        setVisibleMachineIds((prev) => {
+            if (
+                prev !== null &&
+                prev.length === nextIds.length &&
+                prev.every((id, index) => id === nextIds[index])
+            ) {
+                return prev;
+            }
+            return nextIds;
+        });
+    }, []);
 
     const historyEntriesDesc = useMemo(
         () => [...historyEntries].reverse(),
@@ -607,7 +633,7 @@ export default function MapView({ features }: Props) {
     function focusMachineById(id: string | number) {
         const map = mapRef.current;
         if (!map) return;
-        const f = safeFeatures.features.find((x) => String(x.properties?.id) === String(id));
+        const f = visibleFeatures.features.find((x) => String(x.properties?.id) === String(id));
         if (!f) return;
 
         const coords = (f.geometry as Point).coordinates as [number, number];
@@ -709,13 +735,13 @@ export default function MapView({ features }: Props) {
 
         map.on("load", () => {
             loadedRef.current = true;
-            ensureDataLayers(map, safeFeatures);
+            ensureDataLayers(map, visibleFeatures);
             ensureHistoryLayers(map, historyDataRef.current, historyColorRef.current);
             reapplyAllVisibilities(map);
             applyLabelContrast(map, theme);
             bringMachineLayersToTop(map);
             ensureInteractions(map);
-            fitToFeatures(map, safeFeatures);
+            fitToFeatures(map, visibleFeatures);
         });
 
         // Resize listener
@@ -756,7 +782,7 @@ export default function MapView({ features }: Props) {
             if (cancelled || !baseStyle) return;
 
             const nextStyle = cloneStyle(baseStyle);
-            addMachinesToStyle(nextStyle, safeFeatures);
+            addMachinesToStyle(nextStyle, visibleFeatures);
             addHistoryToStyle(nextStyle, historyDataRef.current, historyColorRef.current);
             applyVisibilityToStyle(nextStyle, {
                 labels: labelsVisibleRef.current,
@@ -769,7 +795,7 @@ export default function MapView({ features }: Props) {
 
             // Re-attach once the new style (+glyphs) is fully ready
             stableMap.once("style.load", () => {
-                ensureDataLayers(stableMap, safeFeatures);
+                ensureDataLayers(stableMap, visibleFeatures);
                 ensureHistoryLayers(stableMap, historyDataRef.current, historyColorRef.current);
                 reapplyAllVisibilities(stableMap);
                 applyLabelContrast(stableMap, themeRef.current);
@@ -781,7 +807,7 @@ export default function MapView({ features }: Props) {
         return () => {
             cancelled = true;
         };
-    }, [theme, safeFeatures]);
+    }, [theme, visibleFeatures]);
 
     // ---------- visibility toggles ----------
     useEffect(() => {
@@ -821,10 +847,10 @@ export default function MapView({ features }: Props) {
         if (!map || !loadedRef.current) return;
         const src = map.getSource("machines") as GeoJSONSource | undefined;
         if (src) {
-            src.setData(safeFeatures);
-            fitToFeatures(map, safeFeatures, { onlyIfChanged: true });
+            src.setData(visibleFeatures);
+            fitToFeatures(map, visibleFeatures, { onlyIfChanged: true });
         }
-    }, [safeFeatures]);
+    }, [visibleFeatures]);
 
     useEffect(() => {
         historyDataRef.current = buildHistoryFeatureCollection(
@@ -1197,6 +1223,7 @@ export default function MapView({ features }: Props) {
                                 .filter(Boolean)
                                 .join(" ");
                         }}
+                        onVisibleRowsChange={handleVisibleRowsChange}
                     />
                 </div>
             </div>

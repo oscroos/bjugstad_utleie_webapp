@@ -31,6 +31,7 @@ type DataTableProps<T> = {
   onRowClick?: (row: T) => void;
   isRowClickable?: (row: T) => boolean;
   getRowClassName?: (row: T) => string | undefined;
+  onVisibleRowsChange?: (rows: T[]) => void;
 };
 
 type SortState = {
@@ -117,6 +118,7 @@ export function DataTable<T>({
   onRowClick,
   isRowClickable,
   getRowClassName,
+  onVisibleRowsChange,
 }: DataTableProps<T>) {
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [sortState, setSortState] = useState<SortState>({
@@ -245,6 +247,10 @@ export function DataTable<T>({
     const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
     setCurrentPage((prev) => (prev > totalPages ? totalPages : prev));
   }, [sortedRows.length, pageSize]);
+
+  useEffect(() => {
+    onVisibleRowsChange?.(sortedRows);
+  }, [onVisibleRowsChange, sortedRows]);
 
   useEffect(() => {
     setCurrentPage(1);

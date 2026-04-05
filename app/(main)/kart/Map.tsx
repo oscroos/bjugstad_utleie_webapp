@@ -1,7 +1,7 @@
 // app/(main)/kart/Map.tsx
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { FeatureCollection, Geometry, Point } from "geojson";
 import maplibregl, { Map, GeoJSONSource } from "maplibre-gl";
 import type { GeoJSONSourceSpecification, LayerSpecification, StyleSpecification } from "maplibre-gl";
@@ -40,6 +40,11 @@ type HistoryFeatureCollection = FeatureCollection<
 
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 const SHOW_HISTORY_LABEL = "Se siste bevegelser";
+const HISTORY_OVERLAY_EDGE_PX = 16;
+const HISTORY_OVERLAY_MIN_VISIBLE_OBSERVATIONS = 2;
+const HISTORY_OVERLAY_OBSERVATION_ROW_FALLBACK_PX = 56;
+const HISTORY_OVERLAY_OBSERVATIONS_TITLE_FALLBACK_PX = 24;
+const HISTORY_OVERLAY_COMPACT_SCROLL_BUFFER_PX = 12;
 const HISTORY_INTERVAL_OPTIONS = [
     { label: "Alle", valueMs: 0 },
     { label: "15 min", valueMs: 15 * 60 * 1000 },
@@ -77,6 +82,10 @@ export default function MapView({ features }: Props) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const bottomPanelRef = useRef<HTMLDivElement | null>(null);
     const historyOverlayRef = useRef<HTMLDivElement | null>(null);
+    const historyOverlayCardRef = useRef<HTMLDivElement | null>(null);
+    const historyOverlayHeaderRef = useRef<HTMLDivElement | null>(null);
+    const historyOverlayFiltersRef = useRef<HTMLDivElement | null>(null);
+    const historyObservationsTitleRef = useRef<HTMLDivElement | null>(null);
     const resizeOverlayRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<Map | null>(null);
     const loadedRef = useRef(false);
@@ -98,6 +107,7 @@ export default function MapView({ features }: Props) {
     const [historyMachineName, setHistoryMachineName] = useState<string | null>(null);
     const [historyColor, setHistoryColor] = useState<string>(OEM_COLORS.default);
     const [historyOverlayOpen, setHistoryOverlayOpen] = useState(false);
+    const [historyOverlayUsesFullCardScroll, setHistoryOverlayUsesFullCardScroll] = useState(false);
     const [selectedHistoryEntryId, setSelectedHistoryEntryId] = useState<string | null>(null);
     const [historyRangeStartIndex, setHistoryRangeStartIndex] = useState(0);
     const [historyRangeEndIndex, setHistoryRangeEndIndex] = useState(0);
@@ -947,6 +957,62 @@ export default function MapView({ features }: Props) {
         row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }, [selectedHistoryEntryId, historyOverlayOpen]);
 
+    const updateHistoryOverlayScrollMode = useCallback(() => {
+        if (!historyOverlayOpen) {
+            setHistoryOverlayUsesFullCardScroll(false);
+            return;
+        }
+
+        const card = historyOverlayCardRef.current;
+        const header = historyOverlayHeaderRef.current;
+        const filters = historyOverlayFiltersRef.current;
+        if (!card || !header || !filters) return;
+
+        const availableObservationsHeight = card.clientHeight - header.offsetHeight - filters.offsetHeight;
+        const titleHeight =
+            historyObservationsTitleRef.current?.offsetHeight ?? HISTORY_OVERLAY_OBSERVATIONS_TITLE_FALLBACK_PX;
+        const rowElements = Array.from(
+            card.querySelectorAll<HTMLElement>("[data-history-observation-row='true']"),
+        );
+        const rowsToKeepVisible = Math.min(
+            HISTORY_OVERLAY_MIN_VISIBLE_OBSERVATIONS,
+            Math.max(rowElements.length, 1),
+        );
+        const visibleRowsHeight = rowElements
+            .slice(0, rowsToKeepVisible)
+            .reduce((sum, row) => sum + row.offsetHeight, 0);
+        const fallbackRowsHeight = rowsToKeepVisible * HISTORY_OVERLAY_OBSERVATION_ROW_FALLBACK_PX;
+        const requiredObservationsHeight =
+            titleHeight +
+            (visibleRowsHeight || fallbackRowsHeight) +
+            HISTORY_OVERLAY_COMPACT_SCROLL_BUFFER_PX;
+
+        setHistoryOverlayUsesFullCardScroll(availableObservationsHeight <= requiredObservationsHeight);
+    }, [historyOverlayOpen]);
+
+    useLayoutEffect(() => {
+        if (!historyOverlayOpen) {
+            setHistoryOverlayUsesFullCardScroll(false);
+            return;
+        }
+
+        updateHistoryOverlayScrollMode();
+
+        const observer = new ResizeObserver(() => {
+            updateHistoryOverlayScrollMode();
+        });
+
+        if (containerRef.current) observer.observe(containerRef.current);
+        if (historyOverlayCardRef.current) observer.observe(historyOverlayCardRef.current);
+        if (historyOverlayHeaderRef.current) observer.observe(historyOverlayHeaderRef.current);
+        if (historyOverlayFiltersRef.current) observer.observe(historyOverlayFiltersRef.current);
+        if (historyObservationsTitleRef.current) observer.observe(historyObservationsTitleRef.current);
+
+        return () => {
+            observer.disconnect();
+        };
+    }, [historyOverlayOpen, historyEntriesDesc.length, updateHistoryOverlayScrollMode]);
+
     // ---------- bottom panel size/collapse with click-or-drag divider ----------
     const [panelPx, setPanelPx] = useState<number>(280);
     const [isCollapsed, setIsCollapsed] = useState(false);
@@ -982,7 +1048,9 @@ export default function MapView({ features }: Props) {
         }
 
         if (historyOverlayRef.current) {
-            historyOverlayRef.current.style.top = nextCollapsed ? "50vh" : `calc((100vh - ${nextPanelPx}px) / 2)`;
+            const nextHistoryOverlayStyle = getHistoryOverlayLayout(nextPanelPx, nextCollapsed);
+            historyOverlayRef.current.style.top = nextHistoryOverlayStyle.top;
+            historyOverlayRef.current.style.bottom = nextHistoryOverlayStyle.bottom;
         }
     }
 
@@ -1057,9 +1125,7 @@ export default function MapView({ features }: Props) {
     }, []);
 
     const mapHeightStyle = isCollapsed ? { height: "100vh" } : { height: `calc(100vh - ${panelPx}px)` };
-    const historyOverlayStyle = {
-        top: isCollapsed ? "50vh" : `calc((100vh - ${panelPx}px) / 2)`,
-    };
+    const historyOverlayStyle = getHistoryOverlayLayout(panelPx, isCollapsed);
     const shouldShowResizeOverlay = isHoldingDivider || isWindowResizing;
 
     return (
@@ -1152,11 +1218,20 @@ export default function MapView({ features }: Props) {
             {historyOverlayOpen ? (
                 <div
                     ref={historyOverlayRef}
-                    className="pointer-events-none absolute right-5 z-10 w-[min(14rem,calc(100vw-2.5rem))] -translate-y-1/2"
+                    className="pointer-events-none absolute right-5 z-10 flex w-[min(14rem,calc(100vw-2.5rem))] items-center"
                     style={historyOverlayStyle}
                 >
-                    <div className="pointer-events-auto overflow-hidden rounded-2xl border border-slate-200 bg-white/95 shadow-xl backdrop-blur">
-                        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                    <div
+                        ref={historyOverlayCardRef}
+                        className={`pointer-events-auto flex max-h-full w-full flex-col rounded-2xl border border-slate-200 bg-white/95 shadow-xl backdrop-blur ${historyOverlayUsesFullCardScroll
+                            ? "overflow-y-auto overscroll-contain"
+                            : "overflow-hidden"
+                            }`}
+                    >
+                        <div
+                            ref={historyOverlayHeaderRef}
+                            className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3"
+                        >
                             <div className="min-w-0">
                                 <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                                     Siste bevegelser
@@ -1182,7 +1257,7 @@ export default function MapView({ features }: Props) {
                                 </svg>
                             </button>
                         </div>
-                        <div className="border-b border-slate-200 py-3">
+                        <div ref={historyOverlayFiltersRef} className="border-b border-slate-200 py-3">
                             <section className="space-y-2 px-4">
                                 <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                                     Tidsrom
@@ -1240,8 +1315,13 @@ export default function MapView({ features }: Props) {
                                 </div>
                             </section>
                         </div>
-                        <div className="max-h-[min(42vh,24rem)] overflow-auto px-3 py-3">
-                            <div className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                        <div
+                            className={historyOverlayUsesFullCardScroll ? "px-3 py-3" : "min-h-0 flex-1 overflow-auto px-3 py-3"}
+                        >
+                            <div
+                                ref={historyObservationsTitleRef}
+                                className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500"
+                            >
                                 Observasjoner
                             </div>
                             {historyEntriesDesc.length ? (
@@ -1257,6 +1337,7 @@ export default function MapView({ features }: Props) {
                                             <button
                                                 key={entry.id}
                                                 type="button"
+                                                data-history-observation-row="true"
                                                 ref={(node) => {
                                                     historyRowRefs.current[entry.id] = node;
                                                 }}
@@ -1526,6 +1607,13 @@ function getLatestHistoryEntryId(history: MachinePositionHistoryEntry[]) {
 
 function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
+}
+
+function getHistoryOverlayLayout(panelPx: number, isCollapsed: boolean) {
+    return {
+        top: `${HISTORY_OVERLAY_EDGE_PX}px`,
+        bottom: `${isCollapsed ? HISTORY_OVERLAY_EDGE_PX : panelPx + HISTORY_OVERLAY_EDGE_PX}px`,
+    };
 }
 
 function filterHistoryEntriesByMinimumGap(

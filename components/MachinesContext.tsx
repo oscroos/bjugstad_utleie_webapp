@@ -5,7 +5,7 @@ import { createContext, useContext } from "react";
 import type { AppError } from "@/lib/errors";
 import type { MachinesFC, MachineFeature, MachineProps, MachineListEntry, MachinesData } from "@/types/machines";
 
-/** Ensure we always have { id, name, last_pos_reported_at } on properties */
+/** Ensure we always have the core machine fields on properties */
 function normalizeMachinesFC(input: any): MachinesFC {
     const features: MachineFeature[] = (input?.features ?? []).map((f: any) => {
         const p = f?.properties ?? {};
@@ -13,6 +13,7 @@ function normalizeMachinesFC(input: any): MachinesFC {
             id: p.id,
             name: p.name ?? "",
             oem_name: p.oem_name ?? "",
+            category: p.category != null ? String(p.category) : null,
             last_pos_reported_at:
                 p.last_pos_reported_at != null ? String(p.last_pos_reported_at) : null,
         };
@@ -32,6 +33,7 @@ function normalizeMachinesList(input: any): MachineListEntry[] {
         id: entry?.id,
         name: String(entry?.name ?? "N/A"),
         oem_name: String(entry?.oem_name ?? "N/A"),
+        category: entry?.category != null ? String(entry.category) : null,
         last_pos_reported_at:
             entry?.last_pos_reported_at != null ? String(entry.last_pos_reported_at) : null,
         lat: entry?.lat != null ? Number(entry.lat) : null,

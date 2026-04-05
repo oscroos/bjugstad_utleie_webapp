@@ -261,13 +261,18 @@ export default function MapView({ features }: Props) {
             cellClassName: "align-middle",
         },
         {
-            id: "type",
-            header: "Type",
-            accessor: () => "",
-            cell: () => <span className="text-slate-400">-</span>,
-            sortValue: () => "",
-            filterValue: () => "-",
-            cellClassName: "text-slate-400 align-middle",
+            id: "category",
+            header: "Kategori",
+            accessor: (machine) => machine.category ?? "",
+            cell: (machine) =>
+                machine.category ? (
+                    <span className="text-slate-700">{machine.category}</span>
+                ) : (
+                    <span className="text-slate-400">-</span>
+                ),
+            sortValue: (machine) => (machine.category ?? "").toLowerCase(),
+            filterValue: (machine) => machine.category ?? "-",
+            cellClassName: "align-middle",
         },
         {
             id: "activeAgreement",
@@ -1137,317 +1142,317 @@ export default function MapView({ features }: Props) {
 
                 return (
                     <div className="relative flex h-screen w-full flex-col">
-            {/* Controls (top-left stack) */}
-            <div className="pointer-events-none absolute left-3 top-3 z-10 flex flex-col gap-2">
-                <div className="pointer-events-auto">
-                    <SegmentedIconToggle
-                        value={theme === "light"}
-                        onChange={(on) => setTheme(on ? "light" : "dark")}
-                        LeftIcon={IconSun}
-                        RightIcon={IconMoon}
-                        ariaLabel="Map style"
-                        title="Kartstil"
-                        leftTitle="Lyst kart"
-                        rightTitle="Mørkt kart"
-                    />
-                </div>
-                <div className="pointer-events-auto">
-                    <SegmentedIconToggle
-                        value={labelsVisible}
-                        onChange={(on) => setLabelsVisible(on)}
-                        LeftIcon={IconWriting}
-                        RightIcon={IconWritingOff}
-                        ariaLabel="Place names"
-                        title="Stedsnavn"
-                        leftTitle="Vis stedsnavn"
-                        rightTitle="Skjul stedsnavn"
-                    />
-                </div>
-                <div className="pointer-events-auto">
-                    <SegmentedIconToggle
-                        value={bordersVisible}
-                        onChange={(on) => setBordersVisible(on)}
-                        LeftIcon={IconFlag}
-                        RightIcon={IconFlagOff}
-                        ariaLabel="Borders"
-                        title="Grenser"
-                        leftTitle="Vis grenser"
-                        rightTitle="Skjul grenser"
-                    />
-                </div>
-                <div className="pointer-events-auto">
-                    <SegmentedIconToggle
-                        value={roadsVisible}
-                        onChange={(on) => setRoadsVisible(on)}
-                        LeftIcon={IconRoad}
-                        RightIcon={IconRoadOff}
-                        ariaLabel="Roads"
-                        title="Veger/veier"
-                        leftTitle="Vis veier"
-                        rightTitle="Skjul veier"
-                    />
-                </div>
-            </div>
-
-            {/* Map */}
-            <div
-                ref={containerRef}
-                className={`w-full transition-opacity duration-75 ${shouldShowResizeOverlay ? "opacity-0" : "opacity-100"}`}
-                style={mapHeightStyle}
-            />
-            {shouldShowResizeOverlay ? (
-                <div
-                    ref={resizeOverlayRef}
-                    className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-center bg-slate-900/12 backdrop-blur-[2px]"
-                    style={mapHeightStyle}
-                    aria-hidden="true"
-                >
-                    <div className="rounded-2xl border border-white/50 bg-white/80 px-6 py-5 shadow-lg backdrop-blur-md">
-                        <Image
-                            src="/bjugstad-logos/horizontal/Color.png"
-                            alt="Bjugstad Utleie"
-                            width={220}
-                            height={56}
-                            className="h-12 w-auto object-contain"
-                            priority={false}
-                        />
-                    </div>
-                </div>
-            ) : null}
-
-            {historyOverlayOpen ? (
-                <div
-                    ref={historyOverlayRef}
-                    className="pointer-events-none absolute right-5 z-10 flex w-[min(14rem,calc(100vw-2.5rem))] items-center"
-                    style={historyOverlayStyle}
-                >
-                    <div
-                        ref={historyOverlayCardRef}
-                        className={`pointer-events-auto flex max-h-full w-full flex-col rounded-2xl border border-slate-200 bg-white/95 shadow-xl backdrop-blur ${historyOverlayUsesFullCardScroll
-                            ? "overflow-y-auto overscroll-contain"
-                            : "overflow-hidden"
-                            }`}
-                    >
-                        <div
-                            ref={historyOverlayHeaderRef}
-                            className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3"
-                        >
-                            <div className="min-w-0">
-                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                                    Siste bevegelser
-                                </div>
-                                <div className="truncate text-sm font-semibold text-slate-900">
-                                    {historyMachineName ?? "Maskin"}
-                                </div>
-                                <div className="text-xs text-slate-500">
-                                    {historyEntriesDesc.length === historyEntries.length
-                                        ? `${historyEntriesDesc.length} posisjoner`
-                                        : `${historyEntriesDesc.length} av ${historyEntries.length} posisjoner vises`}
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => clearMachineHistory()}
-                                className="cursor-pointer rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-                                aria-label="Lukk historikk"
-                                title="Lukk historikk"
-                            >
-                                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </button>
-                        </div>
-                        <div ref={historyOverlayFiltersRef} className="border-b border-slate-200 py-3">
-                            <section className="space-y-2 px-4">
-                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                                    Tidsrom
-                                </div>
-                                <HistoryRangeSlider
-                                    min={0}
-                                    max={maxHistoryIndex}
-                                    startValue={safeHistoryRangeStartIndex}
-                                    endValue={safeHistoryRangeEndIndex}
-                                    disabled={historyEntries.length < 2}
-                                    onStartChange={(nextValue) => {
-                                        setHistoryRangeStartIndex(Math.min(nextValue, safeHistoryRangeEndIndex));
-                                    }}
-                                    onEndChange={(nextValue) => {
-                                        setHistoryRangeEndIndex(Math.max(nextValue, safeHistoryRangeStartIndex));
-                                    }}
+                        {/* Controls (top-left stack) */}
+                        <div className="pointer-events-none absolute left-3 top-3 z-10 flex flex-col gap-2">
+                            <div className="pointer-events-auto">
+                                <SegmentedIconToggle
+                                    value={theme === "light"}
+                                    onChange={(on) => setTheme(on ? "light" : "dark")}
+                                    LeftIcon={IconSun}
+                                    RightIcon={IconMoon}
+                                    ariaLabel="Map style"
+                                    title="Kartstil"
+                                    leftTitle="Lyst kart"
+                                    rightTitle="Mørkt kart"
                                 />
-                                <div className="flex items-start justify-between gap-3 text-[11px] text-slate-500">
-                                    <span className="min-w-0 whitespace-pre-line leading-tight">
-                                        {historyRangeStartEntry
-                                            ? formatHistoryFilterTimestamp(historyRangeStartEntry.reported_at)
-                                            : "Tidligst"}
-                                    </span>
-                                    <span className="min-w-0 whitespace-pre-line text-right leading-tight">
-                                        {historyRangeEndEntry
-                                            ? formatHistoryFilterTimestamp(historyRangeEndEntry.reported_at)
-                                            : "Senest"}
-                                    </span>
-                                </div>
-                            </section>
-
-                            <div className="mt-4 border-t border-slate-200" />
-
-                            <section className="space-y-2 px-4 pt-4">
-                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                                    Observasjonsfrekvens
-                                </div>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {HISTORY_INTERVAL_OPTIONS.map((option) => {
-                                        const active = option.valueMs === historyObservationGapMs;
-                                        return (
-                                            <button
-                                                key={option.valueMs}
-                                                type="button"
-                                                onClick={() => setHistoryObservationGapMs(option.valueMs)}
-                                                className={`cursor-pointer rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${active
-                                                    ? "border-sky-300 bg-sky-50 text-sky-700"
-                                                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900"
-                                                    }`}
-                                            >
-                                                {option.label}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </section>
-                        </div>
-                        <div
-                            className={historyOverlayUsesFullCardScroll ? "px-3 py-3" : "min-h-0 flex-1 overflow-auto px-3 py-3"}
-                        >
-                            <div
-                                ref={historyObservationsTitleRef}
-                                className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500"
-                            >
-                                Observasjoner
                             </div>
-                            {historyEntriesDesc.length ? (
-                                <div className="relative pt-2">
-                                    {historyEntriesDesc.length > 1 ? (
+                            <div className="pointer-events-auto">
+                                <SegmentedIconToggle
+                                    value={labelsVisible}
+                                    onChange={(on) => setLabelsVisible(on)}
+                                    LeftIcon={IconWriting}
+                                    RightIcon={IconWritingOff}
+                                    ariaLabel="Place names"
+                                    title="Stedsnavn"
+                                    leftTitle="Vis stedsnavn"
+                                    rightTitle="Skjul stedsnavn"
+                                />
+                            </div>
+                            <div className="pointer-events-auto">
+                                <SegmentedIconToggle
+                                    value={bordersVisible}
+                                    onChange={(on) => setBordersVisible(on)}
+                                    LeftIcon={IconFlag}
+                                    RightIcon={IconFlagOff}
+                                    ariaLabel="Borders"
+                                    title="Grenser"
+                                    leftTitle="Vis grenser"
+                                    rightTitle="Skjul grenser"
+                                />
+                            </div>
+                            <div className="pointer-events-auto">
+                                <SegmentedIconToggle
+                                    value={roadsVisible}
+                                    onChange={(on) => setRoadsVisible(on)}
+                                    LeftIcon={IconRoad}
+                                    RightIcon={IconRoadOff}
+                                    ariaLabel="Roads"
+                                    title="Veger/veier"
+                                    leftTitle="Vis veier"
+                                    rightTitle="Skjul veier"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Map */}
+                        <div
+                            ref={containerRef}
+                            className={`w-full transition-opacity duration-75 ${shouldShowResizeOverlay ? "opacity-0" : "opacity-100"}`}
+                            style={mapHeightStyle}
+                        />
+                        {shouldShowResizeOverlay ? (
+                            <div
+                                ref={resizeOverlayRef}
+                                className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-center bg-slate-900/12 backdrop-blur-[2px]"
+                                style={mapHeightStyle}
+                                aria-hidden="true"
+                            >
+                                <div className="rounded-2xl border border-white/50 bg-white/80 px-6 py-5 shadow-lg backdrop-blur-md">
+                                    <Image
+                                        src="/bjugstad-logos/horizontal/Color.png"
+                                        alt="Bjugstad Utleie"
+                                        width={220}
+                                        height={56}
+                                        className="h-12 w-auto object-contain"
+                                        priority={false}
+                                    />
+                                </div>
+                            </div>
+                        ) : null}
+
+                        {historyOverlayOpen ? (
+                            <div
+                                ref={historyOverlayRef}
+                                className="pointer-events-none absolute right-5 z-10 flex w-[min(14rem,calc(100vw-2.5rem))] items-center"
+                                style={historyOverlayStyle}
+                            >
+                                <div
+                                    ref={historyOverlayCardRef}
+                                    className={`pointer-events-auto flex max-h-full w-full flex-col rounded-2xl border border-slate-200 bg-white/95 shadow-xl backdrop-blur ${historyOverlayUsesFullCardScroll
+                                        ? "overflow-y-auto overscroll-contain"
+                                        : "overflow-hidden"
+                                        }`}
+                                >
+                                    <div
+                                        ref={historyOverlayHeaderRef}
+                                        className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3"
+                                    >
+                                        <div className="min-w-0">
+                                            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                                Siste bevegelser
+                                            </div>
+                                            <div className="truncate text-sm font-semibold text-slate-900">
+                                                {historyMachineName ?? "Maskin"}
+                                            </div>
+                                            <div className="text-xs text-slate-500">
+                                                {historyEntriesDesc.length === historyEntries.length
+                                                    ? `${historyEntriesDesc.length} posisjoner`
+                                                    : `${historyEntriesDesc.length} av ${historyEntries.length} posisjoner vises`}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => clearMachineHistory()}
+                                            className="cursor-pointer rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                                            aria-label="Lukk historikk"
+                                            title="Lukk historikk"
+                                        >
+                                            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <div ref={historyOverlayFiltersRef} className="border-b border-slate-200 py-3">
+                                        <section className="space-y-2 px-4">
+                                            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                                Tidsrom
+                                            </div>
+                                            <HistoryRangeSlider
+                                                min={0}
+                                                max={maxHistoryIndex}
+                                                startValue={safeHistoryRangeStartIndex}
+                                                endValue={safeHistoryRangeEndIndex}
+                                                disabled={historyEntries.length < 2}
+                                                onStartChange={(nextValue) => {
+                                                    setHistoryRangeStartIndex(Math.min(nextValue, safeHistoryRangeEndIndex));
+                                                }}
+                                                onEndChange={(nextValue) => {
+                                                    setHistoryRangeEndIndex(Math.max(nextValue, safeHistoryRangeStartIndex));
+                                                }}
+                                            />
+                                            <div className="flex items-start justify-between gap-3 text-[11px] text-slate-500">
+                                                <span className="min-w-0 whitespace-pre-line leading-tight">
+                                                    {historyRangeStartEntry
+                                                        ? formatHistoryFilterTimestamp(historyRangeStartEntry.reported_at)
+                                                        : "Tidligst"}
+                                                </span>
+                                                <span className="min-w-0 whitespace-pre-line text-right leading-tight">
+                                                    {historyRangeEndEntry
+                                                        ? formatHistoryFilterTimestamp(historyRangeEndEntry.reported_at)
+                                                        : "Senest"}
+                                                </span>
+                                            </div>
+                                        </section>
+
+                                        <div className="mt-4 border-t border-slate-200" />
+
+                                        <section className="space-y-2 px-4 pt-4">
+                                            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                                Observasjonsfrekvens
+                                            </div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {HISTORY_INTERVAL_OPTIONS.map((option) => {
+                                                    const active = option.valueMs === historyObservationGapMs;
+                                                    return (
+                                                        <button
+                                                            key={option.valueMs}
+                                                            type="button"
+                                                            onClick={() => setHistoryObservationGapMs(option.valueMs)}
+                                                            className={`cursor-pointer rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${active
+                                                                ? "border-sky-300 bg-sky-50 text-sky-700"
+                                                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                                                                }`}
+                                                        >
+                                                            {option.label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </section>
+                                    </div>
+                                    <div
+                                        className={historyOverlayUsesFullCardScroll ? "px-3 py-3" : "min-h-0 flex-1 overflow-auto px-3 py-3"}
+                                    >
                                         <div
-                                            className="absolute bottom-4 left-4 top-4 w-px"
-                                            style={{ backgroundColor: historyColor }}
-                                        />
-                                    ) : null}
-                                    <div className="space-y-0.5">
-                                        {historyEntriesDesc.map((entry, index) => (
-                                            <button
-                                                key={entry.id}
-                                                type="button"
-                                                data-history-observation-row="true"
-                                                ref={(node) => {
-                                                    historyRowRefs.current[entry.id] = node;
-                                                }}
-                                                onClick={() => {
-                                                    setSelectedHistoryEntryId(entry.id);
-                                                    mapRef.current?.easeTo({
-                                                        center: [entry.lng, entry.lat],
-                                                        zoom: Math.max(mapRef.current?.getZoom() ?? 0, 14),
-                                                        duration: 400,
-                                                    });
-                                                }}
-                                                className="relative block w-full pl-11 pr-1 py-1.5 text-left"
-                                            >
-                                                <div className="absolute left-1 top-1.5 flex w-6 justify-center">
+                                            ref={historyObservationsTitleRef}
+                                            className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500"
+                                        >
+                                            Observasjoner
+                                        </div>
+                                        {historyEntriesDesc.length ? (
+                                            <div className="relative pt-2">
+                                                {historyEntriesDesc.length > 1 ? (
                                                     <div
-                                                        className="relative flex h-3 w-3 items-center justify-center rounded-full border-2 bg-white shadow-sm"
-                                                        style={{
-                                                            borderColor: historyColor,
-                                                            backgroundColor:
-                                                                entry.id === currentHistoryEntryId ? historyColor : "#ffffff",
-                                                        }}
-                                                    >
-                                                        {selectedHistoryEntryId === entry.id ? (
-                                                            <>
-                                                                <span className="absolute inset-[-4px] rounded-full border-2 border-[#22C55E]" />
-                                                                <span className="h-1.5 w-1.5 rounded-full bg-[#22C55E]" />
-                                                            </>
-                                                        ) : null}
-                                                    </div>
+                                                        className="absolute bottom-4 left-4 top-4 w-px"
+                                                        style={{ backgroundColor: historyColor }}
+                                                    />
+                                                ) : null}
+                                                <div className="space-y-0.5">
+                                                    {historyEntriesDesc.map((entry, index) => (
+                                                        <button
+                                                            key={entry.id}
+                                                            type="button"
+                                                            data-history-observation-row="true"
+                                                            ref={(node) => {
+                                                                historyRowRefs.current[entry.id] = node;
+                                                            }}
+                                                            onClick={() => {
+                                                                setSelectedHistoryEntryId(entry.id);
+                                                                mapRef.current?.easeTo({
+                                                                    center: [entry.lng, entry.lat],
+                                                                    zoom: Math.max(mapRef.current?.getZoom() ?? 0, 14),
+                                                                    duration: 400,
+                                                                });
+                                                            }}
+                                                            className="relative block w-full pl-11 pr-1 py-1.5 text-left"
+                                                        >
+                                                            <div className="absolute left-1 top-1.5 flex w-6 justify-center">
+                                                                <div
+                                                                    className="relative flex h-3 w-3 items-center justify-center rounded-full border-2 bg-white shadow-sm"
+                                                                    style={{
+                                                                        borderColor: historyColor,
+                                                                        backgroundColor:
+                                                                            entry.id === currentHistoryEntryId ? historyColor : "#ffffff",
+                                                                    }}
+                                                                >
+                                                                    {selectedHistoryEntryId === entry.id ? (
+                                                                        <>
+                                                                            <span className="absolute inset-[-4px] rounded-full border-2 border-[#22C55E]" />
+                                                                            <span className="h-1.5 w-1.5 rounded-full bg-[#22C55E]" />
+                                                                        </>
+                                                                    ) : null}
+                                                                </div>
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <div className="text-sm font-semibold leading-tight text-slate-900">
+                                                                    {formatLastUpdated(entry.reported_at)}
+                                                                </div>
+                                                                {index < historyEntriesDesc.length - 1 ? (
+                                                                    <div className="pt-2 text-[11px] font-medium leading-none text-slate-400">
+                                                                        {formatDurationBetween(
+                                                                            entry.reported_at,
+                                                                            historyEntriesDesc[index + 1]?.reported_at,
+                                                                        )}
+                                                                    </div>
+                                                                ) : null}
+                                                            </div>
+                                                        </button>
+                                                    ))}
                                                 </div>
-                                                <div className="min-w-0">
-                                                    <div className="text-sm font-semibold leading-tight text-slate-900">
-                                                        {formatLastUpdated(entry.reported_at)}
-                                                    </div>
-                                                    {index < historyEntriesDesc.length - 1 ? (
-                                                        <div className="pt-2 text-[11px] font-medium leading-none text-slate-400">
-                                                            {formatDurationBetween(
-                                                                entry.reported_at,
-                                                                historyEntriesDesc[index + 1]?.reported_at,
-                                                            )}
-                                                        </div>
-                                                    ) : null}
-                                                </div>
-                                            </button>
-                                        ))}
+                                            </div>
+                                        ) : (
+                                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                                                Ingen tidligere posisjoner funnet for denne maskinen.
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
-                            ) : (
-                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
-                                    Ingen tidligere posisjoner funnet for denne maskinen.
-                                </div>
-                            )}
+                            </div>
+                        ) : null}
+
+                        {/* Divider (click = toggle, drag = resize) - SHORTER HEIGHT */}
+                        <div
+                            className="relative z-10 h-1.5 w-full cursor-row-resize bg-gradient-to-b from-transparent to-transparent hover:from-slate-200/60 hover:to-transparent"
+                            onMouseDown={(e) => {
+                                draggingRef.current = true;
+                                setIsDraggingPanel(true);
+                                setIsHoldingDivider(true);
+                                dragStartYRef.current = e.clientY;
+                                panelStartRef.current = panelPxRef.current;
+                                movedRef.current = false;
+                            }}
+                            title="Klikk for å skjule/vise, dra for å endre høyde"
+                            aria-label="Skille mellom kart og tabell"
+                        >
+                            <div className="absolute left-1/2 top-0 -translate-x-1/2">
+                                <div className="h-1.5 w-12 rounded-full bg-slate-300" />
+                            </div>
                         </div>
-                    </div>
-                </div>
-            ) : null}
 
-            {/* Divider (click = toggle, drag = resize) - SHORTER HEIGHT */}
-            <div
-                className="relative z-10 h-1.5 w-full cursor-row-resize bg-gradient-to-b from-transparent to-transparent hover:from-slate-200/60 hover:to-transparent"
-                onMouseDown={(e) => {
-                    draggingRef.current = true;
-                    setIsDraggingPanel(true);
-                    setIsHoldingDivider(true);
-                    dragStartYRef.current = e.clientY;
-                    panelStartRef.current = panelPxRef.current;
-                    movedRef.current = false;
-                }}
-                title="Klikk for å skjule/vise, dra for å endre høyde"
-                aria-label="Skille mellom kart og tabell"
-            >
-                <div className="absolute left-1/2 top-0 -translate-x-1/2">
-                    <div className="h-1.5 w-12 rounded-full bg-slate-300" />
-                </div>
-            </div>
-
-            {/* Bottom panel (all machines) */}
-            <div
-                ref={bottomPanelRef}
-                className={`w-full border-t border-slate-200 bg-white ${isDraggingPanel ? "transition-none" : "transition-[height] duration-150"} ${isCollapsed ? "h-0 overflow-hidden" : "overflow-hidden"
-                    }`}
-                style={{ height: isCollapsed ? 0 : panelPx }}
-            >
-                <div className="h-full overflow-auto">
-                    <DataTable
-                        data={machineList}
-                        columns={columns}
-                        getRowId={(machine, index) => String(machine.id ?? index)}
-                        emptyMessage="Ingen maskiner a vise."
-                        defaultSort={{ columnId: "lastSeen", direction: "desc" }}
-                        onRowClick={(machine) => {
-                            if (hasMachineCoords(machine)) {
-                                focusMachineById(String(machine.id));
-                            }
-                        }}
-                        isRowClickable={(machine) => hasMachineCoords(machine)}
-                        getRowClassName={(machine) => {
-                            const hasCoords = hasMachineCoords(machine);
-                            const isSelected = String(selectedId) === String(machine.id);
-                            return [
-                                isSelected ? "bg-blue-50/60 ring-1 ring-inset ring-blue-300" : "",
-                                !hasCoords ? "cursor-default hover:bg-transparent" : "",
-                            ]
-                                .filter(Boolean)
-                                .join(" ");
-                        }}
-                        onVisibleRowsChange={handleVisibleRowsChange}
-                    />
-                </div>
-            </div>
+                        {/* Bottom panel (all machines) */}
+                        <div
+                            ref={bottomPanelRef}
+                            className={`w-full border-t border-slate-200 bg-white ${isDraggingPanel ? "transition-none" : "transition-[height] duration-150"} ${isCollapsed ? "h-0 overflow-hidden" : "overflow-hidden"
+                                }`}
+                            style={{ height: isCollapsed ? 0 : panelPx }}
+                        >
+                            <div className="h-full overflow-auto">
+                                <DataTable
+                                    data={machineList}
+                                    columns={columns}
+                                    getRowId={(machine, index) => String(machine.id ?? index)}
+                                    emptyMessage="Ingen maskiner a vise."
+                                    defaultSort={{ columnId: "lastSeen", direction: "desc" }}
+                                    onRowClick={(machine) => {
+                                        if (hasMachineCoords(machine)) {
+                                            focusMachineById(String(machine.id));
+                                        }
+                                    }}
+                                    isRowClickable={(machine) => hasMachineCoords(machine)}
+                                    getRowClassName={(machine) => {
+                                        const hasCoords = hasMachineCoords(machine);
+                                        const isSelected = String(selectedId) === String(machine.id);
+                                        return [
+                                            isSelected ? "bg-blue-50/60 ring-1 ring-inset ring-blue-300" : "",
+                                            !hasCoords ? "cursor-default hover:bg-transparent" : "",
+                                        ]
+                                            .filter(Boolean)
+                                            .join(" ");
+                                    }}
+                                    onVisibleRowsChange={handleVisibleRowsChange}
+                                />
+                            </div>
+                        </div>
                     </div>
                 );
             }}

@@ -77,6 +77,23 @@ export type TrackunitTelemetryRow = {
     km?: number | null;
 };
 
+type MachineHistorySourceRow = Pick<
+    MachineRow,
+    | "id"
+    | "telemetry_source"
+    | "last_pos_reported_at"
+    | "last_pos_latitude"
+    | "last_pos_longitude"
+    | "altitude"
+    | "speed"
+    | "heading"
+    | "km"
+>;
+
+export type MachineTelemetryRow = Omit<MachineHistorySourceRow, "telemetry_source"> & {
+    telemetry_source: string;
+};
+
 type MachinePositionHistoryRow = {
     machine_id: string;
     source: string;
@@ -93,7 +110,7 @@ function isFiniteNumber(value: unknown): value is number {
     return typeof value === "number" && Number.isFinite(value);
 }
 
-function toMachineHistoryRows(rows: MachineRow[]): MachinePositionHistoryRow[] {
+function toMachineHistoryRows(rows: MachineHistorySourceRow[]): MachinePositionHistoryRow[] {
     return rows.flatMap((row) => {
         if (!row.telemetry_source || !row.last_pos_reported_at) return [];
         if (!isFiniteNumber(row.last_pos_latitude) || !isFiniteNumber(row.last_pos_longitude)) return [];
@@ -169,6 +186,68 @@ async function insertMachinePositionHistory(
 
     const res = await client.query(sql, values);
     return res.rowCount ?? 0;
+}
+
+function buildTelemetryUpdateSql(placeholders: string[], keyColumn: "id" | "trackunit_id") {
+    return `
+    UPDATE machines AS m
+       SET last_updated = now(),
+           last_pos_reported_at = CASE
+             WHEN v.last_pos_reported_at::timestamp IS NOT NULL
+              AND (m.last_pos_reported_at IS NULL OR v.last_pos_reported_at::timestamp > m.last_pos_reported_at)
+             THEN v.last_pos_reported_at::timestamp
+             ELSE m.last_pos_reported_at
+           END,
+           last_pos_latitude = CASE
+             WHEN v.last_pos_reported_at::timestamp IS NOT NULL
+              AND (m.last_pos_reported_at IS NULL OR v.last_pos_reported_at::timestamp > m.last_pos_reported_at)
+             THEN COALESCE(v.last_pos_latitude::double precision, m.last_pos_latitude)
+             ELSE m.last_pos_latitude
+           END,
+           last_pos_longitude = CASE
+             WHEN v.last_pos_reported_at::timestamp IS NOT NULL
+              AND (m.last_pos_reported_at IS NULL OR v.last_pos_reported_at::timestamp > m.last_pos_reported_at)
+             THEN COALESCE(v.last_pos_longitude::double precision, m.last_pos_longitude)
+             ELSE m.last_pos_longitude
+           END,
+           altitude = CASE
+             WHEN v.last_pos_reported_at::timestamp IS NOT NULL
+              AND (m.last_pos_reported_at IS NULL OR v.last_pos_reported_at::timestamp > m.last_pos_reported_at)
+             THEN COALESCE(v.altitude::double precision, m.altitude)
+             ELSE m.altitude
+           END,
+           speed = CASE
+             WHEN v.last_pos_reported_at::timestamp IS NOT NULL
+              AND (m.last_pos_reported_at IS NULL OR v.last_pos_reported_at::timestamp > m.last_pos_reported_at)
+             THEN COALESCE(v.speed::double precision, m.speed)
+             ELSE m.speed
+           END,
+           heading = CASE
+             WHEN v.last_pos_reported_at::timestamp IS NOT NULL
+              AND (m.last_pos_reported_at IS NULL OR v.last_pos_reported_at::timestamp > m.last_pos_reported_at)
+             THEN COALESCE(v.heading::double precision, m.heading)
+             ELSE m.heading
+           END,
+           km = CASE
+             WHEN v.last_pos_reported_at::timestamp IS NOT NULL
+              AND (m.last_pos_reported_at IS NULL OR v.last_pos_reported_at::timestamp > m.last_pos_reported_at)
+             THEN COALESCE(v.km::double precision, m.km)
+             ELSE m.km
+           END
+      FROM (
+        VALUES ${placeholders.join(", ")}
+      ) AS v(
+        ${keyColumn},
+        last_pos_reported_at,
+        last_pos_latitude,
+        last_pos_longitude,
+        altitude,
+        speed,
+        heading,
+        km
+      )
+     WHERE m.${keyColumn} = v.${keyColumn}
+  `;
 }
 
 export type CustomerRow = {
@@ -361,6 +440,80 @@ export async function upsertMachines(rows: MachineRow[]): Promise<number> {
     });
 }
 
+export async function updateMachineTelemetry(rows: MachineTelemetryRow[]): Promise<number> {
+    if (!rows.length) return 0;
+
+    const cols = [
+        "id",
+        "last_pos_reported_at",
+        "last_pos_latitude",
+        "last_pos_longitude",
+        "altitude",
+        "speed",
+        "heading",
+        "km",
+    ];
+
+    const values: any[] = [];
+    const placeholders: string[] = [];
+
+    rows.forEach((row, i) => {
+        const offset = i * cols.length;
+        values.push(
+            row.id,
+            row.last_pos_reported_at ?? null,
+            row.last_pos_latitude ?? null,
+            row.last_pos_longitude ?? null,
+            row.altitude ?? null,
+            row.speed ?? null,
+            row.heading ?? null,
+            row.km ?? null,
+        );
+        placeholders.push(
+            `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8})`
+        );
+    });
+
+    const sql = buildTelemetryUpdateSql(placeholders, "id");
+
+    return withClient(async (client) => {
+        await client.query("BEGIN");
+
+        try {
+            const machineIds = [...new Set(
+                rows
+                    .filter((row) => String(row.id ?? "").trim())
+                    .map((row) => String(row.id)),
+            )];
+
+            if (machineIds.length) {
+                const { rows: matchedRows } = await client.query<{ id: string }>(
+                    `
+                    SELECT id
+                    FROM machines
+                    WHERE id = ANY($1::text[])
+                    `,
+                    [machineIds],
+                );
+
+                const matchedIds = new Set(matchedRows.map((row) => row.id));
+                const resolvedHistoryRows = toMachineHistoryRows(
+                    rows.filter((row) => matchedIds.has(String(row.id))),
+                );
+
+                await insertMachinePositionHistory(client, resolvedHistoryRows);
+            }
+
+            const res = await client.query(sql, values);
+            await client.query("COMMIT");
+            return res.rowCount ?? 0;
+        } catch (error) {
+            await client.query("ROLLBACK");
+            throw error;
+        }
+    });
+}
+
 export async function updateTrackunitTelemetry(rows: TrackunitTelemetryRow[]): Promise<number> {
     if (!rows.length) return 0;
 
@@ -395,65 +548,7 @@ export async function updateTrackunitTelemetry(rows: TrackunitTelemetryRow[]): P
         );
     });
 
-    const sql = `
-    UPDATE machines AS m
-       SET last_updated = now(),
-           last_pos_reported_at = CASE
-             WHEN v.last_pos_reported_at::timestamp IS NOT NULL
-              AND (m.last_pos_reported_at IS NULL OR v.last_pos_reported_at::timestamp > m.last_pos_reported_at)
-             THEN v.last_pos_reported_at::timestamp
-             ELSE m.last_pos_reported_at
-           END,
-           last_pos_latitude = CASE
-             WHEN v.last_pos_reported_at::timestamp IS NOT NULL
-              AND (m.last_pos_reported_at IS NULL OR v.last_pos_reported_at::timestamp > m.last_pos_reported_at)
-             THEN COALESCE(v.last_pos_latitude::double precision, m.last_pos_latitude)
-             ELSE m.last_pos_latitude
-           END,
-           last_pos_longitude = CASE
-             WHEN v.last_pos_reported_at::timestamp IS NOT NULL
-              AND (m.last_pos_reported_at IS NULL OR v.last_pos_reported_at::timestamp > m.last_pos_reported_at)
-             THEN COALESCE(v.last_pos_longitude::double precision, m.last_pos_longitude)
-             ELSE m.last_pos_longitude
-           END,
-           altitude = CASE
-             WHEN v.last_pos_reported_at::timestamp IS NOT NULL
-              AND (m.last_pos_reported_at IS NULL OR v.last_pos_reported_at::timestamp > m.last_pos_reported_at)
-             THEN COALESCE(v.altitude::double precision, m.altitude)
-             ELSE m.altitude
-           END,
-           speed = CASE
-             WHEN v.last_pos_reported_at::timestamp IS NOT NULL
-              AND (m.last_pos_reported_at IS NULL OR v.last_pos_reported_at::timestamp > m.last_pos_reported_at)
-             THEN COALESCE(v.speed::double precision, m.speed)
-             ELSE m.speed
-           END,
-           heading = CASE
-             WHEN v.last_pos_reported_at::timestamp IS NOT NULL
-              AND (m.last_pos_reported_at IS NULL OR v.last_pos_reported_at::timestamp > m.last_pos_reported_at)
-             THEN COALESCE(v.heading::double precision, m.heading)
-             ELSE m.heading
-           END,
-           km = CASE
-             WHEN v.last_pos_reported_at::timestamp IS NOT NULL
-              AND (m.last_pos_reported_at IS NULL OR v.last_pos_reported_at::timestamp > m.last_pos_reported_at)
-             THEN COALESCE(v.km::double precision, m.km)
-             ELSE m.km
-           END
-      FROM (
-        VALUES ${placeholders.join(", ")}
-      ) AS v(
-        trackunit_id,
-        last_pos_reported_at,
-        last_pos_latitude,
-        last_pos_longitude,
-        altitude,
-        speed,
-        heading,
-        km
-      )
-     WHERE m.trackunit_id = v.trackunit_id
-  `;
+    const sql = buildTelemetryUpdateSql(placeholders, "trackunit_id");
 
     return withClient(async (client) => {
         await client.query("BEGIN");

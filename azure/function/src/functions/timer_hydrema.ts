@@ -1,6 +1,6 @@
 // azure/function/src/functions/timer_hydrema.ts
 import { app, InvocationContext, Timer } from "@azure/functions";
-import { upsertMachines } from "../shared/db";
+import { MachineTelemetryRow, updateMachineTelemetry } from "../shared/db";
 import { fetchAllHydremaMachines } from "../services/hydrema";
 
 const HYDREMA_OEM_ID_TO_INTERNAL_ID: Record<string, string> = {
@@ -55,8 +55,8 @@ app.timer("timer_hydrema", {
             const missingMappings: string[] = [];
 
             // Map to DB shape (snake_case) + last position
-            const rows = machines
-                .map((m: any) => {
+            const rows: MachineTelemetryRow[] = machines
+                .map((m: any): MachineTelemetryRow | null => {
                     const oemId = m.id ?? null;
                     const serialNumber = m.serialNumber ?? m.serial_number ?? m.serial ?? null;
                     const internalId =
@@ -73,17 +73,13 @@ app.timer("timer_hydrema", {
 
                     return {
                         id: internalId,
-                        oem_id: oemId,
-                        serial_number: serialNumber,
-                        name: m.name ?? oemId ?? serialNumber ?? null,
-                        oem_name: "Hydrema",
                         telemetry_source: "hydrema",
                         last_pos_reported_at: m.geo?.time != null ? new Date(Number(m.geo.time)) : null, // ms -> Date (UTC)
                         last_pos_latitude: m.geo?.latitude ?? null,
                         last_pos_longitude: m.geo?.longitude ?? null,
                     };
                 })
-                .filter((r): r is NonNullable<typeof r> => r != null);
+                .filter((row): row is MachineTelemetryRow => row != null);
 
             if (missingMappings.length) {
                 ctx.log(
@@ -91,10 +87,9 @@ app.timer("timer_hydrema", {
                 );
             }
 
-            // Upsert into DB
-            const affected = await upsertMachines(rows);
+            const updated = await updateMachineTelemetry(rows);
 
-            ctx.log(`Fetched ${machines.length} machines; upserted ${affected}.`);
+            ctx.log(`Fetched ${machines.length} machines; telemetry rows updated ${updated}.`);
         } catch (err: any) {
             ctx.error?.(`timer_hydrema error: ${err?.message || err}`);
             throw (err instanceof Error ? err : new Error(String(err)));

@@ -1,6 +1,6 @@
 // azure/function/src/functions/timer_cat.ts
 import { app, InvocationContext, Timer } from "@azure/functions";
-import { MachineRow, upsertMachines } from "../shared/db";
+import { MachineTelemetryRow, updateMachineTelemetry } from "../shared/db";
 import { fetchAllCatMachines } from "../services/cat";
 
 const CAT_SERIAL_TO_INTERNAL_ID: Record<string, string> = {
@@ -24,12 +24,11 @@ app.timer("timer_cat", {
             const machines = await fetchAllCatMachines();
             const missingMappings: string[] = [];
 
-            const rows: MachineRow[] = machines
-                .map((asset): MachineRow | null => {
+            const rows: MachineTelemetryRow[] = machines
+                .map((asset): MachineTelemetryRow | null => {
                     const equipmentHeader = asset.EquipmentHeader;
                     if (!equipmentHeader) return null;
 
-                    const equipmentId = equipmentHeader.EquipmentID ?? null;
                     const serialNumber = equipmentHeader.SerialNumber ?? null;
                     if (!serialNumber) return null;
 
@@ -44,17 +43,13 @@ app.timer("timer_cat", {
 
                     return {
                         id: internalId,
-                        oem_id: equipmentId,
-                        serial_number: serialNumber,
-                        name: serialNumber ?? equipmentId,
-                        oem_name: equipmentHeader.OEMName ?? "CAT",
                         telemetry_source: "cat",
                         last_pos_reported_at: last_pos_reported_at,
                         last_pos_latitude: loc?.Latitude ?? null,
                         last_pos_longitude: loc?.Longitude ?? null,
                     };
                 })
-                .filter((r): r is MachineRow => !!r);
+                .filter((row): row is MachineTelemetryRow => row != null);
 
             if (missingMappings.length) {
                 ctx.log(
@@ -62,8 +57,8 @@ app.timer("timer_cat", {
                 );
             }
 
-            const affected = await upsertMachines(rows);
-            ctx.log(`CAT: fetched ${machines.length}; upserted ${affected}.`);
+            const updated = await updateMachineTelemetry(rows);
+            ctx.log(`CAT: fetched ${machines.length}; telemetry rows updated ${updated}.`);
         } catch (err: any) {
             ctx.error?.(`timer_cat error: ${err?.message || err}`);
             throw (err instanceof Error ? err : new Error(String(err)));

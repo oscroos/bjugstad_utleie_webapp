@@ -5,6 +5,7 @@ export type MachineProps = {
     id: string | number;
     name: string;
     oem_name: string;
+    category: string | null;
     oem_id?: string | null;
     serial_number?: string | null;
     // not optional: the server returns either ISO string or null

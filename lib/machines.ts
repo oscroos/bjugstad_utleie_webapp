@@ -51,6 +51,7 @@ export async function getVisibleMachinesForUser(
             id: machine.id,
             name: machine.name || "Maskin",
             oem_name: machine.make ?? "N/A",
+            category: null,
             last_pos_reported_at: null,
             lat: null,
             lng: null,
@@ -74,6 +75,7 @@ export async function getMachineLocationById(
             id,
             name,
             oem_name,
+            category,
             last_pos_reported_at,
             last_pos_latitude  AS lat,
             last_pos_longitude AS lng
@@ -144,6 +146,7 @@ const getAllMachinesList = cache(async (): Promise<MachineListEntry[]> => {
                 id,
                 name,
                 oem_name,
+                category,
                 last_pos_reported_at,
                 last_pos_latitude  AS lat,
                 last_pos_longitude AS lng
@@ -171,6 +174,7 @@ async function getMachinesByIds(ids: string[]): Promise<MachineListEntry[]> {
             id,
             name,
             oem_name,
+            category,
             last_pos_reported_at,
             last_pos_latitude  AS lat,
             last_pos_longitude AS lng
@@ -193,6 +197,7 @@ function toMachineListEntry(row: any): MachineListEntry {
         id: typeof row.id === "number" || typeof row.id === "string" ? row.id : String(row.id),
         name: String(row.name ?? "N/A"),
         oem_name: String(row.oem_name ?? "N/A"),
+        category: row.category != null ? String(row.category) : null,
         last_pos_reported_at: reportedAt,
         lat: row.lat != null ? Number(row.lat) : null,
         lng: row.lng != null ? Number(row.lng) : null,
@@ -212,6 +217,7 @@ function buildFeatureCollection(list: MachineListEntry[]): MachinesFC {
                 id: entry.id,
                 name: entry.name,
                 oem_name: entry.oem_name,
+                category: entry.category,
                 last_pos_reported_at: entry.last_pos_reported_at,
             },
         }));

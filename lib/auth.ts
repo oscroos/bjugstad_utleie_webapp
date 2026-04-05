@@ -18,12 +18,15 @@ import Vipps from "next-auth/providers/vipps";
 import type { NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import {
+  DEV_VIPPS_BYPASS_ENABLED,
   IS_DEV,
   VIPPS_DATA_REQUESTS,
   SESSION_USER_FIELDS,
   SESSION_MAX_AGE_SECONDS,
   SESSION_UPDATE_AGE_SECONDS,
-  USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY,
+  DEV_BYPASS_USER_ID,
+  DEV_BYPASS_USER_NAME,
+  DEV_BYPASS_USER_PHONE,
 } from "./constants";
 
 export const authConfig: NextAuthConfig = {
@@ -64,18 +67,24 @@ export const authConfig: NextAuthConfig = {
 
     // === Credentials (added in DEV only if flagged) ===
     // Allows signIn("credentials") from the login page without hitting Vipps.
-    ...(IS_DEV && USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY
+    ...(IS_DEV && DEV_VIPPS_BYPASS_ENABLED
       ? [
         Credentials({
           name: "Dev Login",
           credentials: {}, // no form; triggered programmatically
           async authorize() {
-            // Return a minimal user-like object. With session:'jwt',
-            // it doesn't need to exist in the DB.
+            const user = await loadDevBypassUser();
+
+            if (!user) {
+              console.error(
+                `[auth:dev-bypass] Could not find ${DEV_BYPASS_USER_NAME} by id ${DEV_BYPASS_USER_ID} or phone ${DEV_BYPASS_USER_PHONE}.`,
+              );
+              return null;
+            }
+
             return {
-              id: "dev-user",
-              name: "Dev User",
-              email: "dev@example.com",
+              ...user,
+              devBypass: true,
             };
           },
         }),
@@ -130,6 +139,10 @@ export const authConfig: NextAuthConfig = {
         console.log("[auth:signIn] user =", JSON.stringify(user, null, 2)); // DB-ish user object (maybe newly created by adapter)
         console.log("[auth:signIn] account =", JSON.stringify(account, null, 2)); // Data returned by Vipps account link
         console.log("[auth:signIn] profile =", JSON.stringify(profile, null, 2)); // Raw Vipps claims (phone_number, email, etc.)
+      }
+
+      if (account?.provider === "credentials") {
+        return true;
       }
 
       const origin = process.env.NEXTAUTH_URL!;
@@ -316,22 +329,20 @@ export const authConfig: NextAuthConfig = {
 
     // Runs whenever a JWT is created/updated (e.g., after Vipps callback).
     // Put extra fields you care about onto the token.
-    async jwt({ token, user, trigger, session }) {
+    async jwt({ token, user, account, trigger, session }) {
       if (user) {
         const userId = typeof user.id === "string" ? user.id : undefined;
         if (userId) {
           token.uid = userId;
         }
-        // @ts-expect-error - custom column on your Prisma User model
         token.acceptedTerms = user.acceptedTerms ?? false;
         copyUserFields(token as any, user as any);
         token.accesses = userId ? await loadSessionAccesses(userId) : [];
-
-        // In dev, pretend terms are accepted so middleware doesn't bounce you
-        // (only if using Credentials provider).
-        if (IS_DEV && USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY) {
-          token.acceptedTerms = true;
-        }
+        (token as any).devBypass =
+          account?.provider === "credentials" &&
+          IS_DEV &&
+          DEV_VIPPS_BYPASS_ENABLED &&
+          (user.devBypass === true);
       }
       if (trigger === "update") {
         if (session?.user) {
@@ -339,6 +350,9 @@ export const authConfig: NextAuthConfig = {
           token.accesses = Array.isArray(session.user.accesses)
             ? session.user.accesses
             : token.accesses;
+          if (typeof session.user.devBypass === "boolean") {
+            (token as any).devBypass = session.user.devBypass;
+          }
         } else if (token.uid) {
           const latest = await prisma.user.findUnique({ where: { id: token.uid as string } });
           copyUserFields(token as any, latest as any);
@@ -357,6 +371,7 @@ export const authConfig: NextAuthConfig = {
         session.user.id = token.uid as string;
         session.user.acceptedTerms = (token.acceptedTerms as boolean) ?? false;
         copyUserFields(session.user as any, token as any);
+        session.user.devBypass = Boolean((token as any).devBypass);
         session.user.accesses = (token as any).accesses ?? [];
       }
       return session;
@@ -496,4 +511,33 @@ async function loadSessionAccesses(userId: string) {
     console.error("Failed to load accesses for user", userId, error);
     return [];
   }
+}
+
+async function loadDevBypassUser() {
+  const select = {
+    id: true,
+    name: true,
+    email: true,
+    phone: true,
+    role: true,
+    address_street: true,
+    address_postal_code: true,
+    address_region: true,
+    createdAt: true,
+    updatedAt: true,
+    acceptedTerms: true,
+    acceptedTermsVersion: true,
+    lastLoginAt: true,
+  } as const;
+
+  const userById = await prisma.user.findUnique({
+    where: { id: DEV_BYPASS_USER_ID },
+    select,
+  });
+  if (userById) return userById;
+
+  return prisma.user.findUnique({
+    where: { phone: DEV_BYPASS_USER_PHONE },
+    select,
+  });
 }

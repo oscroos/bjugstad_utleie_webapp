@@ -7,8 +7,15 @@ export const IS_DEV = process.env.NODE_ENV === "development";
 // Whether the app is running in production mode.
 export const IS_PROD = process.env.NODE_ENV === "production";
 
-// Whether to enable the Credentials provider for DEV (skips Vipps login).
-export const USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY: boolean = false;
+// Simple DEV toggle for bypassing Vipps.
+// Set to `false` to restore the normal Vipps login flow locally.
+export const DEV_VIPPS_BYPASS_ENABLED: boolean = true;
+
+// Implementation flag used by auth/login code.
+export const USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY = DEV_VIPPS_BYPASS_ENABLED;
+export const DEV_BYPASS_USER_ID = "cmic0pmax0000ume0vhr3dwol";
+export const DEV_BYPASS_USER_PHONE = "+4745938863";
+export const DEV_BYPASS_USER_NAME = "John Doe";
 
 // Vipps OAuth scope to request additional user data.
 export const VIPPS_DATA_REQUESTS = "openid name email phoneNumber address"

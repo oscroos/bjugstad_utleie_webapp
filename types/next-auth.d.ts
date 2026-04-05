@@ -2,7 +2,17 @@ import type { DefaultSession, DefaultUser } from "next-auth";
 
 declare module "next-auth" {
   interface User extends DefaultUser {
+    phone?: string | null;
     role?: string | null;
+    address_street?: string | null;
+    address_postal_code?: string | null;
+    address_region?: string | null;
+    createdAt?: string | Date | null;
+    updatedAt?: string | Date | null;
+    acceptedTerms?: boolean;
+    acceptedTermsVersion?: string | null;
+    lastLoginAt?: string | Date | null;
+    devBypass?: boolean;
   }
 
   interface Session {
@@ -19,6 +29,7 @@ declare module "next-auth" {
       acceptedTerms?: boolean;
       acceptedTermsVersion?: string | null;
       lastLoginAt?: string | Date | null;
+      devBypass?: boolean;
       accesses?: {
         customerId: number;
         role: string;

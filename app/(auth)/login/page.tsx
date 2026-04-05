@@ -2,35 +2,35 @@
 // Purpose: UI to start authentication. In prod it calls signIn("vipps"),
 // which sends the user into the Vipps OAuth flow configured in lib/auth.ts.
 // In dev it can optionally call signIn("credentials") to skip Vipps.
-// After successful auth, NextAuth redirects to `callbackUrl` or /onboarding/complete.
-//
-// TEST BRUKER TLF: 45938863
+// After successful auth, NextAuth redirects to `callbackUrl` or /.
 
 "use client";
 
-import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react"; // reads session shaped by callbacks in lib/auth.ts
-import { useSearchParams, useRouter } from "next/navigation";
-import { signIn } from "next-auth/react"; // client helper that talks to /api/auth/* (handlers from lib/auth.ts)
-import { IS_DEV, USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY } from "@/lib/constants";
+import { useEffect, useState } from "react";
+import { signIn, useSession } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  DEV_BYPASS_USER_NAME,
+  DEV_VIPPS_BYPASS_ENABLED,
+  IS_DEV,
+} from "@/lib/constants";
 
 export default function LoginPage() {
-  // If middleware redirected here, it'll attach ?callbackUrl=...
-  // After completing Vipps, NextAuth will send the user back to this path.
   const search = useSearchParams();
   const callbackUrl = search.get("callbackUrl") || "/";
   const errorParam = search.get("error");
   const emailFromVipps = search.get("email");
 
   const router = useRouter();
-  const { status } = useSession(); // based on JWT/session produced by lib/auth.ts callbacks
+  const { status } = useSession();
+  const usesDevBypass = IS_DEV && DEV_VIPPS_BYPASS_ENABLED;
 
   const [loading, setLoading] = useState(false);
   const [hideError, setHideError] = useState(false);
 
-  // Map NextAuth error codes (error query param) to friendly messages
   const errorMessage = (() => {
     if (!errorParam || hideError) return null;
+
     switch (errorParam) {
       case "OAuthAccountNotLinked":
         return (
@@ -45,6 +45,10 @@ export default function LoginPage() {
       case "OAuthCallback":
       case "OAuthCallbackError":
         return "Noe gikk galt i Vipps-innloggingen. Prøv igjen.";
+      case "CredentialsSignin":
+        return usesDevBypass
+          ? `DEV-innlogging mislyktes. Fant ikke ${DEV_BYPASS_USER_NAME}-kontoen som bypass-en forventer.`
+          : "Innlogging mislyktes. Prøv igjen.";
       case "UserNotFound":
         return "Vi fant ingen bruker knyttet til kontaktopplysningene dine. Ta kontakt med xxx@bjugstad.no eller din kontoansvarlige for å få brukertilgang før du logger inn igjen.";
       default:
@@ -52,31 +56,20 @@ export default function LoginPage() {
     }
   })();
 
-  // If we're already authenticated (session from NextAuth/lib/auth.ts),
-  // don't show the login screen—go straight to callbackUrl.
   useEffect(() => {
     if (status === "authenticated") {
       router.replace(callbackUrl);
     }
   }, [status, callbackUrl, router]);
 
-  // Single login path:
-  // - In development (behind a flag), call the Credentials provider to skip Vipps.
-  // - Otherwise call the Vipps provider, which triggers the external Vipps OAuth flow.
   async function handleLogin() {
     setLoading(true);
 
-    if (IS_DEV && USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY) {
-      // Dev-only provider configured in lib/auth.ts.
-      // This posts to /api/auth/signin/credentials (handled by NextAuth handlers).
+    if (usesDevBypass) {
       await signIn("credentials", { callbackUrl });
       return;
     }
 
-    // Production path: kick off Vipps OAuth.
-    // This posts to /api/auth/signin/vipps, which redirects to Vipps,
-    // and Vipps will redirect back to /api/auth/callback/vipps (handlers from lib/auth.ts),
-    // which finally lands us on `callbackUrl`.
     await signIn("vipps", { callbackUrl });
   }
 
@@ -103,13 +96,12 @@ export default function LoginPage() {
           Du må logge inn med Vipps før du kan bruke kundeportalen.
         </p>
 
-        {/* Single button: either triggers dev credentials (if enabled) or Vipps OAuth */}
         <button
           onClick={handleLogin}
           disabled={loading}
           className="w-full rounded-xl bg-orange-500 py-3 font-medium transition hover:bg-orange-600 disabled:opacity-60 cursor-pointer"
         >
-          {loading ? "Åpner Vipps…" : "Logg inn med Vipps"}
+          {loading ? (usesDevBypass ? "Logger inn..." : "Åpner Vipps...") : "Logg inn med Vipps"}
         </button>
       </div>
     </main>

@@ -8,8 +8,11 @@ import Vipps from "next-auth/providers/vipps";
 import Credentials from "next-auth/providers/credentials";
 import type { NextAuthConfig } from "next-auth";
 import {
+  DEV_BYPASS_USER_ID,
+  DEV_BYPASS_USER_NAME,
+  DEV_BYPASS_USER_PHONE,
+  DEV_VIPPS_BYPASS_ENABLED,
   IS_DEV,
-  USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY,
   SESSION_USER_FIELDS,
   SESSION_MAX_AGE_SECONDS,
   SESSION_UPDATE_AGE_SECONDS,
@@ -30,16 +33,17 @@ const edgeAuthConfig: NextAuthConfig = {
       clientSecret: process.env.AUTH_VIPPS_SECRET!,
       issuer: process.env.AUTH_VIPPS_ISSUER,
     }),
-    ...(IS_DEV && USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY
+    ...(IS_DEV && DEV_VIPPS_BYPASS_ENABLED
       ? [
         Credentials({
           name: "Dev Login",
           credentials: {},
           async authorize() {
             return {
-              id: "dev-user",
-              name: "Dev User",
-              email: "dev@example.com",
+              id: DEV_BYPASS_USER_ID,
+              name: DEV_BYPASS_USER_NAME,
+              phone: DEV_BYPASS_USER_PHONE,
+              devBypass: true,
             };
           },
         }),
@@ -54,16 +58,16 @@ const edgeAuthConfig: NextAuthConfig = {
     // NOTE: No DB work in Edge. The OAuthAccountNotLinked redirect
     // happens in the Node runtime (lib/auth.ts) during the real OAuth flow.
 
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.uid = user.id;
-        // Carry dev flag so middleware can allow navigation during local dev if desired
         token.acceptedTerms = (user as any).acceptedTerms ?? false;
         copyUserFields(token as any, user as any);
-        if (IS_DEV && USE_CREDENTIALS_PROVIDER_FOR_DEV_ONLY) {
-          // Shortcut in dev so middleware doesn't bounce you around
-          token.acceptedTerms = true;
-        }
+        (token as any).devBypass =
+          account?.provider === "credentials" &&
+          IS_DEV &&
+          DEV_VIPPS_BYPASS_ENABLED &&
+          (user as any).devBypass === true;
       }
       return token;
     },
@@ -72,6 +76,7 @@ const edgeAuthConfig: NextAuthConfig = {
         session.user.id = token.uid as string;
         session.user.acceptedTerms = (token as any).acceptedTerms ?? false;
         copyUserFields(session.user as any, token as any);
+        session.user.devBypass = Boolean((token as any).devBypass);
       }
       return session;
     },

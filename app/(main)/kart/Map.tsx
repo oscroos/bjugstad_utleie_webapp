@@ -39,6 +39,18 @@ type HistoryFeatureCollection = FeatureCollection<
 >;
 
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
+const SHOW_HISTORY_LABEL = "Se siste bevegelser";
+const HISTORY_INTERVAL_OPTIONS = [
+    { label: "Alle", valueMs: 0 },
+    { label: "15 min", valueMs: 15 * 60 * 1000 },
+    { label: "1 t", valueMs: 60 * 60 * 1000 },
+    { label: "3 t", valueMs: 3 * 60 * 60 * 1000 },
+    { label: "6 t", valueMs: 6 * 60 * 60 * 1000 },
+    { label: "12 t", valueMs: 12 * 60 * 60 * 1000 },
+    { label: "24 t", valueMs: 24 * 60 * 60 * 1000 },
+    { label: "3 d", valueMs: 3 * 24 * 60 * 60 * 1000 },
+] as const;
+const DEFAULT_HISTORY_INTERVAL_MS = 15 * 60 * 1000;
 
 // Palette
 const c = {
@@ -87,11 +99,14 @@ export default function MapView({ features }: Props) {
     const [historyColor, setHistoryColor] = useState<string>(OEM_COLORS.default);
     const [historyOverlayOpen, setHistoryOverlayOpen] = useState(false);
     const [selectedHistoryEntryId, setSelectedHistoryEntryId] = useState<string | null>(null);
-    const [currentHistoryEntryId, setCurrentHistoryEntryId] = useState<string | null>(null);
+    const [historyRangeStartIndex, setHistoryRangeStartIndex] = useState(0);
+    const [historyRangeEndIndex, setHistoryRangeEndIndex] = useState(0);
+    const [historyObservationGapMs, setHistoryObservationGapMs] = useState<number>(DEFAULT_HISTORY_INTERVAL_MS);
     const historyDataRef = useRef<HistoryFeatureCollection>(emptyHistoryFeatureCollection());
     const historyMachineIdRef = useRef<string | null>(null);
     const historyColorRef = useRef<string>(OEM_COLORS.default);
     const historyRowRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+    const historyLoadingRef = useRef(false);
 
     const labelLayerIds = useRef<string[]>([]);
     const roadLayerIds = useRef<string[]>([]);
@@ -146,9 +161,35 @@ export default function MapView({ features }: Props) {
         });
     }, []);
 
+    const maxHistoryIndex = historyEntries.length > 0 ? historyEntries.length - 1 : 0;
+    const safeHistoryRangeStartIndex = historyEntries.length
+        ? clamp(historyRangeStartIndex, 0, maxHistoryIndex)
+        : 0;
+    const safeHistoryRangeEndIndex = historyEntries.length
+        ? clamp(historyRangeEndIndex, safeHistoryRangeStartIndex, maxHistoryIndex)
+        : 0;
+
+    const historyRangeStartEntry = historyEntries[safeHistoryRangeStartIndex] ?? null;
+    const historyRangeEndEntry = historyEntries[safeHistoryRangeEndIndex] ?? null;
+
+    const rangedHistoryEntries = useMemo(() => {
+        if (!historyEntries.length) return [];
+        return historyEntries.slice(safeHistoryRangeStartIndex, safeHistoryRangeEndIndex + 1);
+    }, [historyEntries, safeHistoryRangeStartIndex, safeHistoryRangeEndIndex]);
+
+    const filteredHistoryEntries = useMemo(
+        () => filterHistoryEntriesByMinimumGap(rangedHistoryEntries, historyObservationGapMs),
+        [rangedHistoryEntries, historyObservationGapMs],
+    );
+
     const historyEntriesDesc = useMemo(
-        () => [...historyEntries].reverse(),
-        [historyEntries],
+        () => [...filteredHistoryEntries].reverse(),
+        [filteredHistoryEntries],
+    );
+
+    const currentHistoryEntryId = useMemo(
+        () => getLatestHistoryEntryId(filteredHistoryEntries),
+        [filteredHistoryEntries],
     );
 
     const columns: DataColumn<MachineListEntry>[] = [
@@ -474,7 +515,10 @@ export default function MapView({ features }: Props) {
         setHistoryColor(OEM_COLORS.default);
         setHistoryOverlayOpen(false);
         setSelectedHistoryEntryId(null);
-        setCurrentHistoryEntryId(null);
+        setHistoryRangeStartIndex(0);
+        setHistoryRangeEndIndex(0);
+        setHistoryObservationGapMs(DEFAULT_HISTORY_INTERVAL_MS);
+        historyRowRefs.current = {};
 
         const activeMap = map ?? mapRef.current;
         if (!activeMap || !loadedRef.current) return;
@@ -488,14 +532,17 @@ export default function MapView({ features }: Props) {
         machineName: string,
         oemName: string,
         map: Map,
+        popup: maplibregl.Popup,
+        popupContent: HTMLElement,
         button: HTMLButtonElement,
     ) {
         if (historyMachineIdRef.current && historyMachineIdRef.current !== machineId) {
             clearMachineHistory(map);
         }
 
-        button.disabled = true;
-        button.textContent = "Laster...";
+        historyLoadingRef.current = true;
+        setPopupActionsDisabled(popupContent, true);
+        setHistoryButtonLoading(button);
 
         try {
             const response = await fetch(`/api/machines/${encodeURIComponent(machineId)}/location-history`, {
@@ -511,41 +558,49 @@ export default function MapView({ features }: Props) {
             }
 
             const history = payload.history ?? [];
-            const nextCurrentHistoryEntryId = getLatestHistoryEntryId(history);
-            const nextSelectedHistoryEntryId = nextCurrentHistoryEntryId;
-            const fc = buildHistoryFeatureCollection(
-                history,
-                nextSelectedHistoryEntryId,
-                nextCurrentHistoryEntryId,
-            );
+            if (!history.length) {
+                clearMachineHistory(map);
+                setHistoryButtonLabel(button, "Ingen bevegelser funnet");
+                resetHistoryButton(button);
+                return;
+            }
+
+            const nextSelectedHistoryEntryId = getLatestHistoryEntryId(history);
 
             historyMachineIdRef.current = machineId;
-            historyDataRef.current = fc;
             historyColorRef.current = getOemColor(oemName);
+            historyRowRefs.current = {};
             setHistoryEntries(history);
             setHistoryMachineName(machineName);
             setHistoryColor(historyColorRef.current);
             setHistoryOverlayOpen(true);
             setSelectedHistoryEntryId(nextSelectedHistoryEntryId);
-            setCurrentHistoryEntryId(nextCurrentHistoryEntryId);
-            ensureHistoryLayers(map, fc, historyColorRef.current);
+            setHistoryRangeStartIndex(0);
+            setHistoryRangeEndIndex(history.length - 1);
+            setHistoryObservationGapMs(DEFAULT_HISTORY_INTERVAL_MS);
+            ensureHistoryLayers(
+                map,
+                buildHistoryFeatureCollection(history, nextSelectedHistoryEntryId, nextSelectedHistoryEntryId),
+                historyColorRef.current,
+            );
             bringMachineLayersToTop(map);
-
-            if (history.length) {
-                fitMapToCoordinates(
-                    map,
-                    history.map((entry) => [entry.lng, entry.lat] as [number, number]),
-                );
-                button.textContent = "Viser siste bevegelser";
-            } else {
-                button.textContent = "Ingen bevegelser funnet";
+            if (popupRef.current === popup) {
+                popup.remove();
             }
+            fitMapToCoordinates(
+                map,
+                history.map((entry) => [entry.lng, entry.lat] as [number, number]),
+            );
         } catch (error) {
             console.error("Failed to load machine history", error);
             clearMachineHistory(map);
-            button.textContent = "Kunne ikke hente bevegelser";
+            setHistoryButtonLabel(button, "Kunne ikke hente bevegelser");
+            resetHistoryButton(button);
         } finally {
-            button.disabled = false;
+            historyLoadingRef.current = false;
+            if (popupRef.current === popup) {
+                setPopupActionsDisabled(popupContent, false);
+            }
         }
     }
 
@@ -553,6 +608,8 @@ export default function MapView({ features }: Props) {
     const popupRef = useRef<maplibregl.Popup | null>(null);
 
     function openPopupForFeature(map: Map, f: MachineFeature, opts?: { sticky?: boolean }) {
+        if (historyLoadingRef.current) return;
+
         // close existing popup
         if (popupRef.current) {
             try { popupRef.current.remove(); } catch { }
@@ -599,13 +656,16 @@ export default function MapView({ features }: Props) {
         });
 
         popupContent.querySelector<HTMLButtonElement>("[data-show-history]")?.addEventListener("click", () => {
-            popup.remove();
+            const historyButton = popupContent.querySelector<HTMLButtonElement>("[data-show-history]");
+            if (!historyButton || historyButton.disabled) return;
             void loadMachineHistory(
                 String(id),
                 name,
                 oemName,
                 map,
-                popupContent.querySelector<HTMLButtonElement>("[data-show-history]")!,
+                popup,
+                popupContent,
+                historyButton,
             );
         });
 
@@ -631,6 +691,8 @@ export default function MapView({ features }: Props) {
 
 
     function focusMachineById(id: string | number) {
+        if (historyLoadingRef.current) return;
+
         const map = mapRef.current;
         if (!map) return;
         const f = visibleFeatures.features.find((x) => String(x.properties?.id) === String(id));
@@ -853,8 +915,23 @@ export default function MapView({ features }: Props) {
     }, [visibleFeatures]);
 
     useEffect(() => {
+        if (!filteredHistoryEntries.length) {
+            if (selectedHistoryEntryId !== null) {
+                setSelectedHistoryEntryId(null);
+            }
+            return;
+        }
+
+        if (selectedHistoryEntryId && filteredHistoryEntries.some((entry) => entry.id === selectedHistoryEntryId)) {
+            return;
+        }
+
+        setSelectedHistoryEntryId(currentHistoryEntryId);
+    }, [filteredHistoryEntries, selectedHistoryEntryId, currentHistoryEntryId]);
+
+    useEffect(() => {
         historyDataRef.current = buildHistoryFeatureCollection(
-            historyEntries,
+            filteredHistoryEntries,
             selectedHistoryEntryId,
             currentHistoryEntryId,
         );
@@ -862,7 +939,7 @@ export default function MapView({ features }: Props) {
         if (!map || !loadedRef.current) return;
         const src = map.getSource("machine-history") as GeoJSONSource | undefined;
         src?.setData(historyDataRef.current);
-    }, [historyEntries, selectedHistoryEntryId, currentHistoryEntryId]);
+    }, [filteredHistoryEntries, selectedHistoryEntryId, currentHistoryEntryId]);
 
     useEffect(() => {
         if (!selectedHistoryEntryId || !historyOverlayOpen) return;
@@ -1088,13 +1165,15 @@ export default function MapView({ features }: Props) {
                                     {historyMachineName ?? "Maskin"}
                                 </div>
                                 <div className="text-xs text-slate-500">
-                                    {historyEntriesDesc.length} posisjoner
+                                    {historyEntriesDesc.length === historyEntries.length
+                                        ? `${historyEntriesDesc.length} posisjoner`
+                                        : `${historyEntriesDesc.length} av ${historyEntries.length} posisjoner vises`}
                                 </div>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => clearMachineHistory()}
-                                className="rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                                className="cursor-pointer rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
                                 aria-label="Lukk historikk"
                                 title="Lukk historikk"
                             >
@@ -1103,9 +1182,70 @@ export default function MapView({ features }: Props) {
                                 </svg>
                             </button>
                         </div>
+                        <div className="border-b border-slate-200 py-3">
+                            <section className="space-y-2 px-4">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                    Tidsrom
+                                </div>
+                                <HistoryRangeSlider
+                                    min={0}
+                                    max={maxHistoryIndex}
+                                    startValue={safeHistoryRangeStartIndex}
+                                    endValue={safeHistoryRangeEndIndex}
+                                    disabled={historyEntries.length < 2}
+                                    onStartChange={(nextValue) => {
+                                        setHistoryRangeStartIndex(Math.min(nextValue, safeHistoryRangeEndIndex));
+                                    }}
+                                    onEndChange={(nextValue) => {
+                                        setHistoryRangeEndIndex(Math.max(nextValue, safeHistoryRangeStartIndex));
+                                    }}
+                                />
+                                <div className="flex items-start justify-between gap-3 text-[11px] text-slate-500">
+                                    <span className="min-w-0 whitespace-pre-line leading-tight">
+                                        {historyRangeStartEntry
+                                            ? formatHistoryFilterTimestamp(historyRangeStartEntry.reported_at)
+                                            : "Tidligst"}
+                                    </span>
+                                    <span className="min-w-0 whitespace-pre-line text-right leading-tight">
+                                        {historyRangeEndEntry
+                                            ? formatHistoryFilterTimestamp(historyRangeEndEntry.reported_at)
+                                            : "Senest"}
+                                    </span>
+                                </div>
+                            </section>
+
+                            <div className="mt-4 border-t border-slate-200" />
+
+                            <section className="space-y-2 px-4 pt-4">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                    Observasjonsfrekvens
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {HISTORY_INTERVAL_OPTIONS.map((option) => {
+                                        const active = option.valueMs === historyObservationGapMs;
+                                        return (
+                                            <button
+                                                key={option.valueMs}
+                                                type="button"
+                                                onClick={() => setHistoryObservationGapMs(option.valueMs)}
+                                                className={`cursor-pointer rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${active
+                                                    ? "border-sky-300 bg-sky-50 text-sky-700"
+                                                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                                                    }`}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </section>
+                        </div>
                         <div className="max-h-[min(42vh,24rem)] overflow-auto px-3 py-3">
+                            <div className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                Observasjoner
+                            </div>
                             {historyEntriesDesc.length ? (
-                                <div className="relative">
+                                <div className="relative pt-2">
                                     {historyEntriesDesc.length > 1 ? (
                                         <div
                                             className="absolute bottom-4 left-4 top-4 w-px"
@@ -1291,6 +1431,63 @@ function SegmentedIconToggle({
     );
 }
 
+function HistoryRangeSlider({
+    min,
+    max,
+    startValue,
+    endValue,
+    disabled,
+    onStartChange,
+    onEndChange,
+}: {
+    min: number;
+    max: number;
+    startValue: number;
+    endValue: number;
+    disabled?: boolean;
+    onStartChange: (value: number) => void;
+    onEndChange: (value: number) => void;
+}) {
+    const total = Math.max(max - min, 1);
+    const startPercent = ((startValue - min) / total) * 100;
+    const endPercent = ((endValue - min) / total) * 100;
+    const trackLeft = disabled ? 0 : startPercent;
+    const trackWidth = disabled ? 100 : Math.max(endPercent - startPercent, 0);
+    const rangeInputClass = `pointer-events-none absolute inset-0 h-8 w-full appearance-none bg-transparent ${disabled ? "opacity-50" : ""} [&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:mt-[-6px] [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-sky-300 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-sm [&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-transparent [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-sky-300 [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-sm`;
+
+    return (
+        <div className="relative h-8">
+            <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-slate-200" />
+            <div
+                className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-sky-500"
+                style={{ left: `${trackLeft}%`, width: `${trackWidth}%` }}
+            />
+            <input
+                type="range"
+                min={min}
+                max={max}
+                step={1}
+                value={startValue}
+                disabled={disabled}
+                onChange={(event) => onStartChange(Number(event.target.value))}
+                className={rangeInputClass}
+                aria-label="Start for tidsrom"
+            />
+            <input
+                type="range"
+                min={min}
+                max={max}
+                step={1}
+                value={endValue}
+                disabled={disabled}
+                onChange={(event) => onEndChange(Number(event.target.value))}
+                className={`${rangeInputClass} z-10`}
+                aria-label="Slutt for tidsrom"
+            />
+        </div>
+    );
+}
+
 
 // ---------- HELPER FUNCTIONS ----------
 
@@ -1325,6 +1522,71 @@ function getLatestHistoryEntryId(history: MachinePositionHistoryEntry[]) {
         const entryReceivedAt = new Date(entry.received_at).getTime();
         return entryReceivedAt > latestReceivedAt ? entry : latest;
     }, null)?.id ?? null;
+}
+
+function clamp(value: number, min: number, max: number) {
+    return Math.min(Math.max(value, min), max);
+}
+
+function filterHistoryEntriesByMinimumGap(
+    history: MachinePositionHistoryEntry[],
+    minimumGapMs: number,
+) {
+    if (history.length <= 2 || minimumGapMs <= 0) {
+        return history;
+    }
+
+    const filtered: MachinePositionHistoryEntry[] = [];
+    let lastIncludedTimeMs: number | null = null;
+
+    history.forEach((entry, index) => {
+        const isFirst = index === 0;
+        const isLast = index === history.length - 1;
+        const timestampMs = toHistoryTimestampMs(entry.reported_at);
+
+        if (isFirst || isLast || timestampMs == null || lastIncludedTimeMs == null) {
+            filtered.push(entry);
+            if (timestampMs != null) {
+                lastIncludedTimeMs = timestampMs;
+            }
+            return;
+        }
+
+        if (timestampMs - lastIncludedTimeMs >= minimumGapMs) {
+            filtered.push(entry);
+            lastIncludedTimeMs = timestampMs;
+        }
+    });
+
+    return filtered;
+}
+
+function formatHistoryFilterTimestamp(value?: string | null) {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    return `${formatDatePart(date)}\nkl. ${formatTimePart(date)}`;
+}
+
+function formatDatePart(date: Date) {
+    return date.toLocaleDateString("nb-NO", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+    });
+}
+
+function formatTimePart(date: Date) {
+    return date.toLocaleTimeString("nb-NO", {
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
+
+function toHistoryTimestampMs(value?: string | number | null) {
+    if (!value) return null;
+    const timestampMs = new Date(value).getTime();
+    return Number.isNaN(timestampMs) ? null : timestampMs;
 }
 
 function toTitleCase(value: string) {
@@ -1724,7 +1986,7 @@ function buildPopupContent({
                     data-show-history
                     class="${standardButtonCompactClass.replace("text-sm", "text-[11px]")} w-full"
                 >
-                    Se siste bevegelser
+                    ${SHOW_HISTORY_LABEL}
                 </button>
                 <button
                     type="button"
@@ -1738,6 +2000,46 @@ function buildPopupContent({
     `;
 
     return container;
+}
+
+function setPopupActionsDisabled(container: HTMLElement, disabled: boolean) {
+    const selectors = ["[data-popup-close]", "[data-show-details]"];
+    selectors.forEach((selector) => {
+        const button = container.querySelector<HTMLButtonElement>(selector);
+        if (!button) return;
+
+        button.disabled = disabled;
+        button.setAttribute("aria-disabled", disabled ? "true" : "false");
+        button.style.opacity = disabled ? "0.55" : "";
+        button.style.cursor = disabled ? "not-allowed" : "";
+    });
+}
+
+function setHistoryButtonLoading(button: HTMLButtonElement) {
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    button.innerHTML = `
+        <span class="inline-flex items-center gap-2">
+            <svg class="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" opacity="0.25"></circle>
+                <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
+            </svg>
+            <span>Laster bevegelser...</span>
+        </span>
+    `;
+}
+
+function setHistoryButtonLabel(button: HTMLButtonElement, label: string) {
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+    button.textContent = label;
+}
+
+function resetHistoryButton(button: HTMLButtonElement, delayMs = 2200) {
+    window.setTimeout(() => {
+        if (!button.isConnected) return;
+        setHistoryButtonLabel(button, SHOW_HISTORY_LABEL);
+    }, delayMs);
 }
 
 function formatLastUpdated(v: string | number) {

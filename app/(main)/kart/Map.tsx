@@ -18,7 +18,7 @@ import {
 } from "@tabler/icons-react";
 import { useSession } from "next-auth/react";
 import DataTable, { type DataColumn } from "@/components/DataTable";
-import DialogFlowHost from "@/components/dialogs/DialogFlowHost";
+import DialogFlowHost, { type DialogAgreementInput } from "@/components/dialogs/DialogFlowHost";
 import { useMachines, useMachinesList } from "@/components/MachinesContext";
 import type {
     MachineFeature,
@@ -79,6 +79,7 @@ function buildOemColorExpression(): any[] {
 const OEM_COLOR_EXPRESSION = buildOemColorExpression() as unknown as maplibregl.ExpressionSpecification;
 
 export default function MapView({ features }: Props) {
+    const mapViewportRef = useRef<HTMLDivElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const bottomPanelRef = useRef<HTMLDivElement | null>(null);
     const historyOverlayRef = useRef<HTMLDivElement | null>(null);
@@ -94,6 +95,7 @@ export default function MapView({ features }: Props) {
     const styleCacheRef = useRef<{ light?: StyleSpecification; dark?: StyleSpecification }>({});
     const { data: session } = useSession();
     const openMachineDialogRef = useRef<((machineId: number, machineLabel: string) => void) | null>(null);
+    const openAgreementDialogRef = useRef<((agreement: DialogAgreementInput) => void) | null>(null);
 
     // UI theme
     const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -277,20 +279,44 @@ export default function MapView({ features }: Props) {
         {
             id: "activeAgreement",
             header: "Aktiv avtale",
-            accessor: () => "",
-            cell: () => <span className="text-slate-400">-</span>,
-            sortValue: () => "",
-            filterValue: () => "-",
-            cellClassName: "text-slate-400 align-middle",
+            accessor: (machine) => machine.active_agreement_id ?? "",
+            cell: (machine) => {
+                const agreement = getAgreementDialogInput(machine);
+                if (!agreement) {
+                    return <span className="text-slate-400">-</span>;
+                }
+                return (
+                    <button
+                        type="button"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            openAgreementDialogRef.current?.(agreement);
+                        }}
+                        className="inline-flex max-w-full cursor-pointer items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800 transition hover:border-blue-300 hover:bg-blue-100"
+                    >
+                        <span className="truncate font-semibold">{agreement.id}</span>
+                    </button>
+                );
+            },
+            sortValue: (machine) => machine.active_agreement_id ?? "",
+            filterValue: (machine) => machine.active_agreement_id ?? "-",
+            cellClassName: "whitespace-nowrap align-middle",
         },
         {
             id: "renter",
             header: "Leietaker",
-            accessor: () => "",
-            cell: () => <span className="text-slate-400">-</span>,
-            sortValue: () => "",
-            filterValue: () => "-",
-            cellClassName: "text-slate-400 align-middle",
+            accessor: (machine) => getActiveCustomerLabel(machine) ?? "",
+            cell: (machine) => {
+                const customerLabel = getActiveCustomerLabel(machine);
+                return customerLabel ? (
+                    <span className="text-slate-700">{customerLabel}</span>
+                ) : (
+                    <span className="text-slate-400">-</span>
+                );
+            },
+            sortValue: (machine) => (getActiveCustomerLabel(machine) ?? "").toLowerCase(),
+            filterValue: (machine) => getActiveCustomerLabel(machine) ?? "-",
+            cellClassName: "align-middle",
         },
         {
             id: "lastSeen",
@@ -637,7 +663,7 @@ export default function MapView({ features }: Props) {
         const name = props.name ?? "Maskin";
         const oemName = props.oem_name ?? "N/A";
         const logoSrc = getOEMLogo(oemName);
-        const typeValue = formatPopupValue("");
+        const categoryValue = formatPopupValue(props.category);
         const agreementStatus = "-";
         const renterValue = formatPopupValue("");
         const lastSeenValue = formatPopupValue(
@@ -649,7 +675,7 @@ export default function MapView({ features }: Props) {
             name,
             oemName,
             logoSrc,
-            typeValue,
+            categoryValue,
             agreementStatus,
             renterValue,
             lastSeenValue,
@@ -1038,14 +1064,8 @@ export default function MapView({ features }: Props) {
         panelPxRef.current = nextPanelPx;
         collapsedRef.current = nextCollapsed;
 
-        if (containerRef.current) {
-            containerRef.current.style.height = nextCollapsed ? "100vh" : `calc(100vh - ${nextPanelPx}px)`;
-        }
-
-        if (resizeOverlayRef.current) {
-            resizeOverlayRef.current.style.height = nextCollapsed
-                ? "100vh"
-                : `calc(100vh - ${nextPanelPx}px)`;
+        if (mapViewportRef.current) {
+            mapViewportRef.current.style.height = nextCollapsed ? "100vh" : `calc(100vh - ${nextPanelPx}px)`;
         }
 
         if (bottomPanelRef.current) {
@@ -1135,7 +1155,10 @@ export default function MapView({ features }: Props) {
 
     return (
         <DialogFlowHost viewer={session?.user}>
-            {({ openMachine }) => {
+            {({ openAgreement, openMachine }) => {
+                openAgreementDialogRef.current = (agreement) => {
+                    openAgreement(agreement);
+                };
                 openMachineDialogRef.current = (machineId, machineLabel) => {
                     void openMachine({ id: machineId, name: machineLabel });
                 };
@@ -1195,16 +1218,19 @@ export default function MapView({ features }: Props) {
                         </div>
 
                         {/* Map */}
-                        <div
-                            ref={containerRef}
-                            className={`w-full transition-opacity duration-75 ${shouldShowResizeOverlay ? "opacity-0" : "opacity-100"}`}
-                            style={mapHeightStyle}
-                        />
-                        {shouldShowResizeOverlay ? (
+                        <div ref={mapViewportRef} className="relative w-full" style={mapHeightStyle}>
+                            <div
+                                className={`h-full w-full transition-opacity duration-75 ${shouldShowResizeOverlay ? "opacity-0" : "opacity-100"}`}
+                            >
+                                <div
+                                    ref={containerRef}
+                                    className="relative h-full w-full overflow-hidden"
+                                />
+                            </div>
+                            {shouldShowResizeOverlay ? (
                             <div
                                 ref={resizeOverlayRef}
-                                className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-center bg-slate-900/12 backdrop-blur-[2px]"
-                                style={mapHeightStyle}
+                                className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-slate-900/12 backdrop-blur-[2px]"
                                 aria-hidden="true"
                             >
                                 <div className="rounded-2xl border border-white/50 bg-white/80 px-6 py-5 shadow-lg backdrop-blur-md">
@@ -1218,7 +1244,8 @@ export default function MapView({ features }: Props) {
                                     />
                                 </div>
                             </div>
-                        ) : null}
+                            ) : null}
+                        </div>
 
                         {historyOverlayOpen ? (
                             <div
@@ -1426,7 +1453,7 @@ export default function MapView({ features }: Props) {
                                 }`}
                             style={{ height: isCollapsed ? 0 : panelPx }}
                         >
-                            <div className="h-full overflow-auto">
+                            <div className="h-full min-h-0 overflow-hidden">
                                 <DataTable
                                     data={machineList}
                                     columns={columns}
@@ -1450,6 +1477,7 @@ export default function MapView({ features }: Props) {
                                             .join(" ");
                                     }}
                                     onVisibleRowsChange={handleVisibleRowsChange}
+                                    fillHeight
                                 />
                             </div>
                         </div>
@@ -1579,6 +1607,68 @@ function HistoryRangeSlider({
 
 function hasMachineCoords(machine: MachineListEntry) {
     return Number.isFinite(machine.lng) && Number.isFinite(machine.lat);
+}
+
+function getActiveCustomerLabel(machine: Pick<MachineListEntry, "active_customer_name" | "active_customer_id">) {
+    const customerName = machine.active_customer_name?.trim();
+    if (customerName) return customerName;
+    if (machine.active_customer_id != null) return `Kunde ${machine.active_customer_id}`;
+    return null;
+}
+
+function getAgreementDialogInput(machine: MachineListEntry): DialogAgreementInput | null {
+    const agreement = machine.active_agreement;
+    if (agreement?.id) {
+        const customerName = agreement.customerName?.trim() || getActiveCustomerLabel({
+            active_customer_name: machine.active_customer_name,
+            active_customer_id: machine.active_customer_id,
+        });
+
+        return {
+            id: agreement.id,
+            customer:
+                agreement.customerId != null || customerName
+                    ? {
+                        id: agreement.customerId ?? undefined,
+                        name: customerName ?? undefined,
+                    }
+                    : undefined,
+            startDate: agreement.startDate ?? null,
+            endDate: agreement.endDate ?? null,
+            comment: agreement.comment ?? null,
+            projectNumber: agreement.projectNumber ?? null,
+            contactPersonName: agreement.contactPersonName ?? null,
+            contactPersonTelephoneNumber: agreement.contactPersonTelephoneNumber ?? null,
+            contactPersonEmail: agreement.contactPersonEmail ?? null,
+            customerContactPersonId: agreement.customerContactPersonId ?? null,
+            customerContactPersonName: agreement.customerContactPersonName ?? null,
+            customerContactPersonTelephoneNumber: agreement.customerContactPersonTelephoneNumber ?? null,
+            customerContactPersonEmail: agreement.customerContactPersonEmail ?? null,
+            insuranceIncluded: agreement.insuranceIncluded ?? null,
+            contractPrice: agreement.contractPrice ?? null,
+            location: agreement.location ?? null,
+            createdBy: agreement.createdBy ?? null,
+            createdByTelephoneNumber: agreement.createdByTelephoneNumber ?? null,
+            machines: agreement.machines ?? [],
+        };
+    }
+
+    const agreementId = machine.active_agreement_id?.trim();
+    if (!agreementId) return null;
+
+    const customerName = getActiveCustomerLabel(machine);
+
+    return {
+        id: agreementId,
+        customer:
+            machine.active_customer_id != null || customerName
+                ? {
+                    id: machine.active_customer_id ?? undefined,
+                    name: customerName ?? undefined,
+                }
+                : undefined,
+        machines: [],
+    };
 }
 
 function getOemFilterKey(oemName: string) {
@@ -1999,7 +2089,7 @@ function buildPopupContent({
     name,
     oemName,
     logoSrc,
-    typeValue,
+    categoryValue,
     agreementStatus,
     renterValue,
     lastSeenValue,
@@ -2008,7 +2098,7 @@ function buildPopupContent({
     name: string;
     oemName: string;
     logoSrc?: string | null;
-    typeValue: string;
+    categoryValue: string;
     agreementStatus: string;
     renterValue: string;
     lastSeenValue: string;
@@ -2018,7 +2108,7 @@ function buildPopupContent({
         agreementStatus === "Aktiv"
             ? "border-emerald-200 bg-emerald-50 text-emerald-700"
             : "border-slate-200 bg-slate-100 text-slate-600";
-    const typeTone = typeValue === "-" ? "text-slate-400 font-medium" : "text-slate-900 font-semibold";
+    const categoryTone = categoryValue === "-" ? "text-slate-400 font-medium" : "text-slate-900 font-semibold";
     const renterTone = renterValue === "-" ? "text-slate-400 font-medium" : "text-slate-900 font-semibold";
     const lastSeenTone = lastSeenValue === "-" ? "text-slate-400 font-medium" : "text-slate-900 font-semibold";
     const logoMarkup = logoSrc
@@ -2054,8 +2144,8 @@ function buildPopupContent({
             <div class="space-y-2 px-2.5 py-2.5">
                 <div class="grid grid-cols-2 gap-1.5">
                     <div class="min-h-[52px] rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
-                        <div class="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Type</div>
-                        <div class="mt-0.5 text-[11px] ${typeTone}">${escapeHtml(typeValue)}</div>
+                        <div class="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Kategori</div>
+                        <div class="mt-0.5 text-[11px] ${categoryTone}">${escapeHtml(categoryValue)}</div>
                     </div>
                     <div class="min-h-[52px] rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
                         <div class="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Avtale</div>

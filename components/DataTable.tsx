@@ -32,6 +32,7 @@ type DataTableProps<T> = {
   isRowClickable?: (row: T) => boolean;
   getRowClassName?: (row: T) => string | undefined;
   onVisibleRowsChange?: (rows: T[]) => void;
+  fillHeight?: boolean;
 };
 
 type SortState = {
@@ -119,6 +120,7 @@ export function DataTable<T>({
   isRowClickable,
   getRowClassName,
   onVisibleRowsChange,
+  fillHeight = false,
 }: DataTableProps<T>) {
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [sortState, setSortState] = useState<SortState>({
@@ -342,8 +344,15 @@ export function DataTable<T>({
   const showPaginationControls = totalRows > pageSize;
 
   return (
-    <div className="space-y-3">
-      <div className="relative overflow-x-auto overflow-y-visible rounded-t-2xl">
+    <div className={cx(fillHeight ? "flex h-full min-h-0 flex-col" : "space-y-3")}>
+      <div
+        className={cx(
+          "relative rounded-t-2xl",
+          fillHeight
+            ? "datatable-scroll-compact min-h-0 flex-1 overflow-x-auto overflow-y-auto"
+            : "overflow-x-auto overflow-y-visible",
+        )}
+      >
         <table className="min-w-full divide-y divide-slate-100">
           <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
             <tr>
@@ -546,9 +555,14 @@ export function DataTable<T>({
         </table>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-md border border-slate-100 bg-white px-4 py-3 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-wrap items-center gap-3">
-          <span>
+      <div
+        className={cx(
+          "shrink-0 flex rounded-md border border-slate-100 bg-white text-slate-600 md:flex-row md:items-center md:justify-between",
+          fillHeight ? "flex-col gap-2 px-3 py-2 text-xs" : "flex-col gap-3 px-4 py-3 text-sm",
+        )}
+      >
+        <div className={cx("flex flex-wrap items-center", fillHeight ? "gap-2" : "gap-3")}>
+          <span className={fillHeight ? "leading-none" : undefined}>
             {(() => {
               const displayStart = totalRows === 0 ? 0 : startIndex + 1;
               const displayEnd = totalRows === 0 ? 0 : endIndex;
@@ -556,10 +570,13 @@ export function DataTable<T>({
             })()}
           </span>
           {canAdjustPageSize && (
-            <label className="flex items-center gap-2 text-xs text-slate-500">
+            <label className={cx("flex items-center text-slate-500", fillHeight ? "gap-1.5 text-[11px]" : "gap-2 text-xs")}>
               <span>per side</span>
               <select
-                className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                className={cx(
+                  "rounded-md border border-slate-200 bg-white text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100",
+                  fillHeight ? "px-2 py-0.5 text-xs" : "px-2 py-1 text-sm",
+                )}
                 value={pageSize}
                 onChange={(event) => handlePageSizeChange(Number(event.target.value))}
               >
@@ -573,13 +590,14 @@ export function DataTable<T>({
           )}
         </div>
         {showPaginationControls && (
-          <div className="flex items-center gap-2">
+          <div className={cx("flex items-center", fillHeight ? "gap-1.5" : "gap-2")}>
             <button
               type="button"
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
               className={cx(
-                "rounded border px-3 py-1 text-sm font-medium cursor-pointer",
+                "rounded border font-medium cursor-pointer",
+                fillHeight ? "px-2.5 py-0.5 text-xs" : "px-3 py-1 text-sm",
                 currentPage === 1
                   ? "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed"
                   : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
@@ -587,7 +605,7 @@ export function DataTable<T>({
             >
               Forrige
             </button>
-            <span className="text-xs text-slate-500">
+            <span className={cx("text-slate-500", fillHeight ? "text-[11px] leading-none" : "text-xs")}>
               Side {currentPage} av {totalPages}
             </span>
             <button
@@ -595,7 +613,8 @@ export function DataTable<T>({
               onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}
               className={cx(
-                "rounded border px-3 py-1 text-sm font-medium cursor-pointer",
+                "rounded border font-medium cursor-pointer",
+                fillHeight ? "px-2.5 py-0.5 text-xs" : "px-3 py-1 text-sm",
                 currentPage === totalPages
                   ? "border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed"
                   : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"

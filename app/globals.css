@@ -23,3 +23,24 @@ body {
   padding: 0;
   box-shadow: none;
 }
+
+.datatable-scroll-compact {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.datatable-scroll-compact::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.datatable-scroll-compact::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.datatable-scroll-compact::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}

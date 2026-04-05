@@ -7,9 +7,14 @@ import type {
     MachineListEntry,
     MachinesData,
     MachinePositionHistoryEntry,
+    MachineAgreementSummary,
 } from "@/types/machines";
 import { IS_DEV } from "./constants";
-import { fetchAgreementsForUser, splitAgreementsByStatus } from "@/lib/agreements";
+import {
+    fetchAgreementsForUser,
+    splitAgreementsByStatus,
+    type AgreementPayload,
+} from "@/lib/agreements";
 
 // Fetch machines (with or without coordinates) for the Kart view.
 export async function getVisibleMachinesForUser(
@@ -44,7 +49,15 @@ export async function getVisibleMachinesForUser(
                 dbEntry.oem_name && dbEntry.oem_name !== "N/A"
                     ? dbEntry.oem_name
                     : (machine.make ?? "N/A");
-            return { ...dbEntry, name, oem_name: oemName };
+            return {
+                ...dbEntry,
+                name,
+                oem_name: oemName,
+                active_agreement_id: machine.active_agreement_id,
+                active_agreement: machine.active_agreement,
+                active_customer_id: machine.active_customer_id,
+                active_customer_name: machine.active_customer_name,
+            };
         }
 
         return {
@@ -52,6 +65,10 @@ export async function getVisibleMachinesForUser(
             name: machine.name || "Maskin",
             oem_name: machine.make ?? "N/A",
             category: null,
+            active_agreement_id: machine.active_agreement_id,
+            active_agreement: machine.active_agreement,
+            active_customer_id: machine.active_customer_id,
+            active_customer_name: machine.active_customer_name,
             last_pos_reported_at: null,
             lat: null,
             lng: null,
@@ -198,6 +215,15 @@ function toMachineListEntry(row: any): MachineListEntry {
         name: String(row.name ?? "N/A"),
         oem_name: String(row.oem_name ?? "N/A"),
         category: row.category != null ? String(row.category) : null,
+        active_agreement_id:
+            row.active_agreement_id != null ? String(row.active_agreement_id) : null,
+        active_agreement: normalizeMachineAgreementSummary(row.active_agreement),
+        active_customer_id:
+            row.active_customer_id != null && row.active_customer_id !== ""
+                ? Number(row.active_customer_id)
+                : null,
+        active_customer_name:
+            row.active_customer_name != null ? String(row.active_customer_name) : null,
         last_pos_reported_at: reportedAt,
         lat: row.lat != null ? Number(row.lat) : null,
         lng: row.lng != null ? Number(row.lng) : null,
@@ -218,6 +244,9 @@ function buildFeatureCollection(list: MachineListEntry[]): MachinesFC {
                 name: entry.name,
                 oem_name: entry.oem_name,
                 category: entry.category,
+                active_agreement_id: entry.active_agreement_id,
+                active_customer_id: entry.active_customer_id,
+                active_customer_name: entry.active_customer_name,
                 last_pos_reported_at: entry.last_pos_reported_at,
             },
         }));
@@ -226,38 +255,196 @@ function buildFeatureCollection(list: MachineListEntry[]): MachinesFC {
 }
 
 function collectAgreementMachines(
-    agreements: Array<{ id: string; machines?: Array<{ id?: string; name?: string | null; make?: string | null }> }>,
+    agreements: AgreementPayload[],
 ) {
-    const results: Array<{ id: string; name: string | null; make: string | null; isSynthetic: boolean }> = [];
-    const seen = new Set<string>();
+    const results: Array<{
+        id: string;
+        name: string | null;
+        make: string | null;
+        isSynthetic: boolean;
+        active_agreement_id: string | null;
+        active_agreement: MachineAgreementSummary | null;
+        active_customer_id: number | null;
+        active_customer_name: string | null;
+        _startDate: string | null;
+        _endDate: string | null;
+    }> = [];
+    const seen = new Map<string, number>();
 
     agreements.forEach((agreement) => {
         const machines = agreement.machines ?? [];
         machines.forEach((machine, index) => {
             const rawId = machine?.id?.trim();
+            const candidate = {
+                id: rawId || `unknown-${agreement.id}-${index}`,
+                name: machine?.name ?? null,
+                make: machine?.make ?? null,
+                isSynthetic: !rawId,
+                active_agreement_id: agreement.id ?? null,
+                active_agreement: toMachineAgreementSummary(agreement),
+                active_customer_id: agreement.customerId ?? null,
+                active_customer_name: agreement.customerName ?? null,
+                _startDate: agreement.startDate ?? null,
+                _endDate: agreement.endDate ?? null,
+            };
+
             if (rawId) {
-                if (seen.has(rawId)) return;
-                seen.add(rawId);
-                results.push({
-                    id: rawId,
-                    name: machine?.name ?? null,
-                    make: machine?.make ?? null,
-                    isSynthetic: false,
-                });
+                const existingIndex = seen.get(rawId);
+                if (existingIndex == null) {
+                    seen.set(rawId, results.length);
+                    results.push(candidate);
+                    return;
+                }
+
+                if (compareAgreementCandidates(candidate, results[existingIndex]) < 0) {
+                    results[existingIndex] = candidate;
+                }
                 return;
             }
 
-            const syntheticId = `unknown-${agreement.id}-${index}`;
-            if (seen.has(syntheticId)) return;
-            seen.add(syntheticId);
-            results.push({
-                id: syntheticId,
-                name: machine?.name ?? null,
-                make: machine?.make ?? null,
-                isSynthetic: true,
-            });
+            results.push(candidate);
         });
     });
 
-    return results;
+    return results.map(({ _startDate: _ignoredStartDate, _endDate: _ignoredEndDate, ...machine }) => machine);
+}
+
+function toMachineAgreementSummary(agreement: AgreementPayload): MachineAgreementSummary {
+    return {
+        id: String(agreement.id),
+        customerId: agreement.customerId ?? null,
+        customerName: agreement.customerName ?? null,
+        startDate: agreement.startDate ?? null,
+        endDate: agreement.endDate ?? null,
+        comment: agreement.comment ?? null,
+        projectNumber: agreement.projectNumber ?? null,
+        contactPersonName: agreement.contactPersonName ?? null,
+        contactPersonTelephoneNumber: agreement.contactPersonTelephoneNumber ?? null,
+        contactPersonEmail: agreement.contactPersonEmail ?? null,
+        customerContactPersonId: agreement.customerContactPersonId ?? null,
+        customerContactPersonName: agreement.customerContactPersonName ?? null,
+        customerContactPersonTelephoneNumber: agreement.customerContactPersonTelephoneNumber ?? null,
+        customerContactPersonEmail: agreement.customerContactPersonEmail ?? null,
+        insuranceIncluded: agreement.insuranceIncluded ?? null,
+        contractPrice: agreement.contractPrice ?? null,
+        location: agreement.location ?? null,
+        createdBy: agreement.createdBy ?? null,
+        createdByTelephoneNumber: agreement.createdByTelephoneNumber ?? null,
+        machines: (agreement.machines ?? []).map((machine) => ({
+            id: machine.id ?? undefined,
+            name: machine.name ?? null,
+            make: machine.make ?? null,
+        })),
+    };
+}
+
+function normalizeMachineAgreementSummary(value: unknown): MachineAgreementSummary | null {
+    if (!value || typeof value !== "object") return null;
+    const agreement = value as Record<string, unknown>;
+    const agreementId = agreement.id;
+    if (typeof agreementId !== "string" && typeof agreementId !== "number") {
+        return null;
+    }
+
+    const machines = Array.isArray(agreement.machines)
+        ? agreement.machines.map((machine) => {
+            if (!machine || typeof machine !== "object") {
+                return { id: undefined, name: null, make: null };
+            }
+            const agreementMachine = machine as Record<string, unknown>;
+            return {
+                id:
+                    typeof agreementMachine.id === "string" || typeof agreementMachine.id === "number"
+                        ? agreementMachine.id
+                        : undefined,
+                name:
+                    agreementMachine.name != null
+                        ? String(agreementMachine.name)
+                        : null,
+                make:
+                    agreementMachine.make != null
+                        ? String(agreementMachine.make)
+                        : null,
+            };
+        })
+        : null;
+
+    return {
+        id: String(agreementId),
+        customerId:
+            agreement.customerId != null && agreement.customerId !== ""
+                ? Number(agreement.customerId)
+                : null,
+        customerName: agreement.customerName != null ? String(agreement.customerName) : null,
+        startDate: agreement.startDate != null ? String(agreement.startDate) : null,
+        endDate: agreement.endDate != null ? String(agreement.endDate) : null,
+        comment: agreement.comment != null ? String(agreement.comment) : null,
+        projectNumber: agreement.projectNumber != null ? String(agreement.projectNumber) : null,
+        contactPersonName:
+            agreement.contactPersonName != null ? String(agreement.contactPersonName) : null,
+        contactPersonTelephoneNumber:
+            agreement.contactPersonTelephoneNumber != null
+                ? String(agreement.contactPersonTelephoneNumber)
+                : null,
+        contactPersonEmail:
+            agreement.contactPersonEmail != null ? String(agreement.contactPersonEmail) : null,
+        customerContactPersonId:
+            agreement.customerContactPersonId != null && agreement.customerContactPersonId !== ""
+                ? Number(agreement.customerContactPersonId)
+                : null,
+        customerContactPersonName:
+            agreement.customerContactPersonName != null
+                ? String(agreement.customerContactPersonName)
+                : null,
+        customerContactPersonTelephoneNumber:
+            agreement.customerContactPersonTelephoneNumber != null
+                ? String(agreement.customerContactPersonTelephoneNumber)
+                : null,
+        customerContactPersonEmail:
+            agreement.customerContactPersonEmail != null
+                ? String(agreement.customerContactPersonEmail)
+                : null,
+        insuranceIncluded:
+            typeof agreement.insuranceIncluded === "boolean" ? agreement.insuranceIncluded : null,
+        contractPrice:
+            typeof agreement.contractPrice === "boolean" ? agreement.contractPrice : null,
+        location: agreement.location != null ? String(agreement.location) : null,
+        createdBy: agreement.createdBy != null ? String(agreement.createdBy) : null,
+        createdByTelephoneNumber:
+            agreement.createdByTelephoneNumber != null
+                ? String(agreement.createdByTelephoneNumber)
+                : null,
+        machines,
+    };
+}
+
+function compareAgreementCandidates(
+    a: { _startDate: string | null; _endDate: string | null },
+    b: { _startDate: string | null; _endDate: string | null },
+) {
+    const byStart =
+        (toAgreementTimestamp(b._startDate, "start") ?? 0) -
+        (toAgreementTimestamp(a._startDate, "start") ?? 0);
+    if (byStart !== 0) return byStart;
+
+    return (
+        (toAgreementTimestamp(b._endDate, "end") ?? 0) -
+        (toAgreementTimestamp(a._endDate, "end") ?? 0)
+    );
+}
+
+function toAgreementTimestamp(value?: string | null, boundary: "start" | "end" = "start") {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        if (boundary === "end") {
+            date.setHours(23, 59, 59, 999);
+        } else {
+            date.setHours(0, 0, 0, 0);
+        }
+    }
+
+    return date.getTime();
 }

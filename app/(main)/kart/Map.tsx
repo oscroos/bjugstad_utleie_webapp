@@ -662,10 +662,19 @@ export default function MapView({ features }: Props) {
         const id = props.id ?? "-";
         const name = props.name ?? "Maskin";
         const oemName = props.oem_name ?? "N/A";
+        const listMachine = machineList.find((machine) => String(machine.id) === String(id));
+        const agreement = listMachine ? getAgreementDialogInput(listMachine) : null;
         const logoSrc = getOEMLogo(oemName);
         const categoryValue = formatPopupValue(props.category);
-        const agreementStatus = "-";
-        const renterValue = formatPopupValue("");
+        const activeAgreementId = agreement != null ? String(agreement.id) : null;
+        const renterValue = formatPopupValue(
+            listMachine
+                ? getActiveCustomerLabel(listMachine)
+                : getActiveCustomerLabel({
+                    active_customer_name: props.active_customer_name,
+                    active_customer_id: props.active_customer_id,
+                }),
+        );
         const lastSeenValue = formatPopupValue(
             props.last_pos_reported_at ? formatLastUpdated(props.last_pos_reported_at) : "",
         );
@@ -676,7 +685,7 @@ export default function MapView({ features }: Props) {
             oemName,
             logoSrc,
             categoryValue,
-            agreementStatus,
+            activeAgreementId,
             renterValue,
             lastSeenValue,
         });
@@ -715,6 +724,12 @@ export default function MapView({ features }: Props) {
             const numericMachineId = Number(id);
             if (!Number.isFinite(numericMachineId)) return;
             openMachineDialogRef.current?.(numericMachineId, name);
+        });
+
+        popupContent.querySelector<HTMLButtonElement>("[data-open-agreement]")?.addEventListener("click", () => {
+            if (!agreement) return;
+            popup.remove();
+            openAgreementDialogRef.current?.(agreement);
         });
 
         popup.on("close", () => {
@@ -2090,7 +2105,7 @@ function buildPopupContent({
     oemName,
     logoSrc,
     categoryValue,
-    agreementStatus,
+    activeAgreementId,
     renterValue,
     lastSeenValue,
 }: {
@@ -2099,18 +2114,25 @@ function buildPopupContent({
     oemName: string;
     logoSrc?: string | null;
     categoryValue: string;
-    agreementStatus: string;
+    activeAgreementId?: string | null;
     renterValue: string;
     lastSeenValue: string;
 }) {
     const container = document.createElement("div");
-    const statusTone =
-        agreementStatus === "Aktiv"
-            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-            : "border-slate-200 bg-slate-100 text-slate-600";
     const categoryTone = categoryValue === "-" ? "text-slate-400 font-medium" : "text-slate-900 font-semibold";
     const renterTone = renterValue === "-" ? "text-slate-400 font-medium" : "text-slate-900 font-semibold";
     const lastSeenTone = lastSeenValue === "-" ? "text-slate-400 font-medium" : "text-slate-900 font-semibold";
+    const agreementMarkup = activeAgreementId
+        ? `
+            <button
+                type="button"
+                data-open-agreement
+                class="inline-flex max-w-full cursor-pointer items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-800 transition hover:border-blue-300 hover:bg-blue-100"
+            >
+                <span class="truncate">${escapeHtml(activeAgreementId)}</span>
+            </button>
+        `
+        : `<div class="mt-0.5 text-[11px] font-medium text-slate-400">-</div>`;
     const logoMarkup = logoSrc
         ? `<img src="${escapeHtml(logoSrc)}" alt="${escapeHtml(oemName)} logo" class="max-h-8 w-auto object-contain" />`
         : `<span class="text-[10px] font-semibold text-slate-400">OEM</span>`;
@@ -2148,11 +2170,9 @@ function buildPopupContent({
                         <div class="mt-0.5 text-[11px] ${categoryTone}">${escapeHtml(categoryValue)}</div>
                     </div>
                     <div class="min-h-[52px] rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
-                        <div class="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Avtale</div>
+                        <div class="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Aktiv avtale</div>
                         <div class="mt-0.5">
-                            <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusTone}">
-                                ${escapeHtml(agreementStatus)}
-                            </span>
+                            ${agreementMarkup}
                         </div>
                     </div>
                     <div class="min-h-[52px] rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5">
@@ -2186,7 +2206,7 @@ function buildPopupContent({
 }
 
 function setPopupActionsDisabled(container: HTMLElement, disabled: boolean) {
-    const selectors = ["[data-popup-close]", "[data-show-details]"];
+    const selectors = ["[data-popup-close]", "[data-show-details]", "[data-open-agreement]"];
     selectors.forEach((selector) => {
         const button = container.querySelector<HTMLButtonElement>(selector);
         if (!button) return;

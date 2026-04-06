@@ -3,6 +3,14 @@
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
+import { AxisBottom, AxisLeft } from "@visx/axis";
+import { LinearGradient } from "@visx/gradient";
+import { GridColumns, GridRows } from "@visx/grid";
+import { Group } from "@visx/group";
+import { ParentSize } from "@visx/responsive";
+import { scaleBand, scaleLinear, scalePoint } from "@visx/scale";
+import { AreaClosed, Bar, LinePath } from "@visx/shape";
+import { useTooltip } from "@visx/tooltip";
 import {
   IconAdjustmentsHorizontal,
   IconArrowUpRight,
@@ -87,9 +95,47 @@ type MachineRow = {
   summary: FleetSummary;
 };
 
+type MetricCardData = {
+  metricKey: MetricKey;
+  title: string;
+  subtitle: string;
+  color: string;
+  series: SeriesPoint[];
+  summaryLabel: string;
+  summaryValue: string;
+  footnotes: Array<{ label: string; value: string }>;
+};
+
+type TrendTooltipData = {
+  point: SeriesPoint;
+  value: number;
+  metricKey: MetricKey;
+  color: string;
+};
+
+type ContributionBarDatum = {
+  id: string;
+  label: string;
+  shortLabel: string;
+  subLabel: string;
+  value: number;
+  color: string;
+};
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const REFERENCE_DATE = new Date("2026-04-06T12:00:00+02:00");
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
+const TREND_CHART_HEIGHT = 320;
+const TOOLTIP_STYLE: React.CSSProperties = {
+  border: "1px solid rgba(226, 232, 240, 0.95)",
+  borderRadius: "16px",
+  background: "rgba(255, 255, 255, 0.96)",
+  boxShadow: "0 18px 48px rgba(15, 23, 42, 0.12)",
+  color: "#0F172A",
+  padding: "10px 12px",
+  backdropFilter: "blur(10px)",
+  pointerEvents: "none",
+};
 const OEM_COLORS: Record<string, string> = {
   hydrema: "#000000",
   cat: "#F59E0B",
@@ -117,6 +163,28 @@ const ANALYSIS_OPTIONS: Array<{ key: AnalysisKey; label: string }> = [
   { key: "energy", label: "Energibruk" },
   { key: "co2", label: "CO2-utslipp" },
   { key: "contribution", label: "Maskinbidrag" },
+];
+
+const CONTRIBUTION_METRIC_OPTIONS: Array<{
+  key: MetricKey;
+  label: string;
+  activeClass: string;
+}> = [
+  {
+    key: "usageHours",
+    label: "Drift",
+    activeClass: "border-emerald-600 bg-emerald-600 text-white shadow-sm",
+  },
+  {
+    key: "energyKwh",
+    label: "Energi",
+    activeClass: "border-sky-600 bg-sky-600 text-white shadow-sm",
+  },
+  {
+    key: "co2Kg",
+    label: "CO2",
+    activeClass: "border-amber-500 bg-amber-500 text-white shadow-sm",
+  },
 ];
 
 const DUMMY_MACHINES: MachineDefinition[] = [
@@ -592,61 +660,36 @@ function formatAxisMetric(metricKey: MetricKey, value: number) {
   return `${formatNumber(value, value >= 100 ? 0 : 1)} kg`;
 }
 
-function getChartGeometry(series: SeriesPoint[], metricKey: MetricKey) {
-  const width = 760;
-  const height = 280;
-  const paddingLeft = 46;
-  const paddingRight = 18;
-  const paddingTop = 18;
-  const paddingBottom = 36;
-  const values = series.map((point) => point[metricKey]);
-  const maxValue = Math.max(...values, 1);
-  const chartHeight = height - paddingTop - paddingBottom;
-  const chartWidth = width - paddingLeft - paddingRight;
-  const step = values.length > 1 ? chartWidth / (values.length - 1) : 0;
-  const average =
-    values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1);
-  const labelStep = Math.max(1, Math.ceil(values.length / 6));
+function getPointMetricValue(point: SeriesPoint, metricKey: MetricKey) {
+  return point[metricKey];
+}
 
-  const points = values.map((value, index) => {
-    const x = paddingLeft + step * index;
-    const y = paddingTop + chartHeight - (value / maxValue) * chartHeight;
-    return {
-      x,
-      y,
-      label: series[index]?.compactLabel ?? "",
-      showLabel: index % labelStep === 0 || index === values.length - 1,
-    };
-  });
+function getSummaryMetricValue(summary: FleetSummary, metricKey: MetricKey) {
+  if (metricKey === "usageHours") return summary.totalUsageHours;
+  if (metricKey === "energyKwh") return summary.totalEnergyKwh;
+  return summary.totalCo2Kg;
+}
 
-  const linePath = points
-    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
-    .join(" ");
-  const areaPath =
-    points.length > 0
-      ? `${linePath} L ${points[points.length - 1].x} ${
-          height - paddingBottom
-        } L ${points[0].x} ${height - paddingBottom} Z`
-      : "";
-  const yTicks = [1, 0.66, 0.33, 0].map((ratio) => ({
-    value: maxValue * ratio,
-    y: paddingTop + chartHeight - ratio * chartHeight,
-    label: formatAxisMetric(metricKey, maxValue * ratio),
-  }));
+function formatMetricValue(metricKey: MetricKey, value: number) {
+  if (metricKey === "usageHours") return formatHours(value);
+  if (metricKey === "energyKwh") return formatEnergy(value);
+  return formatCo2(value);
+}
 
+function truncateLabel(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 1)}…`;
+}
+
+function getRelativePointerPosition(
+  event: React.PointerEvent<SVGElement>,
+  container: HTMLDivElement | null,
+) {
+  if (!container) return null;
+  const rect = container.getBoundingClientRect();
   return {
-    width,
-    height,
-    paddingLeft,
-    paddingRight,
-    paddingTop,
-    paddingBottom,
-    points,
-    linePath,
-    areaPath,
-    yTicks,
-    averageLineY:
-      paddingTop + chartHeight - (average / Math.max(maxValue, 1)) * chartHeight,
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
   };
 }
 
@@ -656,7 +699,7 @@ function buildMetricCardData(
   summary: FleetSummary,
   previousSummary: FleetSummary,
   aggregationLabel: string,
-) {
+): MetricCardData {
   if (metricKey === "usageHours") {
     return {
       metricKey,
@@ -1212,6 +1255,241 @@ function buildDummyMiniPopupContent(machine: MachineDefinition) {
   return container;
 }
 
+function MetricTrendPlot({
+  metricKey,
+  color,
+  series,
+  title,
+}: Pick<MetricCardData, "metricKey" | "color" | "series" | "title">) {
+  const chartContainerRef = useRef<HTMLDivElement | null>(null);
+  const {
+    tooltipOpen,
+    tooltipData,
+    tooltipLeft,
+    tooltipTop,
+    showTooltip,
+    hideTooltip,
+  } = useTooltip<TrendTooltipData>();
+
+  return (
+    <div
+      ref={chartContainerRef}
+      className="relative h-[20rem] w-full"
+    >
+      <ParentSize>
+        {({ width }) => {
+          if (width <= 0 || series.length === 0) return null;
+
+          const height = TREND_CHART_HEIGHT;
+          const margin = { top: 18, right: 22, bottom: 34, left: 58 };
+          const innerWidth = Math.max(width - margin.left - margin.right, 1);
+          const innerHeight = Math.max(height - margin.top - margin.bottom, 1);
+          const values = series.map((point) => getPointMetricValue(point, metricKey));
+          const domainMax = Math.max(...values, 1);
+          const average =
+            values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1);
+          const xScale = scalePoint<string>({
+            domain: series.map((point) => point.key),
+            range: [0, innerWidth],
+            padding: 0.42,
+          });
+          const yScale = scaleLinear<number>({
+            domain: [0, domainMax * 1.1],
+            range: [innerHeight, 0],
+            nice: true,
+          });
+          const labelStep = Math.max(1, Math.ceil(series.length / 6));
+          const tickKeys = series
+            .filter((_, index) => index % labelStep === 0 || index === series.length - 1)
+            .map((point) => point.key);
+          const xLookup = new Map(series.map((point) => [point.key, point.compactLabel]));
+          const plottedPoints = series.map((point) => {
+            const value = getPointMetricValue(point, metricKey);
+            return {
+              point,
+              value,
+              x: xScale(point.key) ?? 0,
+              y: yScale(value),
+            };
+          });
+          const activePoint = tooltipData?.point ?? series[series.length - 1];
+          const activeValue = tooltipData?.value ?? getPointMetricValue(activePoint, metricKey);
+          const activeX = xScale(activePoint.key) ?? 0;
+          const activeY = yScale(activeValue);
+
+          return (
+            <>
+              <svg width={width} height={height} role="img" aria-label={title}>
+                <LinearGradient
+                  id={`trend-fill-${metricKey}`}
+                  from={color}
+                  to={color}
+                  fromOpacity={0.28}
+                  toOpacity={0.03}
+                />
+
+                <Group left={margin.left} top={margin.top}>
+                  <GridRows
+                    scale={yScale}
+                    width={innerWidth}
+                    stroke="rgba(148,163,184,0.2)"
+                    strokeDasharray="3 5"
+                    numTicks={4}
+                  />
+                  <GridColumns
+                    scale={xScale}
+                    height={innerHeight}
+                    tickValues={tickKeys}
+                    stroke="rgba(148,163,184,0.1)"
+                  />
+
+                  <line
+                    x1={0}
+                    x2={innerWidth}
+                    y1={yScale(average)}
+                    y2={yScale(average)}
+                    stroke={color}
+                    strokeOpacity={0.24}
+                    strokeDasharray="7 7"
+                  />
+
+                  <AreaClosed<SeriesPoint>
+                    data={series}
+                    x={(point) => xScale(point.key) ?? 0}
+                    y={(point) => yScale(getPointMetricValue(point, metricKey))}
+                    yScale={yScale}
+                    fill={`url(#trend-fill-${metricKey})`}
+                  />
+                  <LinePath<SeriesPoint>
+                    data={series}
+                    x={(point) => xScale(point.key) ?? 0}
+                    y={(point) => yScale(getPointMetricValue(point, metricKey))}
+                    stroke={color}
+                    strokeWidth={3}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+
+                  <rect
+                    x={0}
+                    y={0}
+                    width={innerWidth}
+                    height={innerHeight}
+                    fill="transparent"
+                    onPointerLeave={hideTooltip}
+                    onPointerMove={(event) => {
+                      const coords = getRelativePointerPosition(
+                        event,
+                        chartContainerRef.current,
+                      );
+                      if (!coords) return;
+
+                      const chartX = Math.max(
+                        0,
+                        Math.min(coords.x - margin.left, innerWidth),
+                      );
+                      const nearest = plottedPoints.reduce((best, candidate) =>
+                        Math.abs(candidate.x - chartX) < Math.abs(best.x - chartX)
+                          ? candidate
+                          : best,
+                      );
+
+                      showTooltip({
+                        tooltipData: {
+                          point: nearest.point,
+                          value: nearest.value,
+                          metricKey,
+                          color,
+                        },
+                        tooltipLeft: coords.x,
+                        tooltipTop: coords.y,
+                      });
+                    }}
+                  />
+
+                  <circle
+                    cx={activeX}
+                    cy={activeY}
+                    r={11}
+                    fill={color}
+                    fillOpacity={0.12}
+                    pointerEvents="none"
+                  />
+                  <circle
+                    cx={activeX}
+                    cy={activeY}
+                    r={5.5}
+                    fill={color}
+                    stroke="#FFFFFF"
+                    strokeWidth={3}
+                    pointerEvents="none"
+                  />
+                </Group>
+
+                <AxisLeft
+                  left={margin.left}
+                  top={margin.top}
+                  scale={yScale}
+                  numTicks={4}
+                  hideAxisLine
+                  hideTicks
+                  tickFormat={(value) => formatAxisMetric(metricKey, Number(value))}
+                  tickLabelProps={() => ({
+                    fill: "#64748B",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    textAnchor: "end",
+                    dx: "-0.5em",
+                    dy: "0.33em",
+                  })}
+                />
+                <AxisBottom
+                  left={margin.left}
+                  top={margin.top + innerHeight}
+                  scale={xScale}
+                  tickValues={tickKeys}
+                  hideAxisLine
+                  hideTicks
+                  tickFormat={(value) => xLookup.get(String(value)) ?? ""}
+                  tickLabelProps={() => ({
+                    fill: "#64748B",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    textAnchor: "middle",
+                  })}
+                />
+              </svg>
+
+              {tooltipOpen &&
+              tooltipData &&
+              tooltipLeft !== undefined &&
+              tooltipTop !== undefined ? (
+                <div className="pointer-events-none absolute inset-0 z-20">
+                  <div
+                    style={{
+                      ...TOOLTIP_STYLE,
+                      position: "absolute",
+                      left: clamp(tooltipLeft + 14, 12, Math.max(width - 168, 12)),
+                      top: clamp(tooltipTop - 58, 12, TREND_CHART_HEIGHT - 74),
+                    }}
+                  >
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    {tooltipData.point.label}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">
+                    {formatMetricValue(metricKey, tooltipData.value)}
+                  </p>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          );
+        }}
+      </ParentSize>
+    </div>
+  );
+}
+
 function MetricTrendCard({
   metricKey,
   title,
@@ -1221,29 +1499,13 @@ function MetricTrendCard({
   summaryLabel,
   summaryValue,
   footnotes,
-}: {
-  metricKey: MetricKey;
-  title: string;
-  subtitle: string;
-  color: string;
-  series: SeriesPoint[];
-  summaryLabel: string;
-  summaryValue: string;
-  footnotes: Array<{ label: string; value: string }>;
-}) {
-  const config = getChartGeometry(series, metricKey);
-
+}: MetricCardData) {
   return (
     <section className="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 px-6 py-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Analyse
-            </p>
-            <h2 className="mt-2 text-xl font-semibold text-slate-900">
-              {title}
-            </h2>
+            <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
             <p className="mt-1 text-sm text-slate-600">{subtitle}</p>
           </div>
 
@@ -1253,116 +1515,19 @@ function MetricTrendCard({
               <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
                 {summaryLabel}
               </p>
-              <p className="text-sm font-semibold text-slate-900">
-                {summaryValue}
-              </p>
+              <p className="text-sm font-semibold text-slate-900">{summaryValue}</p>
             </div>
           </div>
         </div>
       </div>
 
       <div className="px-5 py-5">
-        <div className="overflow-hidden rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] px-2 py-3">
-          <svg
-            className="h-[19rem] w-full"
-            viewBox={`0 0 ${config.width} ${config.height}`}
-            preserveAspectRatio="none"
-            role="img"
-            aria-label={title}
-          >
-            <defs>
-              <linearGradient id={`gradient-${metricKey}`} x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor={color} stopOpacity="0.32" />
-                <stop offset="100%" stopColor={color} stopOpacity="0.04" />
-              </linearGradient>
-            </defs>
-
-            {config.yTicks.map((tick) => (
-              <g key={`${metricKey}-y-${tick.value}`}>
-                <line
-                  x1={config.paddingLeft}
-                  x2={config.width - config.paddingRight}
-                  y1={tick.y}
-                  y2={tick.y}
-                  stroke="rgba(148,163,184,0.22)"
-                  strokeDasharray="3 4"
-                />
-                <text
-                  x={8}
-                  y={tick.y + 4}
-                  fill="#64748B"
-                  fontSize="12"
-                  fontWeight="600"
-                >
-                  {tick.label}
-                </text>
-              </g>
-            ))}
-
-            <line
-              x1={config.paddingLeft}
-              x2={config.width - config.paddingRight}
-              y1={config.averageLineY}
-              y2={config.averageLineY}
-              stroke={color}
-              strokeOpacity="0.3"
-              strokeDasharray="6 6"
-            />
-
-            <path d={config.areaPath} fill={`url(#gradient-${metricKey})`} />
-            <path
-              d={config.linePath}
-              fill="none"
-              stroke={color}
-              strokeWidth="3.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-
-            {config.points.map((point, index) =>
-              point.showLabel ? (
-                <g key={`${metricKey}-x-${point.label}-${index}`}>
-                  <line
-                    x1={point.x}
-                    x2={point.x}
-                    y1={config.paddingTop}
-                    y2={config.height - config.paddingBottom}
-                    stroke="rgba(148,163,184,0.12)"
-                  />
-                  <text
-                    x={point.x}
-                    y={config.height - 6}
-                    fill="#64748B"
-                    fontSize="12"
-                    textAnchor="middle"
-                  >
-                    {point.label}
-                  </text>
-                </g>
-              ) : null,
-            )}
-
-            {config.points.length > 0 ? (
-              <>
-                <circle
-                  cx={config.points[config.points.length - 1].x}
-                  cy={config.points[config.points.length - 1].y}
-                  r="5.5"
-                  fill={color}
-                  stroke="#FFFFFF"
-                  strokeWidth="3"
-                />
-                <circle
-                  cx={config.points[config.points.length - 1].x}
-                  cy={config.points[config.points.length - 1].y}
-                  r="11"
-                  fill={color}
-                  fillOpacity="0.12"
-                />
-              </>
-            ) : null}
-          </svg>
-        </div>
+        <MetricTrendPlot
+          metricKey={metricKey}
+          color={color}
+          series={series}
+          title={title}
+        />
 
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           {footnotes.map((item) => (
@@ -1373,9 +1538,7 @@ function MetricTrendCard({
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                 {item.label}
               </p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">
-                {item.value}
-              </p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">{item.value}</p>
             </div>
           ))}
         </div>
@@ -1384,34 +1547,165 @@ function MetricTrendCard({
   );
 }
 
-function ContributionBar({
-  label,
-  value,
-  share,
-  color,
+function ContributionBarChart({
+  data,
+  metricKey,
 }: {
-  label: string;
-  value: string;
-  share: number;
-  color: string;
+  data: ContributionBarDatum[];
+  metricKey: MetricKey;
 }) {
+  const chartContainerRef = useRef<HTMLDivElement | null>(null);
+  const {
+    tooltipOpen,
+    tooltipData,
+    tooltipLeft,
+    tooltipTop,
+    showTooltip,
+    hideTooltip,
+  } = useTooltip<ContributionBarDatum>();
+  const chartHeight = Math.max(280, data.length * 42 + 52);
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-3 text-sm">
-        <span className="font-semibold text-slate-700">{label}</span>
-        <span className="font-semibold text-slate-900">
-          {value} • {formatPercent(share, 0)}
-        </span>
-      </div>
-      <div className="h-2.5 overflow-hidden rounded-full bg-slate-200">
-        <div
-          className="h-full rounded-full"
-          style={{
-            width: `${Math.max(share * 100, share > 0 ? 8 : 0)}%`,
-            backgroundColor: color,
-          }}
-        />
-      </div>
+    <div ref={chartContainerRef} className="relative w-full" style={{ height: chartHeight }}>
+      <ParentSize>
+        {({ width }) => {
+          if (width <= 0 || data.length === 0) return null;
+
+          const height = chartHeight;
+          const margin = { top: 16, right: 34, bottom: 34, left: 150 };
+          const innerWidth = Math.max(width - margin.left - margin.right, 1);
+          const innerHeight = Math.max(height - margin.top - margin.bottom, 1);
+          const xScale = scaleLinear<number>({
+            domain: [0, Math.max(...data.map((item) => item.value), 1) * 1.12],
+            range: [0, innerWidth],
+            nice: true,
+          });
+          const yScale = scaleBand<string>({
+            domain: data.map((item) => item.id),
+            range: [0, innerHeight],
+            padding: 0.26,
+          });
+
+          return (
+            <>
+              <svg width={width} height={height} role="img" aria-label="Maskinbidrag">
+                <Group left={margin.left} top={margin.top}>
+                  <GridColumns
+                    scale={xScale}
+                    height={innerHeight}
+                    numTicks={4}
+                    stroke="rgba(148,163,184,0.16)"
+                    strokeDasharray="3 5"
+                  />
+
+                  {data.map((item) => {
+                    const y = yScale(item.id);
+                    const barWidth = xScale(item.value);
+                    if (y === undefined) return null;
+
+                    return (
+                      <g key={`${metricKey}-${item.id}`}>
+                        <Bar
+                          x={0}
+                          y={y}
+                          width={barWidth}
+                          height={yScale.bandwidth()}
+                          rx={10}
+                          fill={item.color}
+                          fillOpacity={0.9}
+                          onPointerLeave={hideTooltip}
+                          onPointerMove={(event) => {
+                            const coords = getRelativePointerPosition(
+                              event,
+                              chartContainerRef.current,
+                            );
+                            if (!coords) return;
+
+                            showTooltip({
+                              tooltipData: item,
+                              tooltipLeft: coords.x,
+                              tooltipTop: coords.y,
+                            });
+                          }}
+                        />
+                        <text
+                          x={Math.min(barWidth + 10, innerWidth - 4)}
+                          y={y + yScale.bandwidth() / 2}
+                          fill="#0F172A"
+                          fontSize="12"
+                          fontWeight="700"
+                          dominantBaseline="middle"
+                        >
+                          {formatMetricValue(metricKey, item.value)}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </Group>
+
+                <AxisLeft
+                  left={margin.left}
+                  top={margin.top}
+                  scale={yScale}
+                  hideAxisLine
+                  hideTicks
+                  tickFormat={(value) => {
+                    const match = data.find((item) => item.id === String(value));
+                    return match ? truncateLabel(match.shortLabel, 18) : "";
+                  }}
+                  tickLabelProps={() => ({
+                    fill: "#334155",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textAnchor: "end",
+                    dx: "-0.6em",
+                    dy: "0.33em",
+                  })}
+                />
+                <AxisBottom
+                  left={margin.left}
+                  top={margin.top + innerHeight}
+                  scale={xScale}
+                  numTicks={4}
+                  hideAxisLine
+                  hideTicks
+                  tickFormat={(value) => formatAxisMetric(metricKey, Number(value))}
+                  tickLabelProps={() => ({
+                    fill: "#64748B",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    textAnchor: "middle",
+                  })}
+                />
+              </svg>
+
+              {tooltipOpen &&
+              tooltipData &&
+              tooltipLeft !== undefined &&
+              tooltipTop !== undefined ? (
+                <div className="pointer-events-none absolute inset-0 z-20">
+                  <div
+                    style={{
+                      ...TOOLTIP_STYLE,
+                      position: "absolute",
+                      left: clamp(tooltipLeft + 14, 12, Math.max(width - 216, 12)),
+                      top: clamp(tooltipTop - 28, 12, chartHeight - 88),
+                    }}
+                  >
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      {tooltipData.label}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">
+                      {formatMetricValue(metricKey, tooltipData.value)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">{tooltipData.subLabel}</p>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          );
+        }}
+      </ParentSize>
     </div>
   );
 }
@@ -1427,21 +1721,83 @@ function MachineContributionCard({
   totalEnergyKwh: number;
   totalCo2Kg: number;
 }) {
+  const [metricKey, setMetricKey] = useState<MetricKey>("usageHours");
+  const sortedRows = [...rows].sort(
+    (a, b) =>
+      getSummaryMetricValue(b.summary, metricKey) -
+      getSummaryMetricValue(a.summary, metricKey),
+  );
+  const totalValue =
+    metricKey === "usageHours"
+      ? totalUsageHours
+      : metricKey === "energyKwh"
+        ? totalEnergyKwh
+        : totalCo2Kg;
+  const topRow = sortedRows[0];
+  const averageValue = rows.length > 0 ? totalValue / rows.length : 0;
+  const chartData: ContributionBarDatum[] = sortedRows.map((row) => ({
+    id: row.machine.id,
+    label: row.machine.name,
+    shortLabel: row.machine.name,
+    subLabel: `${row.machine.category} • ${row.machine.location}`,
+    value: getSummaryMetricValue(row.summary, metricKey),
+    color:
+      metricKey === "usageHours"
+        ? row.machine.accent
+        : metricKey === "energyKwh"
+          ? "#0EA5E9"
+          : "#F59E0B",
+  }));
+
   return (
     <section className="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 px-6 py-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-          Bidrag
-        </p>
-        <h2 className="mt-2 text-xl font-semibold text-slate-900">
-          Hvilke maskiner driver utslagene?
-        </h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Sortert etter simulert driftstid i valgt periode.
-        </p>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">Maskinbidrag</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Forslag til bar-chart-stil for å sammenligne valgte maskiner.
+            </p>
+          </div>
+
+          {topRow ? (
+            <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+              <IconArrowUpRight className="h-4 w-4 text-slate-500" />
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                  Størst bidrag
+                </p>
+                <p className="text-sm font-semibold text-slate-900">
+                  {topRow.machine.name}
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {CONTRIBUTION_METRIC_OPTIONS.map((option) => {
+            const active = option.key === metricKey;
+
+            return (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setMetricKey(option.key)}
+                className={`cursor-pointer rounded-full border px-3.5 py-2 text-sm font-semibold transition ${
+                  active
+                    ? option.activeClass
+                    : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="space-y-3 px-5 py-5">
+      <div className="px-5 py-5">
         {rows.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-16 text-center">
             <p className="text-sm font-semibold text-slate-700">
@@ -1449,59 +1805,36 @@ function MachineContributionCard({
             </p>
           </div>
         ) : (
-          rows.map((row, index) => {
-            const usageShare =
-              totalUsageHours > 0 ? row.summary.totalUsageHours / totalUsageHours : 0;
-            const energyShare =
-              totalEnergyKwh > 0 ? row.summary.totalEnergyKwh / totalEnergyKwh : 0;
-            const co2Share = totalCo2Kg > 0 ? row.summary.totalCo2Kg / totalCo2Kg : 0;
+          <>
+            <ContributionBarChart data={chartData} metricKey={metricKey} />
 
-            return (
-              <div
-                key={row.machine.id}
-                className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4 shadow-sm"
-              >
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
-                        {index + 1}
-                      </span>
-                      <span className="truncate text-base font-semibold text-slate-900">
-                        {row.machine.name}
-                      </span>
-                      <Tag label={row.machine.powertrain} />
-                    </div>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {row.machine.category} • {row.machine.location} • {row.machine.project}
-                    </p>
-                  </div>
-                  <StatusBadge status={row.machine.status} />
-                </div>
-
-                <div className="mt-4 space-y-3">
-                  <ContributionBar
-                    label="Drift"
-                    value={formatHours(row.summary.totalUsageHours)}
-                    share={usageShare}
-                    color={row.machine.accent}
-                  />
-                  <ContributionBar
-                    label="Energi"
-                    value={formatEnergy(row.summary.totalEnergyKwh)}
-                    share={energyShare}
-                    color="#0EA5E9"
-                  />
-                  <ContributionBar
-                    label="CO2"
-                    value={formatCo2(row.summary.totalCo2Kg)}
-                    share={co2Share}
-                    color="#F59E0B"
-                  />
-                </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Total
+                </p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">
+                  {formatMetricValue(metricKey, totalValue)}
+                </p>
               </div>
-            );
-          })
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Snitt per maskin
+                </p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">
+                  {formatMetricValue(metricKey, averageValue)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Visning
+                </p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">
+                  {rows.length} maskiner
+                </p>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </section>
@@ -1813,7 +2146,15 @@ export default function MachinesDashboard() {
         />
         <KpiCard
           icon={<IconChartAreaLine className="h-5 w-5 text-violet-600" />}
-          label={<span>Elektrifiserings&shy;grad</span>}
+          label={
+            <span
+              lang="nb"
+              className="block whitespace-normal break-normal"
+              style={{ hyphens: "auto", WebkitHyphens: "auto" }}
+            >
+              Elektrifiseringsgrad
+            </span>
+          }
           value={formatPercent(summary.electrificationRate, 0)}
           helper={`${formatCo2(summary.avoidedCo2Kg)} spart mot dieselreferanse`}
           accentClass="bg-violet-500"

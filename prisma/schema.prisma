@@ -24,28 +24,53 @@ enum CompanyRole {
   user
 }
 
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+enum ProjectRole {
+  OWNER
+  PROJECT_MANAGER
+  MEMBER
+  VIEWER
+}
+
+enum FieldType {
+  TEXT
+  NUMBER
+  DATE
+  SELECT
+  BOOLEAN
+}
+
 model User {
-  id                   String       @id @default(cuid())
-  phone                String?      @unique
+  id                   String     @id @default(cuid())
+  phone                String?    @unique
   name                 String?
-  email                String?      @unique
-  emailVerified        DateTime?    @map("email_verified")
+  email                String?    @unique
+  emailVerified        DateTime?  @map("email_verified")
   address_street       String?
   address_postal_code  String?
   address_region       String?
-  role                 GlobalRole   @default(customer)
-  acceptedTerms        Boolean      @default(false) @map("accepted_terms")
-  acceptedTermsAt      DateTime?    @map("accepted_terms_at")
-  acceptedTermsVersion String?      @map("accepted_terms_version")
-  createdAt            DateTime     @default(now()) @map("created_at")
-  updatedAt            DateTime     @updatedAt @map("updated_at")
-  firstLoginAt         DateTime?    @map("first_login_at")
-  lastLoginAt          DateTime?    @map("last_login_at")
+  role                 GlobalRole @default(customer)
+  acceptedTerms        Boolean    @default(false) @map("accepted_terms")
+  acceptedTermsAt      DateTime?  @map("accepted_terms_at")
+  acceptedTermsVersion String?    @map("accepted_terms_version")
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
+  firstLoginAt         DateTime?  @map("first_login_at")
+  lastLoginAt          DateTime?  @map("last_login_at")
 
-  accounts             Account[]
-  sessions             Session[]
-  accesses             UserCustomerAccess[]
-  loginEvents          UserLoginEvent[]
+  accounts              Account[]
+  sessions              Session[]
+  accesses              UserCustomerAccess[]
+  loginEvents           UserLoginEvent[]
+  projectsCreated       Project[]            @relation("ProjectsCreated")
+  projectParticipations ProjectParticipant[]
 
   @@map("users")
 }
@@ -89,29 +114,29 @@ model VerificationToken {
 }
 
 model Machine {
-  id                String    @id
-  name              String?
-  oemName           String?   @map("oem_name")
-  oemId             String?   @map("oem_id")
-  serialNumber      String?   @map("serial_number")
-  model             String?
-  productionYear    String?   @map("production_year")
-  category          String?
-  registrationNumber String?  @map("registration_number")
-  railControlDate   DateTime? @map("rail_control_date")
-  controlDate       DateTime? @map("control_date")
-  trackunitId       String?   @map("trackunit_id")
-  leasingCompany    String?   @map("leasing_company")
-  firstSeen         DateTime  @default(now()) @map("first_seen")
-  lastUpdated       DateTime  @default(now()) @updatedAt @map("last_updated")
-  lastPosReportedAt DateTime? @map("last_pos_reported_at")
-  lastPosLatitude   Float?    @map("last_pos_latitude")
-  lastPosLongitude  Float?    @map("last_pos_longitude")
-  altitude          Float?
-  speed             Float?
-  heading           Float?
-  km                Float?
-  positionHistory   MachinePositionHistory[]
+  id                 String                   @id
+  name               String?
+  oemName            String?                  @map("oem_name")
+  oemId              String?                  @map("oem_id")
+  serialNumber       String?                  @map("serial_number")
+  model              String?
+  productionYear     String?                  @map("production_year")
+  category           String?
+  registrationNumber String?                  @map("registration_number")
+  railControlDate    DateTime?                @map("rail_control_date")
+  controlDate        DateTime?                @map("control_date")
+  trackunitId        String?                  @map("trackunit_id")
+  leasingCompany     String?                  @map("leasing_company")
+  firstSeen          DateTime                 @default(now()) @map("first_seen")
+  lastUpdated        DateTime                 @default(now()) @updatedAt @map("last_updated")
+  lastPosReportedAt  DateTime?                @map("last_pos_reported_at")
+  lastPosLatitude    Float?                   @map("last_pos_latitude")
+  lastPosLongitude   Float?                   @map("last_pos_longitude")
+  altitude           Float?
+  speed              Float?
+  heading            Float?
+  km                 Float?
+  positionHistory    MachinePositionHistory[]
 
   @@index([lastUpdated(sort: Desc)], map: "idx_machines_last_updated")
   @@index([lastPosReportedAt(sort: Desc)], map: "idx_machines_last_pos_reported_at")
@@ -119,18 +144,18 @@ model Machine {
 }
 
 model MachinePositionHistory {
-  id          BigInt   @id @default(autoincrement())
-  machineId   String   @map("machine_id")
-  source      String
-  reportedAt  DateTime @map("reported_at")
-  receivedAt  DateTime @default(now()) @map("received_at")
-  latitude    Float
-  longitude   Float
-  altitude    Float?
-  speed       Float?
-  heading     Float?
-  km          Float?
-  machine     Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  id         BigInt   @id @default(autoincrement())
+  machineId  String   @map("machine_id")
+  source     String
+  reportedAt DateTime @map("reported_at")
+  receivedAt DateTime @default(now()) @map("received_at")
+  latitude   Float
+  longitude  Float
+  altitude   Float?
+  speed      Float?
+  heading    Float?
+  km         Float?
+  machine    Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
 
   @@unique([machineId, source, reportedAt], map: "uq_machine_position_history_machine_source_reported_at")
   @@index([machineId, reportedAt(sort: Desc)], map: "idx_machine_position_history_machine_reported_at")
@@ -139,7 +164,7 @@ model MachinePositionHistory {
 }
 
 model Customer {
-  customer_id         Int                    @id
+  customer_id         Int                     @id
   name                String?
   email               String?
   address             String?
@@ -152,6 +177,7 @@ model Customer {
   customer_number     Int?
   contactPersons      CustomerContactPerson[]
   accesses            UserCustomerAccess[]
+  projects            Project[]
 
   @@map("customers")
 }
@@ -170,25 +196,155 @@ model CustomerContactPerson {
 }
 
 model UserCustomerAccess {
-  userId     String       @map("user_id")
-  customerId Int          @map("customer_id")
+  userId     String      @map("user_id")
+  customerId Int         @map("customer_id")
   role       CompanyRole
 
-  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  customer   Customer     @relation(fields: [customerId], references: [customer_id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [customer_id], onDelete: Cascade)
 
   @@id([userId, customerId])
   @@map("user_customer_accesses")
 }
 
 model UserLoginEvent {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
-  provider  String?
-  loggedAt  DateTime @default(now()) @map("logged_at")
+  id       String   @id @default(cuid())
+  userId   String   @map("user_id")
+  provider String?
+  loggedAt DateTime @default(now()) @map("logged_at")
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([loggedAt], map: "idx_user_login_events_logged_at")
   @@map("user_login_events")
+}
+
+model Project {
+  id            String        @id @default(cuid())
+  customerId    Int           @map("customer_id")
+  projectNumber String        @map("project_number")
+  name          String
+  description   String?
+  addressLine   String?       @map("address_line")
+  postalCode    String?       @map("postal_code")
+  city          String?
+  status        ProjectStatus @default(ACTIVE)
+  startDate     DateTime?     @map("start_date")
+  endDate       DateTime?     @map("end_date")
+  createdById   String?       @map("created_by_id")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  customer     Customer             @relation(fields: [customerId], references: [customer_id], onDelete: Cascade)
+  createdBy    User?                @relation("ProjectsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  participants ProjectParticipant[]
+  massTypes    ProjectMassType[]
+  fieldValues  ProjectFieldValue[]
+
+  @@unique([customerId, projectNumber], map: "uq_projects_customer_project_number")
+  @@index([customerId], map: "idx_projects_customer_id")
+  @@index([status], map: "idx_projects_status")
+  @@map("projects")
+}
+
+model ProjectParticipant {
+  id        String      @id @default(cuid())
+  projectId String      @map("project_id")
+  userId    String      @map("user_id")
+  role      ProjectRole @default(MEMBER)
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId], map: "uq_project_participants_project_user")
+  @@index([projectId], map: "idx_project_participants_project_id")
+  @@index([userId], map: "idx_project_participants_user_id")
+  @@map("project_participants")
+}
+
+model MassTypeCatalog {
+  id                    String   @id @default(cuid())
+  name                  String   @unique
+  unit                  String   @default("m3")
+  defaultClassification String   @default("UNKNOWN") @map("default_classification")
+  tonnPerM3             Float    @default(1.6) @map("tonn_per_m3")
+  swellFactor           Float    @default(1.0) @map("swell_factor")
+  active                Boolean  @default(true)
+  sortOrder             Int      @default(0) @map("sort_order")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  projectMassTypes ProjectMassType[]
+
+  @@index([active, sortOrder], map: "idx_mass_type_catalogs_active_sort_order")
+  @@map("mass_type_catalogs")
+}
+
+model ProjectMassType {
+  id         String   @id @default(cuid())
+  projectId  String   @map("project_id")
+  massTypeId String   @map("mass_type_id")
+  plannedIn  Float    @default(0) @map("planned_in")
+  plannedOut Float    @default(0) @map("planned_out")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  project  Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  massType MassTypeCatalog @relation(fields: [massTypeId], references: [id])
+
+  @@unique([projectId, massTypeId], map: "uq_project_mass_types_project_mass_type")
+  @@index([projectId], map: "idx_project_mass_types_project_id")
+  @@index([massTypeId], map: "idx_project_mass_types_mass_type_id")
+  @@map("project_mass_types")
+}
+
+model ProjectFieldDefinition {
+  id        String    @id @default(cuid())
+  label     String
+  fieldType FieldType @default(TEXT) @map("field_type")
+  options   String[]  @default([])
+  required  Boolean   @default(false)
+  active    Boolean   @default(true)
+  sortOrder Int       @default(0) @map("sort_order")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  values ProjectFieldValue[]
+
+  @@index([active, sortOrder], map: "idx_project_field_definitions_active_sort_order")
+  @@map("project_field_definitions")
+}
+
+model ProjectFieldValue {
+  id           String   @id @default(cuid())
+  projectId    String   @map("project_id")
+  definitionId String   @map("definition_id")
+  value        String   @default("")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  project    Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  definition ProjectFieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, definitionId], map: "uq_project_field_values_project_definition")
+  @@index([projectId], map: "idx_project_field_values_project_id")
+  @@index([definitionId], map: "idx_project_field_values_definition_id")
+  @@map("project_field_values")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  customerId Int?     @map("customer_id")
+  userId     String?  @map("user_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([customerId, createdAt], map: "idx_audit_logs_customer_created_at")
+  @@index([userId, createdAt], map: "idx_audit_logs_user_created_at")
+  @@index([entityType, entityId], map: "idx_audit_logs_entity")
+  @@map("audit_logs")
 }

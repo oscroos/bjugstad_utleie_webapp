@@ -12,6 +12,7 @@ import {
   IconX,
   IconListDetails,
   IconFileText,
+  IconFolder,
   IconBackhoe,
   IconMap2,
   IconUser,
@@ -20,6 +21,7 @@ import {
   IconLogout,
   IconClock,
   IconLoader2,
+  IconSettings,
 } from "@tabler/icons-react";
 import { IS_DEV } from "@/lib/constants";
 
@@ -39,10 +41,11 @@ export default function ResponsiveNav() {
   }, [pathname]);
 
   const { data } = useSession();
-  const isAdmin = (data?.user as any)?.role === "super_admin";
+  const isAdmin = data?.user?.role === "super_admin";
 
   const mainItems: NavItem[] = [
     { href: "/avtaler", label: "Avtaler", icon: <IconListDetails className="h-5 w-5" /> },
+    { href: "/prosjekter", label: "Prosjekter", icon: <IconFolder className="h-5 w-5" /> },
     { href: "/dokumenter", label: "Dokumenter", icon: <IconFileText className="h-5 w-5" /> },
     { href: "/maskiner", label: "Maskiner", icon: <IconBackhoe className="h-5 w-5" /> },
     { href: "/kart", label: "Kart", icon: <IconMap2 className="h-5 w-5" /> },
@@ -54,11 +57,12 @@ export default function ResponsiveNav() {
     { href: "/brukere", label: "Brukere", icon: <IconUsers className="h-5 w-5" /> },
     { href: "/kunder", label: "Kunder", icon: <IconBuilding className="h-5 w-5" /> },
     { href: "/aktivitet", label: "Aktivitet", icon: <IconClock className="h-5 w-5" /> },
+    { href: "/katalog", label: "Katalog", icon: <IconSettings className="h-5 w-5" /> },
   ];
 
   const renderLinks = (list: NavItem[]) =>
     list.map(({ href, label, icon }) => {
-      const active = pathname === href;
+      const active = pathname === href || pathname.startsWith(`${href}/`);
       const isLoading = loadingHref === href && !active;
 
       const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {

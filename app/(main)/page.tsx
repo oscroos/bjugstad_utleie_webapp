@@ -8,7 +8,17 @@ type TabCard = {
   description: string;
   badge: string;
   adminOnly?: boolean;
-  preview: "agreements" | "documents" | "machines" | "map" | "profile" | "users" | "customers" | "activity";
+  preview:
+    | "agreements"
+    | "projects"
+    | "documents"
+    | "machines"
+    | "map"
+    | "profile"
+    | "users"
+    | "customers"
+    | "activity"
+    | "catalog";
 };
 
 const TAB_CARDS: TabCard[] = [
@@ -18,6 +28,13 @@ const TAB_CARDS: TabCard[] = [
     description: "Oversikt over leieavtaler med raske innganger til kunde, maskin og avtaledetaljer.",
     badge: "Hovedfane",
     preview: "agreements",
+  },
+  {
+    href: "/prosjekter",
+    title: "Prosjekter",
+    description: "Prosjektgrunnlag med kunde, lokasjon, egendefinerte felt og masseoppsett.",
+    badge: "Hovedfane",
+    preview: "projects",
   },
   {
     href: "/dokumenter",
@@ -70,6 +87,14 @@ const TAB_CARDS: TabCard[] = [
     badge: "Admin",
     adminOnly: true,
     preview: "activity",
+  },
+  {
+    href: "/katalog",
+    title: "Katalog",
+    description: "Administratoroppsett for massetyper og egendefinerte prosjektfelt.",
+    badge: "Admin",
+    adminOnly: true,
+    preview: "catalog",
   },
 ];
 
@@ -155,6 +180,7 @@ function PreviewFrame({
       </div>
       <div className="h-40 bg-white p-3.5">
         {variant === "agreements" ? <PreviewAgreements /> : null}
+        {variant === "projects" ? <PreviewProjects /> : null}
         {variant === "documents" ? <PreviewDocuments /> : null}
         {variant === "machines" ? <PreviewMachines /> : null}
         {variant === "map" ? <PreviewMap /> : null}
@@ -162,6 +188,7 @@ function PreviewFrame({
         {variant === "users" ? <PreviewUsers /> : null}
         {variant === "customers" ? <PreviewCustomers /> : null}
         {variant === "activity" ? <PreviewActivity /> : null}
+        {variant === "catalog" ? <PreviewCatalog /> : null}
       </div>
     </div>
   );
@@ -216,6 +243,39 @@ function PreviewDocuments() {
               {item}
             </div>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PreviewProjects() {
+  return (
+    <div className="grid h-full grid-cols-[1.2fr_0.8fr] gap-4">
+      <div className="space-y-3">
+        {["P-1042 Stasjon nord", "P-1038 Grunnarbeid", "P-1021 VA-trase"].map((project, index) => (
+          <div key={project} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-semibold text-slate-800">{project}</div>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  index === 0 ? "bg-green-100 text-green-700" : "bg-sky-100 text-sky-700"
+                }`}
+              >
+                Aktiv
+              </span>
+            </div>
+            <div className="mt-1 text-xs text-slate-500">Kunde og prosjektoppsett</div>
+          </div>
+        ))}
+      </div>
+      <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Oppsett</div>
+        <div className="mt-4 space-y-2">
+          <div className="h-3 rounded-full bg-slate-300" />
+          <div className="h-3 rounded-full bg-slate-200" />
+          <div className="h-3 w-3/4 rounded-full bg-slate-200" />
+          <div className="mt-4 h-10 rounded-2xl bg-sky-50 ring-1 ring-sky-100" />
         </div>
       </div>
     </div>
@@ -346,6 +406,35 @@ function PreviewActivity() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function PreviewCatalog() {
+  return (
+    <div className="grid h-full grid-cols-2 gap-4">
+      <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Massetyper</div>
+        <div className="mt-4 space-y-2">
+          {["Jord", "Sprengstein", "Asfalt"].map((item) => (
+            <div key={item} className="flex items-center justify-between rounded-full bg-white px-3 py-2 shadow-sm">
+              <span className="text-sm font-medium text-slate-700">{item}</span>
+              <span className="text-[11px] text-slate-400">t/m3</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Prosjektfelt</div>
+        <div className="mt-4 space-y-2">
+          {["SHA", "Ramme", "Kontakt"].map((item, index) => (
+            <div key={item} className="rounded-full bg-white px-3 py-2 text-sm text-slate-600 shadow-sm">
+              {item}
+              {index === 0 ? <span className="ml-1 text-red-500">*</span> : null}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

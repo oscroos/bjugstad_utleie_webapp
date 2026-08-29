@@ -1,11 +1,10 @@
-import React from 'react';
+import { redirect } from "next/navigation";
+import { requireAuthenticatedUser } from "@/lib/access";
+import DocumentHotelClient from "./DocumentHotelClient";
 
-const test = () => {
-    return (
-        <div className='h-screen flex justify-center items-center'>
-           <h1 className='text-3xl'>DOKUMENTER</h1>
-        </div>
-    );
+export default async function DokumenterPage() {
+  const session = await requireAuthenticatedUser();
+  if (!session) redirect("/login");
+
+  return <DocumentHotelClient />;
 }
-
-export default test;

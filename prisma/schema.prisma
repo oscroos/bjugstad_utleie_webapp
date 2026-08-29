@@ -70,6 +70,21 @@ enum KpiMetric {
   CUSTOM
 }
 
+enum FolderKind {
+  SYSTEM
+  PROJECT
+  CUSTOM
+}
+
+enum CallOffStatus {
+  DRAFT
+  SENT
+  PRICED_BY_LESSOR
+  ACTIVE
+  REJECTED
+  CANCELLED
+}
+
 model User {
   id                   String     @id @default(cuid())
   phone                String?    @unique
@@ -94,6 +109,9 @@ model User {
   loginEvents           UserLoginEvent[]
   projectsCreated       Project[]            @relation("ProjectsCreated")
   projectParticipations ProjectParticipant[]
+  docFoldersCreated     DocFolder[]          @relation("DocFoldersCreated")
+  docFilesUploaded      DocFile[]            @relation("DocFilesUploaded")
+  callOffsCreated       CallOff[]            @relation("CallOffsCreated")
 
   @@map("users")
 }
@@ -201,6 +219,8 @@ model Customer {
   contactPersons      CustomerContactPerson[]
   accesses            UserCustomerAccess[]
   projects            Project[]
+  docFolders          DocFolder[]
+  callOffs            CallOff[]
 
   @@map("customers")
 }
@@ -273,6 +293,8 @@ model Project {
   massTypes    ProjectMassType[]
   fieldValues  ProjectFieldValue[]
   kpis         ProjectKpi[]
+  docFolders   DocFolder[]
+  callOffLines CallOffLine[]
 
   @@unique([customerId, projectNumber], map: "uq_projects_customer_project_number")
   @@index([customerId], map: "idx_projects_customer_id")
@@ -383,6 +405,94 @@ model ProjectKpi {
 
   @@index([projectId], map: "idx_project_kpis_project_id")
   @@map("project_kpis")
+}
+
+model DocFolder {
+  id          String     @id @default(cuid())
+  customerId  Int        @map("customer_id")
+  parentId    String?    @map("parent_id")
+  name        String
+  kind        FolderKind @default(CUSTOM)
+  systemKey   String?    @map("system_key")
+  projectId   String?    @map("project_id")
+  createdById String?    @map("created_by_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  customer  Customer    @relation(fields: [customerId], references: [customer_id], onDelete: Cascade)
+  parent    DocFolder?  @relation("DocFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  DocFolder[] @relation("DocFolderTree")
+  project   Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?       @relation("DocFoldersCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  files     DocFile[]
+
+  @@unique([customerId, systemKey], map: "uq_doc_folders_customer_system_key")
+  @@index([customerId, parentId], map: "idx_doc_folders_customer_parent")
+  @@index([projectId], map: "idx_doc_folders_project_id")
+  @@map("doc_folders")
+}
+
+model DocFile {
+  id           String   @id @default(cuid())
+  folderId     String   @map("folder_id")
+  name         String
+  storageKey   String?  @map("storage_key")
+  sizeBytes    Int?     @map("size_bytes")
+  contentType  String?  @map("content_type")
+  uploadedById String?  @map("uploaded_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  folder     DocFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  uploadedBy User?     @relation("DocFilesUploaded", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([folderId], map: "idx_doc_files_folder_id")
+  @@map("doc_files")
+}
+
+model CallOff {
+  id                String        @id @default(cuid())
+  customerId        Int           @map("customer_id")
+  number            String?
+  frameAgreementRef String        @map("frame_agreement_ref")
+  status            CallOffStatus @default(DRAFT)
+  sentAt            DateTime?     @map("sent_at")
+  lessorSignedAt    DateTime?     @map("lessor_signed_at")
+  lessorSignedBy    String?       @map("lessor_signed_by")
+  customerSignedAt  DateTime?     @map("customer_signed_at")
+  customerSignedBy  String?       @map("customer_signed_by")
+  rejectReason      String?       @map("reject_reason")
+  externalRef       String?       @map("external_ref")
+  pdfDocFileId      String?       @map("pdf_doc_file_id")
+  createdById       String?       @map("created_by_id")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  customer  Customer      @relation(fields: [customerId], references: [customer_id], onDelete: Cascade)
+  createdBy User?         @relation("CallOffsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  lines     CallOffLine[]
+
+  @@index([customerId, status], map: "idx_call_offs_customer_status")
+  @@index([createdById], map: "idx_call_offs_created_by_id")
+  @@map("call_offs")
+}
+
+model CallOffLine {
+  id            String    @id @default(cuid())
+  callOffId     String    @map("call_off_id")
+  description   String
+  quantity      Int       @default(1)
+  wantedFrom    DateTime? @map("wanted_from")
+  wantedTo      DateTime? @map("wanted_to")
+  projectId     String?   @map("project_id")
+  machineNumber String?   @map("machine_number")
+  priceText     String?   @map("price_text")
+
+  callOff CallOff  @relation(fields: [callOffId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([callOffId], map: "idx_call_off_lines_call_off_id")
+  @@index([projectId], map: "idx_call_off_lines_project_id")
+  @@map("call_off_lines")
 }
 
 model AuditLog {

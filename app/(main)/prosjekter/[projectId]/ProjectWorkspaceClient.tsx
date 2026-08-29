@@ -22,6 +22,7 @@ import {
   type ProjectStatusValue,
 } from "@/lib/project-status";
 import type { ProjectWorkspace } from "@/lib/projects";
+import ProjectDocumentsPanel from "./ProjectDocumentsPanel";
 
 type ProjectWorkspaceClientProps = {
   project: ProjectWorkspace;
@@ -108,7 +109,7 @@ export default function ProjectWorkspaceClient({
       {activeTab === "info" ? <ProjectInfoTab project={project} /> : null}
       {activeTab === "map" ? <ProjectMapTab project={project} /> : null}
       {activeTab === "masses" ? <ProjectMassesTab project={project} canEdit={canEdit} /> : null}
-      {activeTab === "documents" ? <ProjectDocumentsTab /> : null}
+      {activeTab === "documents" ? <ProjectDocumentsTab projectId={project.id} canEdit={canEdit} /> : null}
     </main>
   );
 }
@@ -318,22 +319,14 @@ function ProjectMassesTab({
   );
 }
 
-function ProjectDocumentsTab() {
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 px-6 py-4">
-        <h2 className="text-xl font-semibold text-slate-900">Dokumenter</h2>
-      </div>
-      <div className="space-y-5 p-6">
-        <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
-          Ingen prosjektdokumenter registrert.
-        </div>
-        <Link href="/dokumenter" className={secondaryButtonClass}>
-          Åpne dokumenter
-        </Link>
-      </div>
-    </section>
-  );
+function ProjectDocumentsTab({
+  projectId,
+  canEdit,
+}: {
+  projectId: string;
+  canEdit: boolean;
+}) {
+  return <ProjectDocumentsPanel projectId={projectId} canEdit={canEdit} />;
 }
 
 function InfoSection({

@@ -7,8 +7,13 @@ import {
   listProjectCustomersForUser,
   listProjectsForUser,
   normalizeProjectFieldValues,
+  normalizeProjectKpis,
   normalizeProjectMassTypes,
 } from "@/lib/projects";
+
+const CONTRACT_TYPES = ["NS_8405", "NS_8406", "NS_8407", "NS_8417", "OTHER"] as const;
+const CLIENT_TYPES = ["PUBLIC", "PRIVATE"] as const;
+const PROJECT_STATUSES = ["PLANNING", "ACTIVE", "ON_HOLD", "COMPLETED", "ARCHIVED"] as const;
 
 export async function GET() {
   const session = await requireAuthenticatedUser();
@@ -54,6 +59,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: startDate.error ?? endDate.error }, { status: 400 });
   }
 
+  const contractType = optionalEnumValue(body.contractType, CONTRACT_TYPES);
+  const clientType = optionalEnumValue(body.clientType, CLIENT_TYPES);
+  const projectStatus = optionalEnumValue(body.status, PROJECT_STATUSES);
+  if (contractType.error || clientType.error || projectStatus.error) {
+    return NextResponse.json(
+      { error: contractType.error ?? clientType.error ?? projectStatus.error },
+      { status: 400 },
+    );
+  }
+
+  const contractSizeNok = optionalNumberValue(body.contractSizeNok);
+  if (contractSizeNok.error) {
+    return NextResponse.json({ error: contractSizeNok.error }, { status: 400 });
+  }
+
   const { fieldDefinitions, massTypes } = await getActiveProjectSetupCatalog();
   const fieldPayload = normalizeProjectFieldValues(fieldDefinitions, body.fieldValues);
   if (fieldPayload.error) return NextResponse.json({ error: fieldPayload.error }, { status: 400 });
@@ -62,6 +82,9 @@ export async function POST(request: Request) {
   if (massTypePayload.error) {
     return NextResponse.json({ error: massTypePayload.error }, { status: 400 });
   }
+
+  const kpiPayload = normalizeProjectKpis(body.kpis);
+  if (kpiPayload.error) return NextResponse.json({ error: kpiPayload.error }, { status: 400 });
 
   try {
     const project = await prisma.project.create({
@@ -72,6 +95,16 @@ export async function POST(request: Request) {
         addressLine: nullableStringValue(body.addressLine),
         postalCode: nullableStringValue(body.postalCode),
         city: nullableStringValue(body.city),
+        contractType: contractType.value,
+        contractSizeNok: contractSizeNok.value,
+        clientType: clientType.value,
+        clientName: nullableStringValue(body.clientName),
+        clientAddress: nullableStringValue(body.clientAddress),
+        clientEmail: nullableStringValue(body.clientEmail),
+        clientContactName: nullableStringValue(body.clientContactName),
+        clientContactEmail: nullableStringValue(body.clientContactEmail),
+        clientContactPhone: nullableStringValue(body.clientContactPhone),
+        status: projectStatus.value ?? "ACTIVE",
         startDate: startDate.value,
         endDate: endDate.value,
         customer: { connect: { customer_id: customerId } },
@@ -99,6 +132,11 @@ export async function POST(request: Request) {
               })),
             }
           : undefined,
+        kpis: kpiPayload.values.length
+          ? {
+              create: kpiPayload.values,
+            }
+          : undefined,
       },
       select: {
         id: true,
@@ -114,7 +152,11 @@ export async function POST(request: Request) {
       action: "project.create",
       entityType: "Project",
       entityId: project.id,
-      metadata: { projectNumber: project.projectNumber, name: project.name },
+      metadata: {
+        projectNumber: project.projectNumber,
+        name: project.name,
+        kpis: kpiPayload.values.length,
+      },
     });
 
     return NextResponse.json({ project }, { status: 201 });
@@ -154,6 +196,16 @@ function integerValue(value: unknown, fallback: number): number {
   return Number.isInteger(parsed) ? parsed : fallback;
 }
 
+function optionalNumberValue(value: unknown): { value: number | null; error: string | null } {
+  if (value === null || value === undefined || value === "") return { value: null, error: null };
+  const normalized = typeof value === "string" ? value.replace(",", ".") : value;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return { value: null, error: "Kontraktsstørrelse må være 0 eller høyere." };
+  }
+  return { value: parsed, error: null };
+}
+
 function nullableStringValue(value: unknown): string | null {
   const normalized = stringValue(value);
   return normalized || null;
@@ -165,4 +217,14 @@ function stringValue(value: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function optionalEnumValue<const T extends readonly string[]>(
+  value: unknown,
+  allowed: T,
+): { value: T[number] | null; error: string | null } {
+  const normalized = stringValue(value);
+  if (!normalized) return { value: null, error: null };
+  if ((allowed as readonly string[]).includes(normalized)) return { value: normalized as T[number], error: null };
+  return { value: null, error: "Ugyldig valg i prosjektoppsettet." };
 }

@@ -4,6 +4,16 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { IconCheck, IconLoader2, IconPlus, IconX } from "@tabler/icons-react";
 import { standardButtonClass } from "@/lib/buttonStyles";
+import {
+  CLIENT_TYPE_LABELS,
+  CONTRACT_TYPE_LABELS,
+  KPI_METRIC_OPTIONS,
+  PROJECT_STATUS_LABELS,
+  type ClientTypeValue,
+  type ContractTypeValue,
+  type KpiMetricValue,
+  type ProjectStatusValue,
+} from "@/lib/project-status";
 
 type FieldTypeValue = "TEXT" | "NUMBER" | "DATE" | "SELECT" | "BOOLEAN";
 
@@ -41,10 +51,29 @@ export type ProjectSetupInitialProject = {
   addressLine: string | null;
   postalCode: string | null;
   city: string | null;
+  contractType: ContractTypeValue | null;
+  contractSizeNok: number | null;
+  clientType: ClientTypeValue | null;
+  clientName: string | null;
+  clientAddress: string | null;
+  clientEmail: string | null;
+  clientContactName: string | null;
+  clientContactEmail: string | null;
+  clientContactPhone: string | null;
+  status: ProjectStatusValue;
   startDate: string | null;
   endDate: string | null;
   fieldValues: Array<{ definitionId: string; value: string }>;
   massTypes: Array<{ massTypeId: string; plannedIn: number; plannedOut: number }>;
+  kpis: Array<{
+    id: string;
+    metric: KpiMetricValue;
+    label: string;
+    targetValue: number;
+    currentValue: number | null;
+    unit: string;
+    contractRef: string | null;
+  }>;
 };
 
 type ProjectSetupFormProps = {
@@ -63,6 +92,16 @@ type CoreForm = {
   addressLine: string;
   postalCode: string;
   city: string;
+  contractType: string;
+  contractSizeNok: string;
+  clientType: string;
+  clientName: string;
+  clientAddress: string;
+  clientEmail: string;
+  clientContactName: string;
+  clientContactEmail: string;
+  clientContactPhone: string;
+  status: ProjectStatusValue;
   startDate: string;
   endDate: string;
 };
@@ -71,6 +110,16 @@ type MassTypeSelection = {
   selected: boolean;
   plannedIn: string;
   plannedOut: string;
+};
+
+type KpiFormRow = {
+  id: string;
+  metric: KpiMetricValue;
+  label: string;
+  targetValue: string;
+  currentValue: string;
+  unit: string;
+  contractRef: string;
 };
 
 type ApiResponse = {
@@ -93,6 +142,9 @@ const inputClass =
 const textareaClass =
   "min-h-24 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30";
 
+const secondaryButtonClass =
+  "cursor-pointer inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
+
 export default function ProjectSetupForm({
   mode,
   customers,
@@ -112,6 +164,16 @@ export default function ProjectSetupForm({
     addressLine: project?.addressLine ?? "",
     postalCode: project?.postalCode ?? "",
     city: project?.city ?? "",
+    contractType: project?.contractType ?? "",
+    contractSizeNok: optionalDecimalDisplay(project?.contractSizeNok),
+    clientType: project?.clientType ?? "",
+    clientName: project?.clientName ?? "",
+    clientAddress: project?.clientAddress ?? "",
+    clientEmail: project?.clientEmail ?? "",
+    clientContactName: project?.clientContactName ?? "",
+    clientContactEmail: project?.clientContactEmail ?? "",
+    clientContactPhone: project?.clientContactPhone ?? "",
+    status: project?.status ?? "ACTIVE",
     startDate: toDateInput(project?.startDate),
     endDate: toDateInput(project?.endDate),
   }));
@@ -137,6 +199,17 @@ export default function ProjectSetupForm({
       }),
     );
   });
+  const [kpis, setKpis] = useState<KpiFormRow[]>(() =>
+    project?.kpis.map((kpi) => ({
+      id: kpi.id,
+      metric: kpi.metric,
+      label: kpi.label,
+      targetValue: optionalDecimalDisplay(kpi.targetValue),
+      currentValue: optionalDecimalDisplay(kpi.currentValue),
+      unit: kpi.unit,
+      contractRef: kpi.contractRef ?? "",
+    })) ?? [],
+  );
 
   const requiredFieldsComplete = useMemo(
     () =>
@@ -145,13 +218,25 @@ export default function ProjectSetupForm({
       ),
     [fieldDefinitions, fieldValues],
   );
+  const kpisComplete = useMemo(
+    () =>
+      kpis.every(
+        (kpi) =>
+          Boolean(kpi.label.trim()) &&
+          Boolean(kpi.unit.trim()) &&
+          isDecimalInput(kpi.targetValue) &&
+          (kpi.currentValue.trim() === "" || isDecimalInput(kpi.currentValue)),
+      ),
+    [kpis],
+  );
 
   const canSubmit =
     !submitting &&
     Boolean(form.customerId) &&
     Boolean(form.projectNumber.trim()) &&
     Boolean(form.name.trim()) &&
-    requiredFieldsComplete;
+    requiredFieldsComplete &&
+    kpisComplete;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -169,6 +254,16 @@ export default function ProjectSetupForm({
       addressLine: form.addressLine,
       postalCode: form.postalCode,
       city: form.city,
+      contractType: form.contractType,
+      contractSizeNok: optionalDecimalInputValue(form.contractSizeNok),
+      clientType: form.clientType,
+      clientName: form.clientName,
+      clientAddress: form.clientAddress,
+      clientEmail: form.clientEmail,
+      clientContactName: form.clientContactName,
+      clientContactEmail: form.clientContactEmail,
+      clientContactPhone: form.clientContactPhone,
+      status: form.status,
       startDate: form.startDate,
       endDate: form.endDate,
       fieldValues: fieldDefinitions.map((definition) => ({
@@ -182,6 +277,14 @@ export default function ProjectSetupForm({
           plannedIn: decimalInputValue(value.plannedIn),
           plannedOut: decimalInputValue(value.plannedOut),
         })),
+      kpis: kpis.map((kpi) => ({
+        metric: kpi.metric,
+        label: kpi.label,
+        targetValue: decimalInputValue(kpi.targetValue),
+        currentValue: optionalDecimalInputValue(kpi.currentValue),
+        unit: kpi.unit,
+        contractRef: kpi.contractRef,
+      })),
     };
 
     const url = mode === "create" ? "/api/prosjekter" : `/api/prosjekter/${project?.id}/oppsett`;
@@ -200,7 +303,7 @@ export default function ProjectSetupForm({
       }
 
       if (mode === "create" && body.project?.id) {
-        router.push(`/prosjekter/${body.project.id}/oppsett`);
+        router.push(`/prosjekter/${body.project.id}`);
         router.refresh();
         return;
       }
@@ -214,7 +317,7 @@ export default function ProjectSetupForm({
     }
   }
 
-  function setCoreValue(key: keyof CoreForm, value: string) {
+  function setCoreValue<K extends keyof CoreForm>(key: K, value: CoreForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
@@ -234,6 +337,48 @@ export default function ProjectSetupForm({
         },
       };
     });
+  }
+
+  function setKpiValue(id: string, patch: Partial<KpiFormRow>) {
+    setKpis((current) =>
+      current.map((kpi) => (kpi.id === id ? { ...kpi, ...patch } : kpi)),
+    );
+  }
+
+  function addKpi() {
+    const metric = KPI_METRIC_OPTIONS[0];
+    setKpis((current) => [
+      ...current,
+      {
+        id: `new-${Date.now()}-${current.length}`,
+        metric: metric.value,
+        label: metric.label,
+        targetValue: "",
+        currentValue: "",
+        unit: metric.defaultUnit,
+        contractRef: "",
+      },
+    ]);
+  }
+
+  function removeKpi(id: string) {
+    setKpis((current) => current.filter((kpi) => kpi.id !== id));
+  }
+
+  function setKpiMetric(id: string, metricValue: KpiMetricValue) {
+    const metric = KPI_METRIC_OPTIONS.find((option) => option.value === metricValue);
+    setKpis((current) =>
+      current.map((kpi) =>
+        kpi.id === id
+          ? {
+              ...kpi,
+              metric: metricValue,
+              label: kpi.label.trim() ? kpi.label : metric?.label ?? kpi.label,
+              unit: kpi.unit.trim() ? kpi.unit : metric?.defaultUnit ?? kpi.unit,
+            }
+          : kpi,
+      ),
+    );
   }
 
   return (
@@ -311,7 +456,21 @@ export default function ProjectSetupForm({
               className={`${inputClass} mt-1`}
             />
           </label>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <label className="text-sm font-medium text-slate-700">
+            Status
+            <select
+              value={form.status}
+              onChange={(event) => setCoreValue("status", event.target.value as ProjectStatusValue)}
+              className={`${inputClass} mt-1`}
+            >
+              {Object.entries(PROJECT_STATUS_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="grid gap-4 md:col-span-2 sm:grid-cols-2">
             <label className="text-sm font-medium text-slate-700">
               Startdato
               <input
@@ -331,6 +490,202 @@ export default function ProjectSetupForm({
               />
             </label>
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 px-6 py-4">
+          <h2 className="text-xl font-semibold text-slate-900">Kontrakt og byggherre</h2>
+        </div>
+        <div className="grid gap-4 p-6 md:grid-cols-2">
+          <label className="text-sm font-medium text-slate-700">
+            Kontraktstype
+            <select
+              value={form.contractType}
+              onChange={(event) => setCoreValue("contractType", event.target.value)}
+              className={`${inputClass} mt-1`}
+            >
+              <option value="">Velg kontraktstype</option>
+              {Object.entries(CONTRACT_TYPE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm font-medium text-slate-700">
+            Kontraktsstørrelse NOK
+            <input
+              value={form.contractSizeNok}
+              onChange={(event) => setCoreValue("contractSizeNok", event.target.value)}
+              inputMode="decimal"
+              className={`${inputClass} mt-1`}
+            />
+          </label>
+          <label className="text-sm font-medium text-slate-700">
+            Byggherretype
+            <select
+              value={form.clientType}
+              onChange={(event) => setCoreValue("clientType", event.target.value)}
+              className={`${inputClass} mt-1`}
+            >
+              <option value="">Velg byggherretype</option>
+              {Object.entries(CLIENT_TYPE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm font-medium text-slate-700">
+            Byggherre
+            <input
+              value={form.clientName}
+              onChange={(event) => setCoreValue("clientName", event.target.value)}
+              className={`${inputClass} mt-1`}
+            />
+          </label>
+          <label className="text-sm font-medium text-slate-700">
+            Byggherreadresse
+            <input
+              value={form.clientAddress}
+              onChange={(event) => setCoreValue("clientAddress", event.target.value)}
+              className={`${inputClass} mt-1`}
+            />
+          </label>
+          <label className="text-sm font-medium text-slate-700">
+            Byggherre e-post
+            <input
+              type="email"
+              value={form.clientEmail}
+              onChange={(event) => setCoreValue("clientEmail", event.target.value)}
+              className={`${inputClass} mt-1`}
+            />
+          </label>
+          <label className="text-sm font-medium text-slate-700">
+            Kontaktperson
+            <input
+              value={form.clientContactName}
+              onChange={(event) => setCoreValue("clientContactName", event.target.value)}
+              className={`${inputClass} mt-1`}
+            />
+          </label>
+          <label className="text-sm font-medium text-slate-700">
+            Kontakt e-post
+            <input
+              type="email"
+              value={form.clientContactEmail}
+              onChange={(event) => setCoreValue("clientContactEmail", event.target.value)}
+              className={`${inputClass} mt-1`}
+            />
+          </label>
+          <label className="text-sm font-medium text-slate-700">
+            Kontakt telefon
+            <input
+              value={form.clientContactPhone}
+              onChange={(event) => setCoreValue("clientContactPhone", event.target.value)}
+              className={`${inputClass} mt-1`}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-xl font-semibold text-slate-900">Kontraktsmål</h2>
+          <button type="button" onClick={addKpi} className={secondaryButtonClass}>
+            <IconPlus className="h-5 w-5" />
+            Legg til mål
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-100 text-sm">
+            <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-6 py-3">Type</th>
+                <th className="px-4 py-3">Navn</th>
+                <th className="px-4 py-3">Målverdi</th>
+                <th className="px-4 py-3">Målt verdi</th>
+                <th className="px-4 py-3">Enhet</th>
+                <th className="px-4 py-3">Kontraktspunkt</th>
+                <th className="px-6 py-3 text-right">Handling</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {kpis.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
+                    Ingen kontraktsmål er lagt inn.
+                  </td>
+                </tr>
+              ) : (
+                kpis.map((kpi) => (
+                  <tr key={kpi.id}>
+                    <td className="min-w-44 px-6 py-3">
+                      <select
+                        value={kpi.metric}
+                        onChange={(event) => setKpiMetric(kpi.id, event.target.value as KpiMetricValue)}
+                        className={inputClass}
+                      >
+                        {KPI_METRIC_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="min-w-48 px-4 py-3">
+                      <input
+                        value={kpi.label}
+                        onChange={(event) => setKpiValue(kpi.id, { label: event.target.value })}
+                        className={inputClass}
+                      />
+                    </td>
+                    <td className="min-w-32 px-4 py-3">
+                      <input
+                        value={kpi.targetValue}
+                        onChange={(event) => setKpiValue(kpi.id, { targetValue: event.target.value })}
+                        inputMode="decimal"
+                        className={inputClass}
+                      />
+                    </td>
+                    <td className="min-w-32 px-4 py-3">
+                      <input
+                        value={kpi.currentValue}
+                        onChange={(event) => setKpiValue(kpi.id, { currentValue: event.target.value })}
+                        inputMode="decimal"
+                        className={inputClass}
+                      />
+                    </td>
+                    <td className="min-w-28 px-4 py-3">
+                      <input
+                        value={kpi.unit}
+                        onChange={(event) => setKpiValue(kpi.id, { unit: event.target.value })}
+                        className={inputClass}
+                      />
+                    </td>
+                    <td className="min-w-40 px-4 py-3">
+                      <input
+                        value={kpi.contractRef}
+                        onChange={(event) => setKpiValue(kpi.id, { contractRef: event.target.value })}
+                        className={inputClass}
+                      />
+                    </td>
+                    <td className="px-6 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => removeKpi(kpi.id)}
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        <IconX className="h-4 w-4" />
+                        Fjern
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -557,6 +912,20 @@ function toDateInput(value?: string | null) {
 
 function decimalInputValue(value: string) {
   return value.replace(",", ".").trim() || "0";
+}
+
+function optionalDecimalInputValue(value: string) {
+  return value.trim() ? value.replace(",", ".").trim() : "";
+}
+
+function optionalDecimalDisplay(value?: number | null) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function isDecimalInput(value: string) {
+  const normalized = value.replace(",", ".").trim();
+  if (!normalized) return false;
+  return Number.isFinite(Number(normalized));
 }
 
 function formatCustomerLabel(customer: ProjectSetupCustomer) {

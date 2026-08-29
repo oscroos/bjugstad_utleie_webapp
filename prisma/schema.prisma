@@ -47,6 +47,29 @@ enum FieldType {
   BOOLEAN
 }
 
+enum ContractType {
+  NS_8405
+  NS_8406
+  NS_8407
+  NS_8417
+  OTHER
+}
+
+enum ClientType {
+  PUBLIC
+  PRIVATE
+}
+
+enum KpiMetric {
+  MAX_CO2_KG
+  MAX_IDLE_PCT
+  MIN_ELECTRIC_PCT
+  MIN_HVO_PCT
+  MAX_DIESEL_LITERS
+  MIN_MASS_REUSE_PCT
+  CUSTOM
+}
+
 model User {
   id                   String     @id @default(cuid())
   phone                String?    @unique
@@ -220,29 +243,40 @@ model UserLoginEvent {
 }
 
 model Project {
-  id            String        @id @default(cuid())
-  customerId    Int           @map("customer_id")
-  projectNumber String        @map("project_number")
-  name          String
-  description   String?
-  addressLine   String?       @map("address_line")
-  postalCode    String?       @map("postal_code")
-  city          String?
-  status        ProjectStatus @default(ACTIVE)
-  startDate     DateTime?     @map("start_date")
-  endDate       DateTime?     @map("end_date")
-  createdById   String?       @map("created_by_id")
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
+  id                 String        @id @default(cuid())
+  customerId         Int           @map("customer_id")
+  projectNumber      String        @map("project_number")
+  name               String
+  description        String?
+  addressLine        String?       @map("address_line")
+  postalCode         String?       @map("postal_code")
+  city               String?
+  contractType       ContractType? @map("contract_type")
+  contractSizeNok    Float?        @map("contract_size_nok")
+  clientType         ClientType?   @map("client_type")
+  clientName         String?       @map("client_name")
+  clientAddress      String?       @map("client_address")
+  clientEmail        String?       @map("client_email")
+  clientContactName  String?       @map("client_contact_name")
+  clientContactEmail String?       @map("client_contact_email")
+  clientContactPhone String?       @map("client_contact_phone")
+  status             ProjectStatus @default(ACTIVE)
+  startDate          DateTime?     @map("start_date")
+  endDate            DateTime?     @map("end_date")
+  createdById        String?       @map("created_by_id")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
 
   customer     Customer             @relation(fields: [customerId], references: [customer_id], onDelete: Cascade)
   createdBy    User?                @relation("ProjectsCreated", fields: [createdById], references: [id], onDelete: SetNull)
   participants ProjectParticipant[]
   massTypes    ProjectMassType[]
   fieldValues  ProjectFieldValue[]
+  kpis         ProjectKpi[]
 
   @@unique([customerId, projectNumber], map: "uq_projects_customer_project_number")
   @@index([customerId], map: "idx_projects_customer_id")
+  @@index([clientName], map: "idx_projects_client_name")
   @@index([status], map: "idx_projects_status")
   @@map("projects")
 }
@@ -331,6 +365,24 @@ model ProjectFieldValue {
   @@index([projectId], map: "idx_project_field_values_project_id")
   @@index([definitionId], map: "idx_project_field_values_definition_id")
   @@map("project_field_values")
+}
+
+model ProjectKpi {
+  id           String    @id @default(cuid())
+  projectId    String    @map("project_id")
+  metric       KpiMetric
+  label        String
+  targetValue  Float     @map("target_value")
+  currentValue Float?    @map("current_value")
+  unit         String
+  contractRef  String?   @map("contract_ref")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId], map: "idx_project_kpis_project_id")
+  @@map("project_kpis")
 }
 
 model AuditLog {

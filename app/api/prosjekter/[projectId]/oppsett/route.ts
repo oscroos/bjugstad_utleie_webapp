@@ -4,12 +4,17 @@ import { prisma } from "@/lib/prisma";
 import {
   getActiveProjectSetupCatalog,
   normalizeProjectFieldValues,
+  normalizeProjectKpis,
   normalizeProjectMassTypes,
 } from "@/lib/projects";
 
 type RouteContext = {
   params: Promise<{ projectId: string }>;
 };
+
+const CONTRACT_TYPES = ["NS_8405", "NS_8406", "NS_8407", "NS_8417", "OTHER"] as const;
+const CLIENT_TYPES = ["PUBLIC", "PRIVATE"] as const;
+const PROJECT_STATUSES = ["PLANNING", "ACTIVE", "ON_HOLD", "COMPLETED", "ARCHIVED"] as const;
 
 export async function GET(_request: Request, { params }: RouteContext) {
   const { projectId } = await params;
@@ -47,6 +52,9 @@ export async function GET(_request: Request, { params }: RouteContext) {
             },
           },
         },
+        kpis: {
+          orderBy: { createdAt: "asc" },
+        },
       },
     }),
     getActiveProjectSetupCatalog(),
@@ -79,6 +87,21 @@ export async function PUT(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Prosjektnavn er påkrevd" }, { status: 400 });
   }
 
+  const contractType = optionalEnumValue(body.contractType, CONTRACT_TYPES);
+  const clientType = optionalEnumValue(body.clientType, CLIENT_TYPES);
+  const projectStatus = optionalEnumValue(body.status, PROJECT_STATUSES);
+  if (contractType.error || clientType.error || projectStatus.error) {
+    return NextResponse.json(
+      { error: contractType.error ?? clientType.error ?? projectStatus.error },
+      { status: 400 },
+    );
+  }
+
+  const contractSizeNok = optionalNumberValue(body.contractSizeNok);
+  if (contractSizeNok.error) {
+    return NextResponse.json({ error: contractSizeNok.error }, { status: 400 });
+  }
+
   const { fieldDefinitions, massTypes } = await getActiveProjectSetupCatalog();
   const fieldPayload = normalizeProjectFieldValues(fieldDefinitions, body.fieldValues);
   if (fieldPayload.error) return NextResponse.json({ error: fieldPayload.error }, { status: 400 });
@@ -87,6 +110,11 @@ export async function PUT(request: Request, { params }: RouteContext) {
   if (massTypePayload.error) {
     return NextResponse.json({ error: massTypePayload.error }, { status: 400 });
   }
+
+  const kpiPayload = normalizeProjectKpis(body.kpis);
+  if (kpiPayload.error) return NextResponse.json({ error: kpiPayload.error }, { status: 400 });
+
+  const nextStatus = body.status !== undefined ? projectStatus.value ?? undefined : undefined;
 
   await prisma.$transaction(async (tx) => {
     await tx.project.update({
@@ -97,6 +125,19 @@ export async function PUT(request: Request, { params }: RouteContext) {
         addressLine: body.addressLine !== undefined ? nullableStringValue(body.addressLine) : undefined,
         postalCode: body.postalCode !== undefined ? nullableStringValue(body.postalCode) : undefined,
         city: body.city !== undefined ? nullableStringValue(body.city) : undefined,
+        contractType: body.contractType !== undefined ? contractType.value : undefined,
+        contractSizeNok: body.contractSizeNok !== undefined ? contractSizeNok.value : undefined,
+        clientType: body.clientType !== undefined ? clientType.value : undefined,
+        clientName: body.clientName !== undefined ? nullableStringValue(body.clientName) : undefined,
+        clientAddress: body.clientAddress !== undefined ? nullableStringValue(body.clientAddress) : undefined,
+        clientEmail: body.clientEmail !== undefined ? nullableStringValue(body.clientEmail) : undefined,
+        clientContactName:
+          body.clientContactName !== undefined ? nullableStringValue(body.clientContactName) : undefined,
+        clientContactEmail:
+          body.clientContactEmail !== undefined ? nullableStringValue(body.clientContactEmail) : undefined,
+        clientContactPhone:
+          body.clientContactPhone !== undefined ? nullableStringValue(body.clientContactPhone) : undefined,
+        status: nextStatus,
         startDate: body.startDate !== undefined ? startDate.value : undefined,
         endDate: body.endDate !== undefined ? endDate.value : undefined,
       },
@@ -124,6 +165,23 @@ export async function PUT(request: Request, { params }: RouteContext) {
         })),
       });
     }
+
+    if (body.kpis !== undefined) {
+      await tx.projectKpi.deleteMany({ where: { projectId } });
+      if (kpiPayload.values.length) {
+        await tx.projectKpi.createMany({
+          data: kpiPayload.values.map((kpi) => ({
+            projectId,
+            metric: kpi.metric,
+            label: kpi.label,
+            targetValue: kpi.targetValue,
+            currentValue: kpi.currentValue,
+            unit: kpi.unit,
+            contractRef: kpi.contractRef,
+          })),
+        });
+      }
+    }
   });
 
   await writeAuditLog({
@@ -135,6 +193,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
     metadata: {
       fieldValues: fieldPayload.values.length,
       massTypes: massTypePayload.values.length,
+      kpis: kpiPayload.values.length,
     },
   });
 
@@ -169,4 +228,24 @@ function stringValue(value: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function optionalNumberValue(value: unknown): { value: number | null; error: string | null } {
+  if (value === null || value === undefined || value === "") return { value: null, error: null };
+  const normalized = typeof value === "string" ? value.replace(",", ".") : value;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return { value: null, error: "Kontraktsstørrelse må være 0 eller høyere." };
+  }
+  return { value: parsed, error: null };
+}
+
+function optionalEnumValue<const T extends readonly string[]>(
+  value: unknown,
+  allowed: T,
+): { value: T[number] | null; error: string | null } {
+  const normalized = stringValue(value);
+  if (!normalized) return { value: null, error: null };
+  if ((allowed as readonly string[]).includes(normalized)) return { value: normalized as T[number], error: null };
+  return { value: null, error: "Ugyldig valg i prosjektoppsettet." };
 }

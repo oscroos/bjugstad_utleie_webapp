@@ -46,6 +46,18 @@ export default async function ProsjektOppsettPage({ params }: PageProps) {
               plannedOut: true,
             },
           },
+          kpis: {
+            select: {
+              id: true,
+              metric: true,
+              label: true,
+              targetValue: true,
+              currentValue: true,
+              unit: true,
+              contractRef: true,
+            },
+            orderBy: { createdAt: "asc" },
+          },
         },
       }),
       getActiveProjectSetupCatalog(),
@@ -108,10 +120,21 @@ function toInitialProject(project: {
   addressLine: string | null;
   postalCode: string | null;
   city: string | null;
+  contractType: ProjectSetupInitialProject["contractType"];
+  contractSizeNok: number | null;
+  clientType: ProjectSetupInitialProject["clientType"];
+  clientName: string | null;
+  clientAddress: string | null;
+  clientEmail: string | null;
+  clientContactName: string | null;
+  clientContactEmail: string | null;
+  clientContactPhone: string | null;
+  status: ProjectSetupInitialProject["status"];
   startDate: Date | null;
   endDate: Date | null;
   fieldValues: Array<{ definitionId: string; value: string }>;
   massTypes: Array<{ massTypeId: string; plannedIn: number; plannedOut: number }>;
+  kpis: ProjectSetupInitialProject["kpis"];
 }): ProjectSetupInitialProject {
   return {
     id: project.id,
@@ -122,9 +145,20 @@ function toInitialProject(project: {
     addressLine: project.addressLine,
     postalCode: project.postalCode,
     city: project.city,
+    contractType: project.contractType,
+    contractSizeNok: project.contractSizeNok,
+    clientType: project.clientType,
+    clientName: project.clientName,
+    clientAddress: project.clientAddress,
+    clientEmail: project.clientEmail,
+    clientContactName: project.clientContactName,
+    clientContactEmail: project.clientContactEmail,
+    clientContactPhone: project.clientContactPhone,
+    status: project.status,
     startDate: project.startDate?.toISOString() ?? null,
     endDate: project.endDate?.toISOString() ?? null,
     fieldValues: project.fieldValues,
     massTypes: project.massTypes,
+    kpis: project.kpis,
   };
 }

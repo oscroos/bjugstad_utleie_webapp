@@ -1,4 +1,13 @@
-import type { FieldType, ProjectStatus } from "@prisma/client";
+import type { ClientType, ContractType, FieldType, KpiMetric, ProjectStatus } from "@prisma/client";
+import {
+  evaluateProjectKpi,
+  KPI_METRIC_LABELS,
+  KPI_METRIC_OPTIONS,
+  summarizeProjectDeviations,
+  type EvaluatedProjectKpi,
+  type KpiMetricValue,
+  type ProjectDeviationLevel,
+} from "@/lib/project-status";
 import { prisma } from "@/lib/prisma";
 
 export type ProjectListItem = {
@@ -8,8 +17,14 @@ export type ProjectListItem = {
   projectNumber: string;
   name: string;
   city: string | null;
+  clientName: string | null;
+  contractType: ContractType | null;
   status: ProjectStatus;
   updatedAt: string;
+  deviationLevel: ProjectDeviationLevel;
+  deviationLabel: string;
+  issueCount: number;
+  issues: string[];
 };
 
 export type ProjectCustomerOption = {
@@ -50,7 +65,63 @@ export type NormalizedProjectMassType = {
   plannedOut: number;
 };
 
+export type NormalizedProjectKpi = {
+  metric: KpiMetric;
+  label: string;
+  targetValue: number;
+  currentValue: number | null;
+  unit: string;
+  contractRef: string | null;
+};
+
+export type ProjectWorkspace = {
+  id: string;
+  customerId: number;
+  customerName: string | null;
+  projectNumber: string;
+  name: string;
+  description: string | null;
+  addressLine: string | null;
+  postalCode: string | null;
+  city: string | null;
+  contractType: ContractType | null;
+  contractSizeNok: number | null;
+  clientType: ClientType | null;
+  clientName: string | null;
+  clientAddress: string | null;
+  clientEmail: string | null;
+  clientContactName: string | null;
+  clientContactEmail: string | null;
+  clientContactPhone: string | null;
+  status: ProjectStatus;
+  startDate: string | null;
+  endDate: string | null;
+  updatedAt: string;
+  fieldValues: Array<{
+    definitionId: string;
+    label: string;
+    fieldType: FieldType;
+    value: string;
+  }>;
+  massTypes: Array<{
+    id: string;
+    massTypeId: string;
+    name: string;
+    unit: string;
+    tonnPerM3: number;
+    plannedIn: number;
+    plannedOut: number;
+  }>;
+  kpis: EvaluatedProjectKpi[];
+  deviations: {
+    level: ProjectDeviationLevel;
+    label: string;
+    issues: string[];
+  };
+};
+
 const ARCHIVED_STATUS: ProjectStatus = "ARCHIVED";
+const KPI_METRIC_VALUES = new Set(KPI_METRIC_OPTIONS.map((option) => option.value));
 
 export async function listProjectsForUser(
   userId: string,
@@ -76,6 +147,8 @@ export async function listProjectsForUser(
       projectNumber: true,
       name: true,
       city: true,
+      clientName: true,
+      contractType: true,
       status: true,
       updatedAt: true,
       customer: {
@@ -83,20 +156,52 @@ export async function listProjectsForUser(
           name: true,
         },
       },
+      kpis: {
+        select: {
+          id: true,
+          metric: true,
+          label: true,
+          targetValue: true,
+          currentValue: true,
+          unit: true,
+          contractRef: true,
+        },
+      },
     },
     orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
   });
 
-  return projects.map((project) => ({
-    id: project.id,
-    customerId: project.customerId,
-    customerName: project.customer.name,
-    projectNumber: project.projectNumber,
-    name: project.name,
-    city: project.city,
-    status: project.status,
-    updatedAt: project.updatedAt.toISOString(),
-  }));
+  return projects.map((project) => {
+    const kpis = project.kpis.map((kpi) =>
+      evaluateProjectKpi({
+        id: kpi.id,
+        metric: kpi.metric,
+        label: kpi.label,
+        targetValue: kpi.targetValue,
+        currentValue: kpi.currentValue,
+        unit: kpi.unit,
+        contractRef: kpi.contractRef,
+      }),
+    );
+    const deviations = summarizeProjectDeviations(kpis);
+
+    return {
+      id: project.id,
+      customerId: project.customerId,
+      customerName: project.customer.name,
+      projectNumber: project.projectNumber,
+      name: project.name,
+      city: project.city,
+      clientName: project.clientName,
+      contractType: project.contractType,
+      status: project.status,
+      updatedAt: project.updatedAt.toISOString(),
+      deviationLevel: deviations.level,
+      deviationLabel: deviations.label,
+      issueCount: deviations.issues.length,
+      issues: deviations.issues,
+    };
+  });
 }
 
 export async function listProjectCustomersForUser(
@@ -179,6 +284,100 @@ export async function getActiveProjectSetupCatalog() {
   return { fieldDefinitions, massTypes };
 }
 
+export async function getProjectWorkspace(projectId: string): Promise<ProjectWorkspace | null> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: {
+      customer: {
+        select: {
+          customer_id: true,
+          name: true,
+        },
+      },
+      fieldValues: {
+        include: {
+          definition: true,
+        },
+        orderBy: {
+          definition: {
+            sortOrder: "asc",
+          },
+        },
+      },
+      massTypes: {
+        include: {
+          massType: true,
+        },
+        orderBy: {
+          massType: {
+            sortOrder: "asc",
+          },
+        },
+      },
+      kpis: {
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  if (!project) return null;
+
+  const kpis = project.kpis.map((kpi) =>
+    evaluateProjectKpi({
+      id: kpi.id,
+      metric: kpi.metric,
+      label: kpi.label,
+      targetValue: kpi.targetValue,
+      currentValue: kpi.currentValue,
+      unit: kpi.unit,
+      contractRef: kpi.contractRef,
+    }),
+  );
+  const deviations = summarizeProjectDeviations(kpis);
+
+  return {
+    id: project.id,
+    customerId: project.customerId,
+    customerName: project.customer.name,
+    projectNumber: project.projectNumber,
+    name: project.name,
+    description: project.description,
+    addressLine: project.addressLine,
+    postalCode: project.postalCode,
+    city: project.city,
+    contractType: project.contractType,
+    contractSizeNok: project.contractSizeNok,
+    clientType: project.clientType,
+    clientName: project.clientName,
+    clientAddress: project.clientAddress,
+    clientEmail: project.clientEmail,
+    clientContactName: project.clientContactName,
+    clientContactEmail: project.clientContactEmail,
+    clientContactPhone: project.clientContactPhone,
+    status: project.status,
+    startDate: project.startDate?.toISOString() ?? null,
+    endDate: project.endDate?.toISOString() ?? null,
+    updatedAt: project.updatedAt.toISOString(),
+    fieldValues: project.fieldValues.map((fieldValue) => ({
+      definitionId: fieldValue.definitionId,
+      label: fieldValue.definition.label,
+      fieldType: fieldValue.definition.fieldType,
+      value: fieldValue.value,
+    })),
+    massTypes: project.massTypes.map((massType) => ({
+      id: massType.id,
+      massTypeId: massType.massTypeId,
+      name: massType.massType.name,
+      unit: massType.massType.unit,
+      tonnPerM3: massType.massType.tonnPerM3,
+      plannedIn: massType.plannedIn,
+      plannedOut: massType.plannedOut,
+    })),
+    kpis,
+    deviations,
+  };
+}
+
 export function normalizeProjectFieldValues(
   definitions: CatalogFieldDefinition[],
   rawValues: unknown,
@@ -244,6 +443,50 @@ export function normalizeProjectMassTypes(
   return { values, error: null };
 }
 
+export function normalizeProjectKpis(
+  rawValues: unknown,
+): { values: NormalizedProjectKpi[]; error: string | null } {
+  if (!Array.isArray(rawValues)) return { values: [], error: null };
+
+  const values: NormalizedProjectKpi[] = [];
+
+  for (const row of rawValues) {
+    if (!isRecord(row)) continue;
+
+    const rawMetric = stringValue(row.metric) as KpiMetricValue;
+    if (!KPI_METRIC_VALUES.has(rawMetric)) {
+      return { values: [], error: "Kontraktsmål har ugyldig type." };
+    }
+
+    const targetValue = requiredNumberValue(row.targetValue);
+    if (targetValue === null || targetValue < 0) {
+      return { values: [], error: "Målverdi på kontraktsmål må være 0 eller høyere." };
+    }
+
+    const currentValue = optionalNumberValue(row.currentValue);
+    if (currentValue.error) return { values: [], error: currentValue.error };
+    if (currentValue.value !== null && currentValue.value < 0) {
+      return { values: [], error: "Målt verdi på kontraktsmål kan ikke være negativ." };
+    }
+
+    const label = stringValue(row.label) || KPI_METRIC_LABELS[rawMetric];
+    const unit = stringValue(row.unit) || defaultKpiUnit(rawMetric);
+    if (!label) return { values: [], error: "Kontraktsmål mangler navn." };
+    if (!unit) return { values: [], error: "Kontraktsmål mangler enhet." };
+
+    values.push({
+      metric: rawMetric as KpiMetric,
+      label,
+      targetValue,
+      currentValue: currentValue.value,
+      unit,
+      contractRef: nullableStringValue(row.contractRef),
+    });
+  }
+
+  return { values, error: null };
+}
+
 function normalizeFieldValue(
   definition: CatalogFieldDefinition,
   rawValue: unknown,
@@ -282,9 +525,35 @@ function stringValue(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function nullableStringValue(value: unknown): string | null {
+  const normalized = stringValue(value);
+  return normalized || null;
+}
+
 function numberValue(value: unknown, fallback: number): number {
   if (value === null || value === undefined || value === "") return fallback;
   const normalized = typeof value === "string" ? value.replace(",", ".") : value;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function requiredNumberValue(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const normalized = typeof value === "string" ? value.replace(",", ".") : value;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function optionalNumberValue(value: unknown): { value: number | null; error: string | null } {
+  if (value === null || value === undefined || value === "") return { value: null, error: null };
+  const normalized = typeof value === "string" ? value.replace(",", ".") : value;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) {
+    return { value: null, error: "Målt verdi på kontraktsmål må være et tall." };
+  }
+  return { value: parsed, error: null };
+}
+
+function defaultKpiUnit(metric: KpiMetricValue) {
+  return KPI_METRIC_OPTIONS.find((option) => option.value === metric)?.defaultUnit ?? "";
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { standardButtonClass } from "@/lib/buttonStyles";
+import { listProjectsForUser, type ProjectListItem } from "@/lib/projects";
 
 type TabCard = {
   href: string;
@@ -102,6 +103,10 @@ export default async function HomePage() {
   const session = await auth();
   const isAdmin = session?.user?.role === "super_admin";
   const visibleCards = TAB_CARDS.filter((card) => !card.adminOnly || isAdmin);
+  const projects = session?.user?.id
+    ? await listProjectsForUser(session.user.id, session.user.role)
+    : [];
+  const projectDeviations = projects.filter((project) => project.deviationLevel !== "GREEN");
 
   return (
     <main className="min-h-full space-y-6 bg-[radial-gradient(circle_at_top_left,_rgba(190,218,255,0.45),_transparent_28%),linear-gradient(180deg,_#f8fbff_0%,_#eef4fb_100%)] p-8">
@@ -117,6 +122,8 @@ export default async function HomePage() {
           hva fanen brukes til, og en direkte snarvei videre.
         </p>
       </div>
+
+      {session ? <ProjectDeviationOverview projects={projectDeviations} /> : null}
 
       <div className="mt-8 grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
         {visibleCards.map((card) => (
@@ -159,6 +166,52 @@ export default async function HomePage() {
       </div>
     </main>
   );
+}
+
+function ProjectDeviationOverview({ projects }: { projects: ProjectListItem[] }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-slate-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-xl font-semibold text-slate-900">Prosjektavvik</h2>
+        <Link href="/prosjekter" className="text-sm font-semibold text-blue-700 hover:text-blue-900">
+          Åpne prosjekter
+        </Link>
+      </div>
+      {projects.length === 0 ? (
+        <div className="px-6 py-5 text-sm text-emerald-700">
+          Ingen avvik registrert i aktive prosjekter.
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {projects.slice(0, 5).map((project) => (
+            <Link
+              key={project.id}
+              href={`/prosjekter/${project.id}`}
+              className="grid gap-3 px-6 py-4 hover:bg-slate-50 md:grid-cols-[1fr_auto]"
+            >
+              <div>
+                <div className="font-semibold text-slate-900">
+                  {project.projectNumber} · {project.name}
+                </div>
+                <div className="mt-1 text-sm text-slate-600">
+                  {project.issues[0] ?? project.deviationLabel}
+                </div>
+              </div>
+              <span className={`h-fit rounded-full px-3 py-1 text-xs font-semibold ${deviationClass(project.deviationLevel)}`}>
+                {project.deviationLabel}
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function deviationClass(level: ProjectListItem["deviationLevel"]) {
+  if (level === "RED") return "bg-red-50 text-red-700 ring-1 ring-red-100";
+  if (level === "YELLOW") return "bg-amber-50 text-amber-700 ring-1 ring-amber-100";
+  return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100";
 }
 
 function PreviewFrame({

@@ -12,13 +12,14 @@ export async function middleware(req: Request) {
   const url = new URL(req.url);
   const pathname = url.pathname;
 
-  // Allow static assets, Next internals, and NextAuth endpoints to pass through.
-  // NOTE: We must not intercept /api/auth/* because that's where NextAuth (and Vipps callbacks) run.
+  // Inbound machine-to-machine routes perform their own shared-secret checks.
+  // NextAuth and static assets must also pass through without a browser session.
   if (
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico" ||
     /\.(?:png|jpg|jpeg|svg|gif|ico|css|js|map|pdf|txt|woff2?|ttf|eot)$/i.test(pathname) ||
-    pathname.startsWith("/api/auth")
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/inbound/")
   ) {
     return NextResponse.next();
   }

@@ -74,6 +74,7 @@ app.timer("timer_hydrema", {
                     return {
                         id: internalId,
                         telemetry_source: "hydrema",
+                        telemetry_external_id: String(oemId ?? serialNumber),
                         last_pos_reported_at: m.geo?.time != null ? new Date(Number(m.geo.time)) : null, // ms -> Date (UTC)
                         last_pos_latitude: m.geo?.latitude ?? null,
                         last_pos_longitude: m.geo?.longitude ?? null,

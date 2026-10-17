@@ -44,6 +44,7 @@ app.timer("timer_cat", {
                     return {
                         id: internalId,
                         telemetry_source: "cat",
+                        telemetry_external_id: serialNumber,
                         last_pos_reported_at: last_pos_reported_at,
                         last_pos_latitude: loc?.Latitude ?? null,
                         last_pos_longitude: loc?.Longitude ?? null,

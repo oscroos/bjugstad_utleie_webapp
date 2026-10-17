@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getMachineLocationById } from "@/lib/machines";
+import { canUserAccessMachine, getMachineLocationById } from "@/lib/machines";
 
 export async function GET(
   _request: Request,
@@ -24,6 +24,11 @@ export async function GET(
   }
 
   try {
+    const canAccess = await canUserAccessMachine(session.user, normalizedId);
+    if (!canAccess) {
+      return NextResponse.json({ error: "Maskin ikke funnet" }, { status: 404 });
+    }
+
     const location = await getMachineLocationById(normalizedId);
     if (!location) {
       return NextResponse.json({ error: "Maskin ikke funnet" }, { status: 404 });

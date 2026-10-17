@@ -22,6 +22,7 @@ import {
   IconClock,
   IconLoader2,
   IconSettings,
+  IconSatellite,
 } from "@tabler/icons-react";
 import { IS_DEV } from "@/lib/constants";
 
@@ -58,6 +59,7 @@ export default function ResponsiveNav() {
     { href: "/kunder", label: "Kunder", icon: <IconBuilding className="h-5 w-5" /> },
     { href: "/aktivitet", label: "Aktivitet", icon: <IconClock className="h-5 w-5" /> },
     { href: "/katalog", label: "Katalog", icon: <IconSettings className="h-5 w-5" /> },
+    { href: "/telemetri", label: "Telemetri", icon: <IconSatellite className="h-5 w-5" /> },
   ];
 
   const renderLinks = (list: NavItem[]) =>

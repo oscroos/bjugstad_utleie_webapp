@@ -92,6 +92,14 @@ type MachineHistorySourceRow = Pick<
 
 export type MachineTelemetryRow = Omit<MachineHistorySourceRow, "telemetry_source"> & {
     telemetry_source: string;
+    telemetry_external_id?: string | null;
+};
+
+type TelemetryLinkRow = {
+    machine_id: string;
+    provider: "CAT" | "HYDREMA" | "TRACKUNIT";
+    external_id: string;
+    last_seen_at?: Date | null;
 };
 
 type MachinePositionHistoryRow = {
@@ -188,7 +196,90 @@ async function insertMachinePositionHistory(
     return res.rowCount ?? 0;
 }
 
-function buildTelemetryUpdateSql(placeholders: string[], keyColumn: "id" | "trackunit_id") {
+async function upsertTelemetryLinks(
+    client: PoolClient,
+    rows: TelemetryLinkRow[],
+): Promise<number> {
+    const unique = [...new Map(
+        rows
+            .filter((row) => row.machine_id && row.external_id)
+            .map((row) => [`${row.provider}:${row.external_id}`, row]),
+    ).values()];
+    if (!unique.length) return 0;
+
+    const values: any[] = [];
+    const placeholders: string[] = [];
+    unique.forEach((row, index) => {
+        const offset = index * 4;
+        values.push(row.machine_id, row.provider, row.external_id, row.last_seen_at ?? null);
+        placeholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`);
+    });
+
+    const result = await client.query(
+        `
+        INSERT INTO machine_telemetry_links (
+          id,
+          machine_id,
+          provider,
+          external_id,
+          active,
+          last_seen_at,
+          last_sync_at,
+          created_at,
+          updated_at
+        )
+        SELECT
+          'tml_' || md5(v.provider || ':' || v.external_id),
+          v.machine_id,
+          v.provider::"TelemetryProvider",
+          v.external_id,
+          true,
+          v.last_seen_at::timestamp,
+          now(),
+          now(),
+          now()
+        FROM (
+          VALUES ${placeholders.join(", ")}
+        ) AS v(machine_id, provider, external_id, last_seen_at)
+        ON CONFLICT (provider, external_id) DO UPDATE
+          SET machine_id = EXCLUDED.machine_id,
+              active = true,
+              last_seen_at = CASE
+                WHEN EXCLUDED.last_seen_at IS NOT NULL
+                 AND (machine_telemetry_links.last_seen_at IS NULL OR EXCLUDED.last_seen_at > machine_telemetry_links.last_seen_at)
+                THEN EXCLUDED.last_seen_at
+                ELSE machine_telemetry_links.last_seen_at
+              END,
+              last_sync_at = now(),
+              updated_at = now()
+        `,
+        values,
+    );
+    return result.rowCount ?? 0;
+}
+
+async function hasTelemetryFoundation(client: PoolClient): Promise<boolean> {
+    const result = await client.query<{ available: boolean }>(
+        `SELECT to_regclass('public.machine_telemetry_links') IS NOT NULL AS available`,
+    );
+    return result.rows[0]?.available === true;
+}
+
+function buildTelemetryUpdateSql(
+    placeholders: string[],
+    keyColumn: "id" | "trackunit_id",
+    telemetryFoundationAvailable: boolean,
+) {
+    const latestSourceUpdate = telemetryFoundationAvailable
+        ? `,
+           last_position_source = CASE
+             WHEN v.last_pos_reported_at::timestamp IS NOT NULL
+              AND (m.last_pos_reported_at IS NULL OR v.last_pos_reported_at::timestamp > m.last_pos_reported_at)
+             THEN v.telemetry_source
+             ELSE m.last_position_source
+           END`
+        : "";
+
     return `
     UPDATE machines AS m
        SET last_updated = now(),
@@ -233,11 +324,12 @@ function buildTelemetryUpdateSql(placeholders: string[], keyColumn: "id" | "trac
               AND (m.last_pos_reported_at IS NULL OR v.last_pos_reported_at::timestamp > m.last_pos_reported_at)
              THEN COALESCE(v.km::double precision, m.km)
              ELSE m.km
-           END
+           END${latestSourceUpdate}
       FROM (
         VALUES ${placeholders.join(", ")}
       ) AS v(
         ${keyColumn},
+        telemetry_source,
         last_pos_reported_at,
         last_pos_latitude,
         last_pos_longitude,
@@ -445,6 +537,7 @@ export async function updateMachineTelemetry(rows: MachineTelemetryRow[]): Promi
 
     const cols = [
         "id",
+        "telemetry_source",
         "last_pos_reported_at",
         "last_pos_latitude",
         "last_pos_longitude",
@@ -461,6 +554,7 @@ export async function updateMachineTelemetry(rows: MachineTelemetryRow[]): Promi
         const offset = i * cols.length;
         values.push(
             row.id,
+            row.telemetry_source,
             row.last_pos_reported_at ?? null,
             row.last_pos_latitude ?? null,
             row.last_pos_longitude ?? null,
@@ -470,16 +564,16 @@ export async function updateMachineTelemetry(rows: MachineTelemetryRow[]): Promi
             row.km ?? null,
         );
         placeholders.push(
-            `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8})`
+            `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9})`
         );
     });
-
-    const sql = buildTelemetryUpdateSql(placeholders, "id");
 
     return withClient(async (client) => {
         await client.query("BEGIN");
 
         try {
+            const telemetryFoundationAvailable = await hasTelemetryFoundation(client);
+            const sql = buildTelemetryUpdateSql(placeholders, "id", telemetryFoundationAvailable);
             const machineIds = [...new Set(
                 rows
                     .filter((row) => String(row.id ?? "").trim())
@@ -502,6 +596,23 @@ export async function updateMachineTelemetry(rows: MachineTelemetryRow[]): Promi
                 );
 
                 await insertMachinePositionHistory(client, resolvedHistoryRows);
+                if (telemetryFoundationAvailable) {
+                    await upsertTelemetryLinks(
+                        client,
+                        rows.flatMap((row) => {
+                            const externalId = row.telemetry_external_id?.trim();
+                            const provider = row.telemetry_source.toUpperCase();
+                            if (!matchedIds.has(String(row.id)) || !externalId) return [];
+                            if (provider !== "CAT" && provider !== "HYDREMA") return [];
+                            return [{
+                                machine_id: String(row.id),
+                                provider,
+                                external_id: externalId,
+                                last_seen_at: row.last_pos_reported_at ?? null,
+                            } satisfies TelemetryLinkRow];
+                        }),
+                    );
+                }
             }
 
             const res = await client.query(sql, values);
@@ -519,6 +630,7 @@ export async function updateTrackunitTelemetry(rows: TrackunitTelemetryRow[]): P
 
     const cols = [
         "trackunit_id",
+        "telemetry_source",
         "last_pos_reported_at",
         "last_pos_latitude",
         "last_pos_longitude",
@@ -535,6 +647,7 @@ export async function updateTrackunitTelemetry(rows: TrackunitTelemetryRow[]): P
         const offset = i * cols.length;
         values.push(
             r.trackunit_id,
+            "trackunit",
             r.last_pos_reported_at ?? null,
             r.last_pos_latitude ?? null,
             r.last_pos_longitude ?? null,
@@ -544,16 +657,16 @@ export async function updateTrackunitTelemetry(rows: TrackunitTelemetryRow[]): P
             r.km ?? null,
         );
         placeholders.push(
-            `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8})`
+            `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9})`
         );
     });
-
-    const sql = buildTelemetryUpdateSql(placeholders, "trackunit_id");
 
     return withClient(async (client) => {
         await client.query("BEGIN");
 
         try {
+            const telemetryFoundationAvailable = await hasTelemetryFoundation(client);
+            const sql = buildTelemetryUpdateSql(placeholders, "trackunit_id", telemetryFoundationAvailable);
             const trackunitIds = [...new Set(
                 rows
                     .filter((row) =>
@@ -603,6 +716,21 @@ export async function updateTrackunitTelemetry(rows: TrackunitTelemetryRow[]): P
                 });
 
                 await insertMachinePositionHistory(client, resolvedHistoryRows);
+                if (telemetryFoundationAvailable) {
+                    await upsertTelemetryLinks(
+                        client,
+                        rows.flatMap((row) => {
+                            const machineId = machineIdByTrackunitId.get(row.trackunit_id);
+                            if (!machineId) return [];
+                            return [{
+                                machine_id: machineId,
+                                provider: "TRACKUNIT",
+                                external_id: row.trackunit_id,
+                                last_seen_at: row.last_pos_reported_at ?? null,
+                            } satisfies TelemetryLinkRow];
+                        }),
+                    );
+                }
             }
 
             const res = await client.query(sql, values);

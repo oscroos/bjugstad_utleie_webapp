@@ -107,6 +107,26 @@ export async function getMachineLocationById(
     return toMachineListEntry(rows[0]);
 }
 
+export async function canUserAccessMachine(
+    user: { id?: string | null; role?: string | null } | null | undefined,
+    machineId: string | number,
+): Promise<boolean> {
+    if (!user?.id) return false;
+    if (user.role === "super_admin") return true;
+    if (user.role !== "customer") return false;
+
+    const normalizedMachineId = String(machineId ?? "").trim();
+    if (!normalizedMachineId) return false;
+
+    const agreements = await fetchAgreementsForUser(user.id, user.role);
+    const { active } = splitAgreementsByStatus(agreements);
+    return active.some((agreement) =>
+        (agreement.machines ?? []).some(
+            (machine) => String(machine.id ?? "").trim() === normalizedMachineId,
+        ),
+    );
+}
+
 export async function getMachineLocationHistoryById(
     id: string | number,
 ): Promise<MachinePositionHistoryEntry[]> {

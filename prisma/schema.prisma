@@ -85,6 +85,29 @@ enum CallOffStatus {
   CANCELLED
 }
 
+enum TelemetryProvider {
+  BJUGSTAD
+  CAT
+  HYDREMA
+  TRACKUNIT
+  TELTONIKA
+  MICTRACK
+  VOLVO_CE
+  KOMATSU
+  SCANIA
+  VOLVO_TRUCKS
+  HITACHI
+  LIEBHERR
+  JCB
+  OTHER
+}
+
+enum MachineOperatingStatus {
+  WORKING
+  IDLE
+  OFF
+}
+
 model User {
   id                   String     @id @default(cuid())
   phone                String?    @unique
@@ -155,29 +178,34 @@ model VerificationToken {
 }
 
 model Machine {
-  id                 String                   @id
+  id                 String                     @id
   name               String?
-  oemName            String?                  @map("oem_name")
-  oemId              String?                  @map("oem_id")
-  serialNumber       String?                  @map("serial_number")
+  oemName            String?                    @map("oem_name")
+  oemId              String?                    @map("oem_id")
+  serialNumber       String?                    @map("serial_number")
   model              String?
-  productionYear     String?                  @map("production_year")
+  productionYear     String?                    @map("production_year")
   category           String?
-  registrationNumber String?                  @map("registration_number")
-  railControlDate    DateTime?                @map("rail_control_date")
-  controlDate        DateTime?                @map("control_date")
-  trackunitId        String?                  @map("trackunit_id")
-  leasingCompany     String?                  @map("leasing_company")
-  firstSeen          DateTime                 @default(now()) @map("first_seen")
-  lastUpdated        DateTime                 @default(now()) @updatedAt @map("last_updated")
-  lastPosReportedAt  DateTime?                @map("last_pos_reported_at")
-  lastPosLatitude    Float?                   @map("last_pos_latitude")
-  lastPosLongitude   Float?                   @map("last_pos_longitude")
+  registrationNumber String?                    @map("registration_number")
+  railControlDate    DateTime?                  @map("rail_control_date")
+  controlDate        DateTime?                  @map("control_date")
+  trackunitId        String?                    @map("trackunit_id")
+  leasingCompany     String?                    @map("leasing_company")
+  firstSeen          DateTime                   @default(now()) @map("first_seen")
+  lastUpdated        DateTime                   @default(now()) @updatedAt @map("last_updated")
+  lastPosReportedAt  DateTime?                  @map("last_pos_reported_at")
+  lastPosLatitude    Float?                     @map("last_pos_latitude")
+  lastPosLongitude   Float?                     @map("last_pos_longitude")
   altitude           Float?
   speed              Float?
   heading            Float?
   km                 Float?
+  ignition           Boolean?
+  operatingStatus    MachineOperatingStatus?    @map("operating_status")
+  lastPositionSource String?                    @map("last_position_source")
   positionHistory    MachinePositionHistory[]
+  telemetryLinks     MachineTelemetryLink[]
+  telemetrySnapshots MachineTelemetrySnapshot[]
 
   @@index([lastUpdated(sort: Desc)], map: "idx_machines_last_updated")
   @@index([lastPosReportedAt(sort: Desc)], map: "idx_machines_last_pos_reported_at")
@@ -185,23 +213,84 @@ model Machine {
 }
 
 model MachinePositionHistory {
-  id         BigInt   @id @default(autoincrement())
-  machineId  String   @map("machine_id")
-  source     String
-  reportedAt DateTime @map("reported_at")
-  receivedAt DateTime @default(now()) @map("received_at")
-  latitude   Float
-  longitude  Float
-  altitude   Float?
-  speed      Float?
-  heading    Float?
-  km         Float?
-  machine    Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  id              BigInt                  @id @default(autoincrement())
+  machineId       String                  @map("machine_id")
+  projectId       String?                 @map("project_id")
+  telemetryLinkId String?                 @map("telemetry_link_id")
+  source          String
+  providerEventId String?                 @map("provider_event_id")
+  reportedAt      DateTime                @map("reported_at")
+  receivedAt      DateTime                @default(now()) @map("received_at")
+  latitude        Float
+  longitude       Float
+  altitude        Float?
+  speed           Float?
+  heading         Float?
+  km              Float?
+  ignition        Boolean?
+  operatingStatus MachineOperatingStatus? @map("operating_status")
+  engineHours     Float?                  @map("engine_hours")
+  fuelLiters      Float?                  @map("fuel_liters")
+  energyKwh       Float?                  @map("energy_kwh")
+  payloadTonnes   Float?                  @map("payload_tonnes")
+  machine         Machine                 @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  project         Project?                @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  telemetryLink   MachineTelemetryLink?   @relation(fields: [telemetryLinkId], references: [id], onDelete: SetNull)
 
   @@unique([machineId, source, reportedAt], map: "uq_machine_position_history_machine_source_reported_at")
+  @@unique([machineId, source, providerEventId], map: "uq_machine_position_history_provider_event")
   @@index([machineId, reportedAt(sort: Desc)], map: "idx_machine_position_history_machine_reported_at")
+  @@index([projectId, reportedAt(sort: Desc)], map: "idx_machine_position_history_project_reported_at")
+  @@index([telemetryLinkId, reportedAt(sort: Desc)], map: "idx_machine_position_history_link_reported_at")
   @@index([reportedAt(sort: Desc)], map: "idx_machine_position_history_reported_at")
   @@map("machine_position_history")
+}
+
+model MachineTelemetryLink {
+  id            String            @id @default(cuid())
+  machineId     String            @map("machine_id")
+  provider      TelemetryProvider
+  externalId    String            @map("external_id")
+  credentialRef String?           @map("credential_ref")
+  active        Boolean           @default(true)
+  lastSeenAt    DateTime?         @map("last_seen_at")
+  lastSyncAt    DateTime?         @map("last_sync_at")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  machine         Machine                  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  positionHistory MachinePositionHistory[]
+
+  @@unique([provider, externalId], map: "uq_machine_telemetry_links_provider_external")
+  @@index([machineId, active], map: "idx_machine_telemetry_links_machine_active")
+  @@index([lastSeenAt(sort: Desc)], map: "idx_machine_telemetry_links_last_seen_at")
+  @@map("machine_telemetry_links")
+}
+
+model MachineTelemetrySnapshot {
+  id                String            @id @default(cuid())
+  machineId         String            @map("machine_id")
+  projectId         String?           @map("project_id")
+  provider          TelemetryProvider
+  periodStart       DateTime          @map("period_start")
+  periodEnd         DateTime          @map("period_end")
+  engineHours       Float?            @map("engine_hours")
+  idleHours         Float?            @map("idle_hours")
+  fuelLiters        Float?            @map("fuel_liters")
+  energyKwh         Float?            @map("energy_kwh")
+  distanceKm        Float?            @map("distance_km")
+  payloadTonnes     Float?            @map("payload_tonnes")
+  calculationMethod String            @default("PROVIDER") @map("calculation_method")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  machine Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@unique([machineId, provider, periodStart, periodEnd], map: "uq_machine_telemetry_snapshots_period")
+  @@index([projectId, periodStart], map: "idx_machine_telemetry_snapshots_project_period")
+  @@index([machineId, periodStart], map: "idx_machine_telemetry_snapshots_machine_period")
+  @@map("machine_telemetry_snapshots")
 }
 
 model Customer {
@@ -287,14 +376,16 @@ model Project {
   createdAt          DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @updatedAt @map("updated_at")
 
-  customer     Customer             @relation(fields: [customerId], references: [customer_id], onDelete: Cascade)
-  createdBy    User?                @relation("ProjectsCreated", fields: [createdById], references: [id], onDelete: SetNull)
-  participants ProjectParticipant[]
-  massTypes    ProjectMassType[]
-  fieldValues  ProjectFieldValue[]
-  kpis         ProjectKpi[]
-  docFolders   DocFolder[]
-  callOffLines CallOffLine[]
+  customer           Customer                   @relation(fields: [customerId], references: [customer_id], onDelete: Cascade)
+  createdBy          User?                      @relation("ProjectsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  participants       ProjectParticipant[]
+  massTypes          ProjectMassType[]
+  fieldValues        ProjectFieldValue[]
+  kpis               ProjectKpi[]
+  docFolders         DocFolder[]
+  callOffLines       CallOffLine[]
+  positionHistory    MachinePositionHistory[]
+  telemetrySnapshots MachineTelemetrySnapshot[]
 
   @@unique([customerId, projectNumber], map: "uq_projects_customer_project_number")
   @@index([customerId], map: "idx_projects_customer_id")

@@ -1,0 +1,82 @@
+// ============================================================================
+//  SCHEMA-TILLEGG DEL 10 – DOKUMENTHOTELL + AVROP
+// ============================================================================
+
+enum FolderKind {
+  SYSTEM    // faste hovedmapper + faste undermapper (kan ikke slettes/omdøpes)
+  PROJECT   // prosjektmappe under «Prosjektdokumenter» (1:1 med Project)
+  CUSTOM    // kundens egne undermapper
+}
+
+model DocFolder {
+  id             String  @id @default(cuid())
+  organizationId String
+  parentId       String?
+  parent         DocFolder?  @relation("tree", fields: [parentId], references: [id], onDelete: Cascade)
+  children       DocFolder[] @relation("tree")
+  name           String
+  kind           FolderKind @default(CUSTOM)
+  systemKey      String?    // AVTALE | AVROP | KUNDE | ANDRE | PROSJEKT | AVTALE_BJUGSTAD | AVTALE_UE | AVTALE_LEV
+  projectId      String?    // satt for PROJECT-mapper og deres undermapper
+  createdById    String?
+  createdAt      DateTime @default(now())
+  files          DocFile[]
+  @@index([organizationId, parentId])
+  @@index([projectId])
+}
+
+model DocFile {
+  id           String @id @default(cuid())
+  folderId     String
+  folder       DocFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  name         String
+  storageKey   String        // peker til blob-lagring
+  sizeBytes    Int?
+  uploadedById String
+  createdAt    DateTime @default(now())
+  @@index([folderId])
+}
+
+// ── AVROP (bestilling under rammeavtale, sendes utleiers register) ──
+enum CallOffStatus {
+  DRAFT              // under utfylling hos kunden
+  SENT               // sendt via API til utleiers register (Blazor-kundemodulen)
+  PRICED_BY_LESSOR   // utleier har lagt inn maskinnr + kontraktspriser og signert
+  ACTIVE             // kunden har signert → aktivt avrop
+  REJECTED           // kunden avslo utleiers retur
+  CANCELLED
+}
+
+model CallOff {
+  id                String @id @default(cuid())
+  organizationId    String
+  number            String?      // «AVR-2026-013», settes ved SENT
+  frameAgreementRef String       // hvilken rammeavtale avropet gjøres under
+  status            CallOffStatus @default(DRAFT)
+  lines             CallOffLine[]
+  sentAt            DateTime?
+  lessorSignedAt    DateTime?
+  lessorSignedBy    String?
+  customerSignedAt  DateTime?
+  customerSignedBy  String?
+  rejectReason      String?
+  externalRef       String?      // id i utleiers register (retur-kobling)
+  pdfDocFileId      String?      // signert avrops-PDF arkiveres i Avropsdokumenter
+  createdById       String
+  createdAt         DateTime @default(now())
+  @@index([organizationId, status])
+}
+
+model CallOffLine {
+  id            String @id @default(cuid())
+  callOffId     String
+  callOff       CallOff @relation(fields: [callOffId], references: [id], onDelete: Cascade)
+  description   String     // kundens ønske: «Gravemaskin 25–30 t m/rototilt»
+  quantity      Int @default(1)
+  wantedFrom    DateTime?
+  wantedTo      DateTime?
+  projectId     String?    // hvilket prosjekt maskinen skal til
+  machineNumber String?    // fylles av utleier ved retur
+  priceText     String?    // fra utleiers kontraktsprisregister, f.eks. «18 500 kr/mnd»
+  @@index([callOffId])
+}

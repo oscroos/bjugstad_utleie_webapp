@@ -201,6 +201,16 @@ const getAllMachinesList = cache(async (): Promise<MachineListEntry[]> => {
     }
 });
 
+/** Last known positions for a set of machine ids (machines without a position are skipped). */
+export async function getMachinePositionsByIds(
+    ids: string[],
+): Promise<Array<{ id: string; lat: number; lng: number }>> {
+    const entries = await getMachinesByIds(ids);
+    return entries
+        .filter((entry) => Number.isFinite(entry.lat) && Number.isFinite(entry.lng))
+        .map((entry) => ({ id: String(entry.id), lat: entry.lat as number, lng: entry.lng as number }));
+}
+
 async function getMachinesByIds(ids: string[]): Promise<MachineListEntry[]> {
     const unique = [...new Set(ids.filter(Boolean).map((id) => String(id)))];
     if (!unique.length) return [];

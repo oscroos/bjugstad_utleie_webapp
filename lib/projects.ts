@@ -8,7 +8,13 @@ import {
   type KpiMetricValue,
   type ProjectDeviationLevel,
 } from "@/lib/project-status";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import {
+  fetchAgreementsForUser,
+  splitAgreementsByStatus,
+  type AgreementPayload,
+} from "@/lib/agreements";
 
 export type ProjectListItem = {
   id: string;
@@ -74,6 +80,14 @@ export type NormalizedProjectKpi = {
   contractRef: string | null;
 };
 
+/** A site zone as used by the UI and API. `coordinates` is an open ring of [lng, lat]. */
+export type ProjectZone = {
+  id: string;
+  name: string;
+  color: string;
+  coordinates: Array<[number, number]>;
+};
+
 export type ProjectWorkspace = {
   id: string;
   customerId: number;
@@ -113,6 +127,7 @@ export type ProjectWorkspace = {
     plannedOut: number;
   }>;
   kpis: EvaluatedProjectKpi[];
+  zones: ProjectZone[];
   deviations: {
     level: ProjectDeviationLevel;
     label: string;
@@ -127,16 +142,18 @@ export async function listProjectsForUser(
   userId: string,
   role?: string | null,
 ): Promise<ProjectListItem[]> {
+  // Mirrors requireProjectRole: super admins see everything, company admins see
+  // all projects for their companies, and other users only the projects they are
+  // participants in.
   const where =
     role === "super_admin"
       ? { status: { not: ARCHIVED_STATUS } }
       : {
           status: { not: ARCHIVED_STATUS },
-          customer: {
-            accesses: {
-              some: { userId },
-            },
-          },
+          OR: [
+            { customer: { accesses: { some: { userId, role: "admin" as const } } } },
+            { participants: { some: { userId } } },
+          ],
         };
 
   const projects = await prisma.project.findMany({
@@ -317,6 +334,9 @@ export async function getProjectWorkspace(projectId: string): Promise<ProjectWor
       kpis: {
         orderBy: { createdAt: "asc" },
       },
+      zones: {
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      },
     },
   });
 
@@ -374,6 +394,7 @@ export async function getProjectWorkspace(projectId: string): Promise<ProjectWor
       plannedOut: massType.plannedOut,
     })),
     kpis,
+    zones: project.zones.map(toProjectZone).filter((zone): zone is ProjectZone => zone !== null),
     deviations,
   };
 }
@@ -556,4 +577,181 @@ function optionalNumberValue(value: unknown): { value: number | null; error: str
 
 function defaultKpiUnit(metric: KpiMetricValue) {
   return KPI_METRIC_OPTIONS.find((option) => option.value === metric)?.defaultUnit ?? "";
+}
+
+// ---------------------------------------------------------------------------
+// Site zones ("anleggssoner")
+// ---------------------------------------------------------------------------
+
+export const PROJECT_ZONE_COLORS = [
+  "#2563EB", // blue
+  "#D97706", // amber
+  "#059669", // emerald
+  "#7C3AED", // violet
+  "#DC2626", // red
+  "#0891B2", // cyan
+] as const;
+
+export const MAX_PROJECT_ZONES = 50;
+export const MAX_ZONE_VERTICES = 500;
+
+const coordinateSchema = z.tuple([
+  z.number().min(-180).max(180), // lng
+  z.number().min(-90).max(90), // lat
+]);
+
+const zoneInputSchema = z.object({
+  id: z.string().trim().min(1).max(64).optional(),
+  name: z.string().trim().min(1, "Sonen må ha et navn").max(80),
+  color: z
+    .string()
+    .trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Ugyldig farge")
+    .optional(),
+  coordinates: z.array(coordinateSchema).min(3).max(MAX_ZONE_VERTICES),
+});
+
+const zonesInputSchema = z.array(zoneInputSchema).max(MAX_PROJECT_ZONES);
+
+export type NormalizedProjectZone = {
+  id: string | null;
+  name: string;
+  color: string;
+  coordinates: Array<[number, number]>;
+};
+
+/**
+ * Validates and normalises zones coming from the client. Rings are stored open
+ * (no repeated closing point); the closing point is added when building GeoJSON.
+ */
+export function normalizeProjectZones(
+  rawZones: unknown,
+): { values: NormalizedProjectZone[]; error?: string } {
+  const parsed = zonesInputSchema.safeParse(rawZones ?? []);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const where = typeof issue?.path?.[0] === "number" ? `Sone ${issue.path[0] + 1}: ` : "";
+    return { values: [], error: `${where}${issue?.message ?? "Ugyldige soner"}` };
+  }
+
+  const values: NormalizedProjectZone[] = [];
+  for (const [index, zone] of parsed.data.entries()) {
+    const ring = dropClosingPoint(zone.coordinates).map(
+      ([lng, lat]) => [roundCoordinate(lng), roundCoordinate(lat)] as [number, number],
+    );
+    const distinct = new Set(ring.map((point) => point.join(",")));
+    if (distinct.size < 3) {
+      return { values: [], error: `Sone ${index + 1}: en sone må ha minst tre ulike punkter` };
+    }
+    values.push({
+      id: zone.id ?? null,
+      name: zone.name,
+      color: zone.color ?? PROJECT_ZONE_COLORS[index % PROJECT_ZONE_COLORS.length],
+      coordinates: ring,
+    });
+  }
+
+  return { values };
+}
+
+/** GeoJSON Polygon geometry for storage: one closed ring. */
+export function zoneToGeometry(coordinates: Array<[number, number]>) {
+  const ring = dropClosingPoint(coordinates);
+  return { type: "Polygon" as const, coordinates: [[...ring, ring[0]]] };
+}
+
+function toProjectZone(zone: {
+  id: string;
+  name: string;
+  color: string;
+  geometry: unknown;
+}): ProjectZone | null {
+  const geometry = zone.geometry as { type?: string; coordinates?: unknown } | null;
+  if (!geometry || geometry.type !== "Polygon" || !Array.isArray(geometry.coordinates)) return null;
+  const outerRing = geometry.coordinates[0];
+  if (!Array.isArray(outerRing)) return null;
+  const coordinates = outerRing
+    .filter(
+      (point): point is [number, number] =>
+        Array.isArray(point) && point.length >= 2 && Number.isFinite(point[0]) && Number.isFinite(point[1]),
+    )
+    .map(([lng, lat]) => [lng, lat] as [number, number]);
+  const ring = dropClosingPoint(coordinates);
+  if (ring.length < 3) return null;
+  return { id: zone.id, name: zone.name, color: zone.color, coordinates: ring };
+}
+
+function dropClosingPoint(coordinates: Array<[number, number]>) {
+  if (coordinates.length < 2) return coordinates;
+  const first = coordinates[0];
+  const last = coordinates[coordinates.length - 1];
+  return first[0] === last[0] && first[1] === last[1] ? coordinates.slice(0, -1) : coordinates;
+}
+
+function roundCoordinate(value: number) {
+  return Math.round(value * 1e6) / 1e6;
+}
+
+// ---------------------------------------------------------------------------
+// Machines on a project
+//
+// There is no machine <-> project relation in our database. Machines reach a
+// project through rental agreements in the Bjugstad register, which carry the
+// customer's project number. We match agreements on customer + project number.
+// ---------------------------------------------------------------------------
+
+export type ProjectMachine = {
+  key: string;
+  machine: { id?: string; name: string | null; make: string | null };
+  agreement: AgreementPayload;
+  isActive: boolean;
+};
+
+export type ProjectMachinesResult = {
+  machines: ProjectMachine[];
+  error: string | null;
+};
+
+export async function listProjectMachines(
+  project: { customerId: number; projectNumber: string },
+  userId: string,
+  role?: string | null,
+): Promise<ProjectMachinesResult> {
+  try {
+    const agreements = await fetchAgreementsForUser(userId, role);
+    const { active } = splitAgreementsByStatus(agreements);
+    const activeIds = new Set(active.map((agreement) => agreement.id));
+    const wantedNumber = normalizeProjectNumber(project.projectNumber);
+
+    const machines: ProjectMachine[] = [];
+    for (const agreement of agreements) {
+      if (agreement.customerId !== project.customerId) continue;
+      if (normalizeProjectNumber(agreement.projectNumber) !== wantedNumber) continue;
+
+      (agreement.machines ?? []).forEach((machine, index) => {
+        machines.push({
+          key: `${agreement.id}-${machine.id ?? `idx-${index}`}`,
+          machine: { id: machine.id, name: machine.name ?? null, make: machine.make ?? null },
+          agreement,
+          isActive: activeIds.has(agreement.id),
+        });
+      });
+    }
+
+    machines.sort((a, b) => {
+      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+      return (a.machine.name ?? "").localeCompare(b.machine.name ?? "", "nb-NO", { sensitivity: "base" });
+    });
+
+    return { machines, error: null };
+  } catch (error) {
+    return {
+      machines: [],
+      error: error instanceof Error && error.message ? error.message : "Kunne ikke hente maskiner",
+    };
+  }
+}
+
+function normalizeProjectNumber(value?: string | null) {
+  return (value ?? "").trim().toLowerCase();
 }

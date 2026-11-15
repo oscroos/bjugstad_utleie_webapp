@@ -5,27 +5,42 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   IconAlertTriangle,
+  IconCalendarEvent,
+  IconCash,
   IconCheck,
   IconFileText,
   IconFolder,
+  IconHelp,
   IconMap2,
+  IconMountain,
   IconTarget,
 } from "@tabler/icons-react";
-import { formatDate, formatDisplay } from "@/lib/formatters";
+import { formatDate } from "@/lib/formatters";
 import {
   CLIENT_TYPE_LABELS,
   CONTRACT_TYPE_LABELS,
   KPI_METRIC_LABELS,
+  KPI_METRIC_OPTIONS,
   PROJECT_STATUS_LABELS,
   type ClientTypeValue,
   type ContractTypeValue,
   type ProjectStatusValue,
 } from "@/lib/project-status";
-import type { ProjectWorkspace } from "@/lib/projects";
+import type { ProjectListItem, ProjectMachinesResult, ProjectWorkspace } from "@/lib/projects";
+import ProjectSwitcher from "../ProjectSwitcher";
 import ProjectDocumentsPanel from "./ProjectDocumentsPanel";
+import ProjectMachinesSection from "./ProjectMachinesSection";
+import ProjectZonesEditor from "./ProjectZonesEditor";
+
+type Viewer = { id?: string | null; role?: string | null };
 
 type ProjectWorkspaceClientProps = {
   project: ProjectWorkspace;
+  projects: ProjectListItem[];
+  machines: ProjectMachinesResult;
+  mapFallbackCenter: { lat: number; lng: number } | null;
+  viewer: Viewer;
+  canCreateProject: boolean;
   canEdit: boolean;
 };
 
@@ -47,6 +62,11 @@ const secondaryButtonClass =
 
 export default function ProjectWorkspaceClient({
   project,
+  projects,
+  machines,
+  mapFallbackCenter,
+  viewer,
+  canCreateProject,
   canEdit,
 }: ProjectWorkspaceClientProps) {
   const [activeTab, setActiveTab] = useState<ProjectTab>("info");
@@ -54,12 +74,14 @@ export default function ProjectWorkspaceClient({
   return (
     <main className="space-y-6 p-8">
       <header className="space-y-4">
-        <Link href="/prosjekter" className="text-sm font-semibold text-blue-700 hover:text-blue-900">
-          Tilbake til prosjekter
-        </Link>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-slate-900">{project.name}</h1>
+          <div className="min-w-0">
+            <ProjectSwitcher
+              currentProjectId={project.id}
+              currentProjectName={project.name}
+              projects={projects}
+              canCreateProject={canCreateProject}
+            />
             <p className="mt-2 text-slate-600">
               {project.projectNumber} · {project.customerName ?? `Kunde ${project.customerId}`}
             </p>
@@ -106,161 +128,443 @@ export default function ProjectWorkspaceClient({
         })}
       </nav>
 
-      {activeTab === "info" ? <ProjectInfoTab project={project} /> : null}
-      {activeTab === "map" ? <ProjectMapTab project={project} /> : null}
+      {activeTab === "info" ? (
+        <ProjectInfoTab project={project} machines={machines} viewer={viewer} canEdit={canEdit} />
+      ) : null}
+      {activeTab === "map" ? (
+        <ProjectMapTab project={project} canEdit={canEdit} fallbackCenter={mapFallbackCenter} />
+      ) : null}
       {activeTab === "masses" ? <ProjectMassesTab project={project} canEdit={canEdit} /> : null}
       {activeTab === "documents" ? <ProjectDocumentsTab projectId={project.id} canEdit={canEdit} /> : null}
     </main>
   );
 }
 
-function ProjectInfoTab({ project }: { project: ProjectWorkspace }) {
+function ProjectInfoTab({
+  project,
+  machines,
+  viewer,
+  canEdit,
+}: {
+  project: ProjectWorkspace;
+  machines: ProjectMachinesResult;
+  viewer: Viewer;
+  canEdit: boolean;
+}) {
+  const timeline = computeTimeline(project.startDate, project.endDate);
+  const kpiCounts = {
+    ok: project.kpis.filter((kpi) => kpi.status === "OK").length,
+    warning: project.kpis.filter((kpi) => kpi.status === "WARNING").length,
+    breach: project.kpis.filter((kpi) => kpi.status === "BREACH").length,
+    missing: project.kpis.filter((kpi) => kpi.status === "DATA_MISSING").length,
+  };
+  const massPlan = project.massTypes.reduce(
+    (acc, massType) => ({
+      plannedIn: acc.plannedIn + massType.plannedIn,
+      plannedOut: acc.plannedOut + massType.plannedOut,
+    }),
+    { plannedIn: 0, plannedOut: 0 },
+  );
+  const massUnit = project.massTypes.length
+    ? Array.from(new Set(project.massTypes.map((massType) => massType.unit))).length === 1
+      ? project.massTypes[0].unit
+      : ""
+    : "";
+
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-6 py-4">
-          <h2 className="text-xl font-semibold text-slate-900">Avvik</h2>
-        </div>
-        <div className="p-6">
-          {project.deviations.issues.length === 0 ? (
-            <div className="flex items-center gap-3 text-sm font-medium text-emerald-700">
-              <IconCheck className="h-5 w-5" />
-              Ingen avvik registrert.
+      {/* Key figures */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile
+          icon={<IconCash className="h-5 w-5" />}
+          tone="blue"
+          label="Kontraktssum"
+          value={project.contractSizeNok === null ? "Ikke satt" : formatCurrency(project.contractSizeNok)}
+          detail={
+            project.contractType
+              ? `${CONTRACT_TYPE_LABELS[project.contractType as ContractTypeValue]}${
+                  project.clientType ? ` · ${CLIENT_TYPE_LABELS[project.clientType as ClientTypeValue]} byggherre` : ""
+                }`
+              : "Kontraktstype ikke satt"
+          }
+        />
+        <StatTile
+          icon={<IconCalendarEvent className="h-5 w-5" />}
+          tone="violet"
+          label="Fremdrift"
+          value={timeline.headline}
+          detail={timeline.detail}
+        >
+          {timeline.percent !== null ? (
+            <ProgressBar percent={timeline.percent} className="bg-violet-500" />
+          ) : null}
+        </StatTile>
+        <StatTile
+          icon={<IconTarget className="h-5 w-5" />}
+          tone={kpiCounts.breach ? "red" : kpiCounts.warning || kpiCounts.missing ? "amber" : "emerald"}
+          label="Kontraktsmål"
+          value={
+            project.kpis.length === 0
+              ? "Ingen"
+              : `${kpiCounts.ok} av ${project.kpis.length} OK`
+          }
+          detail={
+            project.kpis.length === 0
+              ? "Ingen mål registrert"
+              : [
+                  kpiCounts.breach ? `${kpiCounts.breach} brudd` : null,
+                  kpiCounts.warning ? `${kpiCounts.warning} nær grense` : null,
+                  kpiCounts.missing ? `${kpiCounts.missing} mangler data` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "Alle mål innenfor"
+          }
+        >
+          {project.kpis.length > 0 ? (
+            <div className="flex h-2 w-full overflow-hidden rounded-full bg-slate-100">
+              {kpiCounts.ok ? <div className="bg-emerald-500" style={{ flex: kpiCounts.ok }} /> : null}
+              {kpiCounts.warning ? <div className="bg-amber-400" style={{ flex: kpiCounts.warning }} /> : null}
+              {kpiCounts.breach ? <div className="bg-red-500" style={{ flex: kpiCounts.breach }} /> : null}
+              {kpiCounts.missing ? <div className="bg-slate-300" style={{ flex: kpiCounts.missing }} /> : null}
             </div>
-          ) : (
-            <div className="space-y-3">
-              {project.deviations.issues.map((issue) => (
-                <div key={issue} className="flex items-start gap-3 text-sm text-slate-800">
-                  <IconAlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-                  <span>{issue}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        <InfoSection
-          title="Prosjekt"
-          rows={[
-            ["Kunde", project.customerName ?? `Kunde ${project.customerId}`],
-            ["Adresse", formatAddress(project)],
-            ["Periode", formatPeriod(project.startDate, project.endDate)],
-            ["Oppdatert", formatDate(project.updatedAt) ?? "-"],
-            ["Beskrivelse", project.description ?? "-"],
-          ]}
-        />
-        <InfoSection
-          title="Kontrakt"
-          rows={[
-            [
-              "Kontraktstype",
-              project.contractType
-                ? CONTRACT_TYPE_LABELS[project.contractType as ContractTypeValue]
-                : "-",
-            ],
-            ["Kontraktsstørrelse", formatCurrency(project.contractSizeNok)],
-            [
-              "Byggherretype",
-              project.clientType ? CLIENT_TYPE_LABELS[project.clientType as ClientTypeValue] : "-",
-            ],
-          ]}
-        />
-        <InfoSection
-          title="Byggherre"
-          rows={[
-            ["Navn", project.clientName ?? "-"],
-            ["Adresse", project.clientAddress ?? "-"],
-            ["E-post", project.clientEmail ?? "-"],
-            ["Kontaktperson", project.clientContactName ?? "-"],
-            ["Kontakt e-post", project.clientContactEmail ?? "-"],
-            ["Kontakt telefon", project.clientContactPhone ?? "-"],
-          ]}
-        />
-        <InfoSection
-          title="Egendefinerte felt"
-          rows={
-            project.fieldValues.length
-              ? project.fieldValues.map((field) => [field.label, formatProjectField(field)])
-              : [["Status", "Ingen felt registrert"]]
+          ) : null}
+        </StatTile>
+        <StatTile
+          icon={<IconMountain className="h-5 w-5" />}
+          tone="teal"
+          label="Masseplan"
+          value={
+            project.massTypes.length === 0
+              ? "Ingen"
+              : `${project.massTypes.length} ${project.massTypes.length === 1 ? "massetype" : "massetyper"}`
+          }
+          detail={
+            project.massTypes.length === 0
+              ? "Ingen massetyper valgt"
+              : `${formatNumber(massPlan.plannedIn)} ${massUnit} inn · ${formatNumber(massPlan.plannedOut)} ${massUnit} ut`
           }
         />
       </div>
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-6 py-4">
-          <h2 className="text-xl font-semibold text-slate-900">Kontraktsmål</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-100 text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-6 py-3">Mål</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Målverdi</th>
-                <th className="px-4 py-3">Målt verdi</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-6 py-3">Kontraktspunkt</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {project.kpis.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
-                    Ingen kontraktsmål registrert.
-                  </td>
-                </tr>
+      {/* Project facts and contract goals */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+            <h2 className="text-lg font-semibold text-slate-900">Om prosjektet</h2>
+            {canEdit ? (
+              <Link
+                href={`/prosjekter/${project.id}/oppsett`}
+                className="text-sm font-semibold text-blue-700 hover:text-blue-900"
+              >
+                Rediger
+              </Link>
+            ) : null}
+          </div>
+
+          {project.description ? (
+            <p className="whitespace-pre-wrap border-b border-slate-100 px-6 py-4 text-sm leading-relaxed text-slate-700">
+              {project.description}
+            </p>
+          ) : null}
+
+          <dl className="divide-y divide-slate-100">
+            <InfoRow label="Kunde">{project.customerName ?? `Kunde ${project.customerId}`}</InfoRow>
+            <InfoRow label="Sted">{formatAddressInline(project)}</InfoRow>
+            <InfoRow label="Kontrakt">
+              {project.contractType
+                ? CONTRACT_TYPE_LABELS[project.contractType as ContractTypeValue]
+                : "Ikke satt"}
+            </InfoRow>
+            <InfoRow label="Kontraktssum">{formatCurrency(project.contractSizeNok)}</InfoRow>
+            <InfoRow label="Oppstart">{formatDate(project.startDate, { showTime: false }) ?? "Ikke satt"}</InfoRow>
+            <InfoRow label="Sluttfrist">{formatDate(project.endDate, { showTime: false }) ?? "Ikke satt"}</InfoRow>
+            <InfoRow label="Byggherre">{project.clientName ?? "Ikke registrert"}</InfoRow>
+            <InfoRow label="Byggherretype">
+              {project.clientType ? CLIENT_TYPE_LABELS[project.clientType as ClientTypeValue] : "Ikke satt"}
+            </InfoRow>
+            <InfoRow label="Byggherre adresse">{project.clientAddress ?? "-"}</InfoRow>
+            <InfoRow label="Byggherre e-post">
+              {project.clientEmail ? (
+                <a href={`mailto:${project.clientEmail}`} className="text-blue-700 hover:underline">
+                  {project.clientEmail}
+                </a>
               ) : (
-                project.kpis.map((kpi) => (
-                  <tr key={kpi.id}>
-                    <td className="px-6 py-4 font-semibold text-slate-900">{kpi.label}</td>
-                    <td className="px-4 py-4 text-slate-700">
-                      {KPI_METRIC_LABELS[kpi.metric] ?? kpi.metric}
-                    </td>
-                    <td className="px-4 py-4 tabular-nums text-slate-700">
-                      {formatNumber(kpi.targetValue)} {kpi.unit}
-                    </td>
-                    <td className="px-4 py-4 tabular-nums text-slate-700">
-                      {kpi.currentValue === null ? "-" : `${formatNumber(kpi.currentValue)} ${kpi.unit}`}
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${kpiStatusClass(kpi.status)}`}>
-                        {kpi.statusLabel}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-slate-700">{kpi.contractRef ?? "-"}</td>
-                  </tr>
-                ))
+                "-"
               )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+            </InfoRow>
+            <InfoRow label="Byggherre kontaktperson">{project.clientContactName ?? "-"}</InfoRow>
+            <InfoRow label="Kontaktperson telefon">
+              {project.clientContactPhone ? (
+                <a href={`tel:${project.clientContactPhone}`} className="hover:underline">
+                  {project.clientContactPhone}
+                </a>
+              ) : (
+                "-"
+              )}
+            </InfoRow>
+            <InfoRow label="Kontaktperson e-post">
+              {project.clientContactEmail ? (
+                <a href={`mailto:${project.clientContactEmail}`} className="text-blue-700 hover:underline">
+                  {project.clientContactEmail}
+                </a>
+              ) : (
+                "-"
+              )}
+            </InfoRow>
+          </dl>
+
+          <p className="border-t border-slate-100 px-6 py-3 text-right text-xs text-slate-400">
+            Sist oppdatert {formatDate(project.updatedAt) ?? "-"}
+          </p>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Kontraktsmål</h2>
+              <p className="mt-0.5 text-sm text-slate-500">Målt verdi mot kontraktsfestet grense.</p>
+            </div>
+            {canEdit ? (
+              <Link
+                href={`/prosjekter/${project.id}/oppsett`}
+                className="text-sm font-semibold text-blue-700 hover:text-blue-900"
+              >
+                Rediger
+              </Link>
+            ) : null}
+          </div>
+          {project.kpis.length === 0 ? (
+            <div className="p-10 text-center">
+              <IconTarget className="mx-auto h-8 w-8 text-slate-300" />
+              <p className="mt-3 text-sm font-medium text-slate-700">Ingen kontraktsmål registrert</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Legg inn mål for CO2, tomgang, drivstoff eller massegjenbruk for å følge opp kontrakten.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-4 p-5">
+              {project.kpis.map((kpi) => (
+                <KpiCard key={kpi.id} kpi={kpi} />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <ProjectMachinesSection
+        machines={machines.machines}
+        error={machines.error}
+        projectNumber={project.projectNumber}
+        viewer={viewer}
+      />
     </div>
   );
 }
 
-function ProjectMapTab({ project }: { project: ProjectWorkspace }) {
+function InfoRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 px-6 py-2.5">
+      <dt className="shrink-0 text-sm text-slate-500">{label}</dt>
+      <dd className="min-w-0 truncate text-right text-sm font-semibold text-slate-900">{children}</dd>
+    </div>
+  );
+}
+
+const STAT_TONES = {
+  blue: "bg-blue-50 text-blue-700",
+  violet: "bg-violet-50 text-violet-700",
+  emerald: "bg-emerald-50 text-emerald-700",
+  amber: "bg-amber-50 text-amber-700",
+  red: "bg-red-50 text-red-700",
+  teal: "bg-teal-50 text-teal-700",
+} as const;
+
+function StatTile({
+  icon,
+  tone,
+  label,
+  value,
+  detail,
+  children,
+}: {
+  icon: ReactNode;
+  tone: keyof typeof STAT_TONES;
+  label: string;
+  value: string;
+  detail: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center gap-3">
+        <span className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${STAT_TONES[tone]}`}>
+          {icon}
+        </span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</span>
+      </div>
+      <div>
+        <div className="text-2xl font-semibold tabular-nums text-slate-900">{value}</div>
+        <div className="mt-1 text-sm text-slate-500">{detail}</div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ProgressBar({ percent, className }: { percent: number; className: string }) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  return (
+    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+      <div className={`h-full rounded-full ${className}`} style={{ width: `${clamped}%` }} />
+    </div>
+  );
+}
+
+function KpiCard({ kpi }: { kpi: ProjectWorkspace["kpis"][number] }) {
+  const direction = KPI_METRIC_OPTIONS.find((option) => option.value === kpi.metric)?.direction ?? "MAX";
+  const hasData = kpi.status !== "DATA_MISSING" && kpi.currentValue !== null;
+  const ratio =
+    hasData && kpi.targetValue > 0 ? (kpi.currentValue as number) / kpi.targetValue : null;
+  const percent = ratio === null ? 0 : Math.min(100, ratio * 100);
+  const barClass =
+    kpi.status === "BREACH"
+      ? "bg-red-500"
+      : kpi.status === "WARNING"
+        ? "bg-amber-400"
+        : kpi.status === "OK"
+          ? "bg-emerald-500"
+          : "bg-slate-300";
+  const StatusIcon =
+    kpi.status === "BREACH" ? IconAlertTriangle : kpi.status === "WARNING" ? IconAlertTriangle : kpi.status === "OK" ? IconCheck : IconHelp;
+
+  return (
+    <div className={`rounded-xl border p-4 ${kpiCardClass(kpi.status)}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate font-semibold text-slate-900">{kpi.label}</div>
+          <div className="text-xs text-slate-500">
+            {KPI_METRIC_LABELS[kpi.metric] ?? kpi.metric}
+            {kpi.contractRef ? ` · ${kpi.contractRef}` : ""}
+          </div>
+        </div>
+        <span
+          className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${kpiStatusClass(kpi.status)}`}
+        >
+          <StatusIcon className="h-3.5 w-3.5" />
+          {kpi.statusLabel}
+        </span>
+      </div>
+
+      <div className="mt-4 flex items-baseline gap-1.5">
+        <span className="text-2xl font-semibold tabular-nums text-slate-900">
+          {hasData ? formatNumber(kpi.currentValue as number) : "–"}
+        </span>
+        <span className="text-sm text-slate-500">
+          / {formatNumber(kpi.targetValue)} {kpi.unit}
+        </span>
+      </div>
+
+      <div className="mt-2">
+        <ProgressBar percent={percent} className={barClass} />
+        <div className="mt-1 text-xs text-slate-500">
+          {!hasData
+            ? "Ingen måledata ennå"
+            : direction === "MAX"
+              ? `${formatNumber(percent)} % av grensen brukt`
+              : `${formatNumber(percent)} % av minstekravet nådd`}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function kpiCardClass(status: ProjectWorkspace["kpis"][number]["status"]) {
+  if (status === "BREACH") return "border-red-200 bg-red-50/40";
+  if (status === "WARNING") return "border-amber-200 bg-amber-50/40";
+  if (status === "DATA_MISSING") return "border-slate-200 bg-slate-50";
+  return "border-emerald-200 bg-emerald-50/30";
+}
+
+function computeTimeline(startDate: string | null, endDate: string | null) {
+  const start = startDate ? new Date(startDate) : null;
+  const end = endDate ? new Date(endDate) : null;
+  const validStart = start && !Number.isNaN(start.getTime()) ? start : null;
+  const validEnd = end && !Number.isNaN(end.getTime()) ? end : null;
+  const now = new Date();
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  if (validStart && validEnd && validEnd.getTime() > validStart.getTime()) {
+    const total = validEnd.getTime() - validStart.getTime();
+    const elapsed = now.getTime() - validStart.getTime();
+    const percent = Math.max(0, Math.min(100, (elapsed / total) * 100));
+    const daysLeft = Math.ceil((validEnd.getTime() - now.getTime()) / dayMs);
+    const totalDays = Math.round(total / dayMs);
+
+    if (now.getTime() < validStart.getTime()) {
+      const daysUntil = Math.ceil((validStart.getTime() - now.getTime()) / dayMs);
+      return {
+        percent,
+        headline: `Starter om ${daysUntil} ${daysUntil === 1 ? "dag" : "dager"}`,
+        detail: `${formatPeriod(startDate, endDate)} · ${totalDays} dager`,
+      };
+    }
+    if (daysLeft < 0) {
+      return {
+        percent,
+        headline: "Periode utløpt",
+        detail: `Sluttfrist ${formatDate(endDate, { showTime: false }) ?? "-"} · ${Math.abs(daysLeft)} dager siden`,
+      };
+    }
+    return {
+      percent,
+      headline: `${Math.round(percent)} % av perioden`,
+      detail: `${daysLeft} ${daysLeft === 1 ? "dag" : "dager"} igjen til ${formatDate(endDate, { showTime: false }) ?? "-"}`,
+    };
+  }
+
+  if (validStart || validEnd) {
+    return {
+      percent: null,
+      headline: validStart ? "Pågår" : "Frist satt",
+      detail: formatPeriod(startDate, endDate),
+    };
+  }
+
+  return { percent: null, headline: "Ikke planlagt", detail: "Oppstart og sluttfrist er ikke satt" };
+}
+
+function ProjectMapTab({
+  project,
+  canEdit,
+  fallbackCenter,
+}: {
+  project: ProjectWorkspace;
+  canEdit: boolean;
+  fallbackCenter: { lat: number; lng: number } | null;
+}) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 px-6 py-4">
-        <h2 className="text-xl font-semibold text-slate-900">Anleggskart</h2>
-      </div>
-      <div className="space-y-5 p-6">
-        <InfoSection
-          title="Lokasjon"
-          rows={[
-            ["Adresse", formatAddress(project)],
-            ["Sted", project.city ?? "-"],
-          ]}
-        />
-        <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
-          Ingen anleggssoner registrert.
+      <div className="flex flex-col gap-3 border-b border-slate-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-900">Anleggskart</h2>
+          <p className="mt-0.5 text-sm text-slate-500">
+            {formatAddressInline(project) !== "-"
+              ? formatAddressInline(project)
+              : "Tegn anleggssoner i kartet og juster punktene ved behov."}
+          </p>
         </div>
         <Link href="/kart" className={secondaryButtonClass}>
-          Åpne kart
+          Åpne maskinkart
         </Link>
+      </div>
+      <div className="p-6">
+        <ProjectZonesEditor
+          key={project.id}
+          projectId={project.id}
+          initialZones={project.zones}
+          canEdit={canEdit}
+          fallbackCenter={fallbackCenter}
+        />
       </div>
     </section>
   );
@@ -329,47 +633,15 @@ function ProjectDocumentsTab({
   return <ProjectDocumentsPanel projectId={projectId} canEdit={canEdit} />;
 }
 
-function InfoSection({
-  title,
-  rows,
-}: {
-  title: string;
-  rows: Array<[string, string]>;
-}) {
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 px-6 py-4">
-        <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
-      </div>
-      <dl className="divide-y divide-slate-100">
-        {rows.map(([label, value]) => (
-          <div key={`${title}-${label}`} className="grid gap-2 px-6 py-4 sm:grid-cols-[12rem_1fr]">
-            <dt className="text-sm font-medium text-slate-500">{label}</dt>
-            <dd className="whitespace-pre-wrap text-sm text-slate-900">{value}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
-  );
-}
-
-function formatAddress(project: ProjectWorkspace) {
+function formatAddressInline(project: ProjectWorkspace) {
   const cityLine = [project.postalCode, project.city].filter(Boolean).join(" ");
-  return [project.addressLine, cityLine].filter(Boolean).join("\n") || "-";
+  return [project.addressLine, cityLine].filter(Boolean).join(", ") || "-";
 }
 
 function formatPeriod(startDate: string | null, endDate: string | null) {
   const start = formatDate(startDate, { showTime: false }) ?? "-";
   const end = formatDate(endDate, { showTime: false }) ?? "-";
   return `${start} til ${end}`;
-}
-
-function formatProjectField(field: ProjectWorkspace["fieldValues"][number]) {
-  if (field.fieldType === "BOOLEAN") {
-    if (field.value === "true") return "Ja";
-    if (field.value === "false") return "Nei";
-  }
-  return formatDisplay(field.value);
 }
 
 function formatCurrency(value: number | null) {

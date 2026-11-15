@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AnleggsPortalen – samlet testprototype</title>
+<style>
+:root{--navy:#0d3b4f;--navy2:#14536b;--teal:#14b8a6;--teal2:#0f766e;--bg:#f2f5f8;--line:#e2e8f0;--mut:#64748b;--mut2:#94a3b8;--ink:#0f172a;--ok:#15803d;--okbg:#dcfce7;--warn:#b45309;--warnbg:#fef3c7;--bad:#b91c1c;--badbg:#fee2e2;--info:#0369a1;--infobg:#e0f2fe;--lilla:#7c3aed;--lillabg:#ede9fe}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Arial,sans-serif;background:#dde5ec;color:var(--ink);font-size:14px}
+.shell{max-width:1240px;margin:14px auto;background:var(--bg);border:1px solid #cbd5e1;border-radius:18px;overflow:hidden;box-shadow:0 18px 50px rgba(2,20,30,.18);display:flex;flex-direction:column;min-height:92vh}
+.top{background:var(--navy);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.logo{width:32px;height:32px;border-radius:8px;background:var(--teal);display:flex;align-items:center;justify-content:center;font-weight:800;color:#04303b;font-size:15px}
+.tt{font-weight:650;font-size:15px;line-height:1.1}
+.tt small{display:block;font-weight:400;font-size:9px;color:#93c5d3;text-transform:uppercase;letter-spacing:.07em}
+.sok{flex:1;min-width:180px;max-width:420px;position:relative}
+.sok input{width:100%;border:1px solid #2a607a;background:#124660;color:#fff;border-radius:9px;padding:7px 11px;font-size:12.5px;font-family:inherit}
+.sok input::placeholder{color:#7fa8ba}
+.sokres{position:absolute;top:36px;left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:11px;box-shadow:0 10px 26px rgba(2,20,30,.2);z-index:50;max-height:300px;overflow:auto}
+.sokres div{padding:8px 11px;font-size:12px;border-top:1px solid #eef2f6;cursor:pointer;color:var(--ink)}
+.sokres div:hover{background:#f0fdfa}
+.user{font-size:11px;text-align:right;color:#bcd6e0}
+.user b{display:block;color:#fff;font-size:12px}
+.main{display:flex;flex:1;min-height:0}
+.nav{width:198px;background:#fff;border-right:1px solid var(--line);padding:10px 8px;flex-shrink:0}
+.nav button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:none;background:none;padding:8px 10px;border-radius:9px;font-size:12.8px;color:#334155;cursor:pointer;font-family:inherit;margin-bottom:1px}
+.nav button:hover{background:#f1f5f9}
+.nav button.on{background:#0f766e12;color:var(--teal2);font-weight:650}
+.nav .grp{font-size:8.5px;color:var(--mut2);text-transform:uppercase;letter-spacing:.09em;padding:10px 10px 4px;font-weight:700}
+.nav .bdg{margin-left:auto;background:var(--badbg);color:var(--bad);border-radius:99px;font-size:9px;padding:1px 6px;font-weight:700}
+.content{flex:1;padding:16px 18px;overflow-y:auto;min-width:0}
+h1{font-size:17px;font-weight:650;margin:0 0 3px}
+.sub{font-size:12px;color:var(--mut);margin:0 0 13px;line-height:1.55;max-width:860px}
+.card{background:#fff;border:1px solid var(--line);border-radius:13px;padding:13px;margin-bottom:11px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.card h2{font-size:13.5px;font-weight:650;margin:0 0 7px}
+.grid{display:grid;gap:10px}
+.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+.met{background:var(--navy);color:#fff;border-radius:12px;padding:11px;text-align:center}
+.met .v{font-size:20px;font-weight:750}.met .l{font-size:9.5px;opacity:.85;margin-top:1px}
+.btn{background:#fff;border:1px solid #cbd5e1;border-radius:9px;padding:7px 13px;font-size:12.3px;cursor:pointer;font-family:inherit;color:var(--ink)}
+.btn:hover{border-color:#94a3b8}
+.btn-p{background:var(--teal2);border-color:var(--teal2);color:#fff}
+.btn-p:hover{background:#0b5f58}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:4px 9px;font-size:11px;border-radius:8px}
+input,select,textarea{border:1px solid #cbd5e1;border-radius:9px;padding:7px 10px;font-size:12.5px;font-family:inherit;background:#fff;color:var(--ink);max-width:100%}
+textarea{width:100%;resize:vertical}
+.pill{font-size:9px;padding:2px 8px;border-radius:99px;font-weight:700;white-space:nowrap;display:inline-block}
+.pg{background:var(--okbg);color:var(--ok)}.pw{background:var(--warnbg);color:var(--warn)}.pd{background:var(--badbg);color:var(--bad)}.pn{background:#f1f5f9;color:#475569}.pb{background:var(--infobg);color:var(--info)}.pp{background:var(--lillabg);color:var(--lilla)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid #eef2f6;font-size:12.3px;flex-wrap:wrap}
+.row:first-of-type{border-top:none}
+.mini{font-size:10px;color:var(--mut2)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px;flex-wrap:wrap}
+.tabs button{border:none;background:none;padding:8px 11px 7px;font-size:12.3px;color:var(--mut);border-bottom:2.5px solid transparent;cursor:pointer;font-family:inherit}
+.tabs button.on{color:var(--teal2);border-bottom-color:var(--teal2);font-weight:650}
+.bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden}
+.bar>i{display:block;height:100%;border-radius:99px;background:var(--teal2)}
+.feltG{border-left:3px solid var(--ok);background:#f6fdf8;border-radius:8px;padding:7px 10px;margin-bottom:6px;font-size:12px}
+.feltO{border-left:3px solid var(--warn);background:#fffbeb;border-radius:8px;padding:7px 10px;margin-bottom:6px;font-size:12px}
+.chat{background:#fff;border:1px solid var(--line);border-radius:13px;display:flex;flex-direction:column;height:430px}
+.chat .msgs{flex:1;overflow-y:auto;padding:13px}
+.msg{max-width:82%;border-radius:12px;padding:8px 11px;font-size:12.4px;margin-bottom:8px;line-height:1.55;white-space:pre-wrap}
+.msg.me{background:var(--teal2);color:#fff;margin-left:auto;border-bottom-right-radius:3px}
+.msg.ai{background:#f1f5f9;border-bottom-left-radius:3px}
+.chat .inp{display:flex;gap:7px;border-top:1px solid var(--line);padding:9px}
+.chat .inp input{flex:1}
+.mapwrap{max-width:720px}
+.maplag{display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap}
+.maplag .btn.on{background:var(--navy);border-color:var(--navy);color:#fff}
+svg text{font-family:inherit}
+.phone{width:100%;max-width:380px;background:var(--navy);border-radius:28px;padding:10px;box-shadow:0 16px 40px rgba(2,20,30,.3);margin:0 auto}
+.scr{background:var(--bg);border-radius:20px;overflow:hidden;min-height:560px;display:flex;flex-direction:column}
+.ptop{background:var(--navy);color:#fff;padding:11px 13px;display:flex;align-items:center;gap:8px;font-weight:650;font-size:13px}
+.ptop small{display:block;font-weight:400;font-size:8.5px;color:#93c5d3;text-transform:uppercase;letter-spacing:.06em}
+.pbody{padding:11px;flex:1;overflow-y:auto}
+.pbody .card{padding:10px;margin-bottom:8px;border-radius:12px}
+.chk{display:flex;align-items:center;gap:7px;padding:7px 0;border-top:1px solid #eef2f6;font-size:12px;flex-wrap:wrap}
+.smb{border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:4px 9px;font-size:11px;cursor:pointer;font-family:inherit;color:#475569}
+.smb.ok{background:var(--okbg);border-color:#86efac;color:var(--ok)}
+.smb.avv{background:var(--badbg);border-color:#fca5a5;color:var(--bad)}
+.opt{display:block;width:100%;text-align:left;background:#fff;border:1px solid #cbd5e1;border-radius:9px;padding:8px 10px;font-size:12px;cursor:pointer;font-family:inherit;margin-bottom:5px;color:var(--ink)}
+.opt:hover{border-color:var(--teal2);background:#f0fdfa}
+.demo{font-size:10px;color:var(--mut2);background:#fff;border:1px dashed #cbd5e1;border-radius:9px;padding:6px 10px;margin-bottom:11px}
+.pilrad{display:flex;align-items:center;gap:9px;padding:9px 0;border-top:1px solid #eef2f6;font-size:12.3px;flex-wrap:wrap}
+.pil{color:var(--teal2);font-weight:800}
+@media(max-width:860px){.main{flex-direction:column}.nav{width:100%;display:flex;overflow-x:auto;border-right:none;border-bottom:1px solid var(--line);padding:6px}.nav .grp{display:none}.nav button{width:auto;white-space:nowrap}.g2,.g3,.g4{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="shell" id="app"></div>
+<script>
+"use strict";
+function esc(t){return String(t==null?"":t).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function pill(t,c){return '<span class="pill '+c+'">'+esc(t)+'</span>';}
+function nb(n){return Number(n).toLocaleString("nb-NO");}
+
+/* ───────────────────────── DEMODATA ───────────────────────── */
+var PRO=[
+ {id:"p1",nr:"2026-014",navn:"Bjørvika Felt B4",sted:"Oslo",kontrakt:"NS 8407 totalentreprise",bh:"Oslo S Utvikling AS",start:"02.03.2026",slutt:"20.12.2027",sum:"84,5 MNOK",pl:"Nina Prosjektsen",status:"Aktiv"},
+ {id:"p2",nr:"2026-021",navn:"Løren Miljøgate",sted:"Oslo",kontrakt:"NS 8405 utførelse",bh:"Oslo kommune, Bymiljøetaten",start:"04.05.2026",slutt:"30.06.2027",sum:"41,2 MNOK",pl:"Nina Prosjektsen",status:"Aktiv"},
+ {id:"p3",nr:"2026-008",navn:"Nydalen Kvartal 12",sted:"Oslo",kontrakt:"NS 8407",bh:"Avantor",start:"12.01.2026",slutt:"15.08.2026",sum:"12,8 MNOK",pl:"Jon Leder",status:"Aktiv"},
+ {id:"p4",nr:"2026-025",navn:"Økern Portal II",sted:"Oslo",kontrakt:"NS 8405",bh:"Økern Utvikling",start:"01.09.2026",slutt:"01.11.2027",sum:"63,0 MNOK",pl:"Jon Leder",status:"Aktiv"},
+ {id:"p5",nr:"2026-002",navn:"Ensjø Torg",sted:"Oslo",kontrakt:"NS 8406",bh:"Ensjø Utvikling",start:"05.01.2026",slutt:"28.02.2026",sum:"4,1 MNOK",pl:"Nina Prosjektsen",status:"Ferdig"},
+ {id:"p6",nr:"2025-118",navn:"Fornebu Vest",sted:"Bærum",kontrakt:"NS 8407",bh:"OBOS",start:"15.08.2025",slutt:"01.10.2026",sum:"102 MNOK",pl:"Jon Leder",status:"Aktiv"},
+ {id:"p7",nr:"2025-097",navn:"Ski Sentrum Øst",sted:"Nordre Follo",kontrakt:"NS 8405",bh:"Nordre Follo kommune",start:"01.06.2025",slutt:"20.12.2026",sum:"55,7 MNOK",pl:"Nina Prosjektsen",status:"Aktiv"}
+];
+var FLEET=[
+ {id:"M-1042",navn:"CAT 320 gravemaskin",type:"Gravemaskin",eier:"LEID",st:"WORKING",lt:14.8,sn:12.1,tg:31,tsn:18,timer:142,x:200,y:150,drift:"Diesel",dok:[{k:"Sakkyndig kontroll",d:"12.09.2027",st:"ok"},{k:"Samsvarserklæring/CE",d:"—",st:"ok"},{k:"Siste service (500 t)",d:"02.11.2026",st:"ok"}],serv:"500t-service om 84 t → ca. 12 dager (7,1 t/dag)"},
+ {id:"L-330",navn:"Volvo A30 dumper",type:"Dumper",eier:"LEID",st:"WORKING",lt:16.2,sn:15.9,tg:22,tsn:19,timer:156,x:420,y:300,drift:"Diesel",dok:[{k:"Sakkyndig kontroll",d:"03.04.2027",st:"ok"}],serv:"1000t-service om 310 t → ca. 41 dager"},
+ {id:"M-0877",navn:"Volvo EC220 gravemaskin",type:"Gravemaskin",eier:"EGEN",st:"IDLE",lt:11.4,sn:12.1,tg:12,tsn:18,timer:130,x:540,y:170,drift:"Diesel",dok:[{k:"Sakkyndig kontroll",d:"20.01.2027",st:"ok"}],serv:"250t-service om 61 t → ca. 9 dager"},
+ {id:"H-204",navn:"Volvo L120 hjullaster",type:"Hjullaster",eier:"LEID",st:"WORKING",lt:12.9,sn:13.2,tg:17,tsn:20,timer:121,x:300,y:380,drift:"Diesel",dok:[{k:"Sakkyndig kontroll",d:"11.06.2027",st:"ok"}],serv:"—"},
+ {id:"B-77",navn:"Borerigg T45",type:"Borerigg",eier:"LEID",st:"WORKING",lt:19.5,sn:19.5,tg:14,tsn:14,timer:98,x:160,y:255,drift:"Diesel",dok:[{k:"Sakkyndig kontroll",d:"28.02.2027",st:"ok"}],serv:"—"},
+ {id:"G-12",navn:"Aggregat 60 kVA",type:"Aggregat",eier:"LEID",st:"IDLE",lt:6.1,sn:4.9,tg:64,tsn:41,timer:210,x:620,y:360,drift:"Diesel",dok:[],serv:"—"},
+ {id:"D-19",navn:"8t minigraver (el)",type:"Minigraver",eier:"LEID",st:"WORKING",lt:0,sn:0,tg:8,tsn:12,timer:76,x:480,y:120,drift:"El",dok:[{k:"Sakkyndig kontroll",d:"19.05.2027",st:"ok"}],serv:"—"},
+ {id:"V-55",navn:"Valse CC2200",type:"Valse",eier:"EGEN",st:"OFF",lt:8.2,sn:8.2,tg:9,tsn:9,timer:12,x:660,y:210,drift:"Diesel",dok:[{k:"Sakkyndig kontroll",d:"30.09.2027",st:"ok"}],serv:"—"},
+ {id:"K-08",navn:"Mobilkran 60 t",type:"Mobilkran",eier:"EGEN",st:"OFF",lt:0,sn:0,tg:0,tsn:0,timer:0,x:585,y:300,drift:"Diesel",dok:[{k:"Sakkyndig kontroll",d:"01.08.2026",st:"utløpt"}],serv:"—"}
+];
+var RETURNERT={id:"L-215 rst",navn:"Volvo A25 dumper",status:"AVHENTES"}; // skjult i kart/flåte, teller i rapportperioden
+var CREW=[
+ {n:"Ola Hansen",r:"Maskinfører",t:"EGEN",inne:true},
+ {n:"Pavel Kowalski",r:"Grunnarbeider",t:"EGEN",inne:true},
+ {n:"Siri Berg",r:"Stikningsingeniør",t:"EGEN",inne:true},
+ {n:"Jan Olsen",r:"Maskinfører",t:"EGEN",inne:false},
+ {n:"Tore Vik",r:"Grunnarbeider",t:"INNLEID (Adecco)",inne:true},
+ {n:"Marek N.",r:"Betongarbeider",t:"INNLEID (UE Betong AS)",inne:true}
+];
+
+/* ───────────────────────── STATE ───────────────────────── */
+var S={view:"over",q:"",sokOpen:false,
+ basemap:"KART",hot:false,naer:false,sel:null,
+ pid:"p1",ptab:"info",pvelg:false,psok:"",redig:false,
+ masse:{plan:[{t:"Sprengstein",ret:"UT",plan:12500,reg:9100},{t:"Jord (ren)",ret:"UT",plan:6200,reg:5950},{t:"Forurenset jord",ret:"UT",plan:900,reg:410},{t:"Pukk 22/120",ret:"INN",plan:4800,reg:3100}],
+  lass:[{kl:"09:12",m:"L-330",t:28.4,ty:"Sprengstein",ok:true,src:"PLAN"},{kl:"08:41",m:"L-330",t:28.1,ty:"Sprengstein",ok:true,src:"SONE"},{kl:"08:12",m:"L-330",t:27.9,ty:"Sprengstein",ok:true,src:"SJÅFØR"},{kl:"07:48",m:"L-330",t:26.8,ty:null,ok:false,src:null},{kl:"07:22",m:"L-330",t:27.1,ty:null,ok:false,src:null}]},
+ eo:{list:[
+  {id:1,eo:"EO-03",tit:"Omlegging VA-trasé sør",st:"CHANGE",bh:"UNDER_DISCUSSION",int:"WEEKLY_FRIDAY",logg:[{k:"LOAD",t:"12 lass sprengstein ekstra",d:"13.11"},{k:"HOURS",t:"Gravemaskin 14 t / mann 22 t",d:"13.11"},{k:"DIARY",t:"Påtruffet ukjent kabel, stans 2 t (foto)",d:"12.11"}],opph:"Tegning K-201 rev B"},
+  {id:2,eo:null,tit:"Mer fjell enn angitt i felt C",st:"POSSIBLE",bh:"NOT_NOTIFIED",int:"MANUAL",logg:[],opph:"NS 3420-post 26.3, rapport GEO-12",felt:true},
+  {id:3,eo:"EO-02",tit:"Økt gravedybde byggegrop B",st:"COMPLETED",bh:"ACCEPTED",int:"MANUAL",logg:[],opph:"BH-referat 14.08"},
+  {id:4,eo:null,tit:"Flytting av brakkerigg",st:"NO_CHANGE",arsak:"Inngår i rigg og drift iht. kontraktens pkt. 4.2.",bh:"NOT_NOTIFIED",int:"MANUAL",logg:[],opph:"—"}
+ ]},
+ rtab:"krav",rpids:["p1"],rue:true,rvelg:false,aik:3,aisvar:false,
+ ftab:"liste",fai:"",faisvar:null,fsel:null,
+ mtab:"tid",mscope:"PROSJEKT",
+ tid:[{n:"Ola Hansen",d:"14.11",t:"07:00–15:00 (7,5 t)",ot:"",st:"SUBMITTED"},{n:"Pavel Kowalski",d:"14.11",t:"07:00–17:00 (9,5 t)",ot:"2 t 50 %",st:"SUBMITTED"},{n:"Tore Vik (innleid)",d:"14.11",t:"07:00–15:00 (7,5 t)",ot:"",st:"SUBMITTED"},{n:"Siri Berg",d:"13.11",t:"08:00–16:00 (7,5 t)",ot:"",st:"APPROVED"}],
+ komp:[{n:"Ola Hansen",k:"Dok. opplæring: dumper",kilde:"Opplæringsappen",utl:"—",st:"ok"},{n:"Ola Hansen",k:"HMS-kort 4471-882",kilde:"Portal",utl:"11.2027",st:"ok"},{n:"Jan Olsen",k:"Maskinførerbevis M2",kilde:"Portal",utl:"08.12.2026",st:"snart"},{n:"Pavel Kowalski",k:"Dok. opplæring: gravemaskin",kilde:"Opplæringsappen",utl:"mangler",st:"mangler"}],
+ htab:"avvik",
+ avvik:[{id:1,tit:"Dieselsøl ved tankplass",kat:"YTRE_MILJØ",st:"ACTIONS",risk:12,ars:"Teknikk (slange)",tiltak:[{t:"Skifte slanger på tankanlegg",a:"Per Ås",frist:"20.11",done:false},{t:"Absorbent + masseutskifting 2 m³",a:"Pavel K.",frist:"16.11",done:true}]},
+  {id:2,tit:"Manglende rekkverk ved grop B",kat:"HMS",st:"REPORTED",risk:null,ars:null,tiltak:[]}],
+ sjek:{maler:["Utstyrskontroll gravemaskin (daglig)","Vernerunde uke (HMS)","Mottakskontroll rør"],run:null,
+  pkt:[{t:"Bremser/styring funksjonstestet",v:null,f:0},{t:"Lys, speil, ryggekamera OK",v:null,f:0},{t:"Ingen lekkasjer (hydraulikk/diesel)",v:null,f:0},{t:"Brannslukker og nødstopp på plass",v:null,f:0}],signert:false},
+ sja:{tit:"SJA – sprengning salve C4",farer:[{f:"Steinsprut mot gangvei",r:16,t:"Sperring + vakt, varslingsrutine"},{f:"Maskiner i sikringssone",r:12,t:"Geofence-varsel + utkjøring før salve"}],sign:[{n:"Nina Prosjektsen",ok:true},{n:"Per Ås",ok:true},{n:"Ola Hansen",ok:false},{n:"Bergsprenger (UE Fjell AS)",ok:false}]},
+ info:[{t:"Sprengning i sone C kl. 11:30",krit:true,les:false},{t:"Ny parkering fra mandag – bruk P2",krit:false,les:true}],
+ dtab:"hotell",dsel:null,
+ avrop:{st:"DRAFT",nr:null,linjer:[{d:"Borerigg T45 m/fører",ant:1,fra:"01.12.2026",til:"28.02.2027",mnr:null,pris:null},{d:"Gravemaskin 25 t",ant:1,fra:"01.12.2026",til:"30.06.2027",mnr:null,pris:null},{d:"Dumper 30 t",ant:2,fra:"01.12.2026",til:"30.06.2027",mnr:null,pris:null}]},
+ jchat:[{me:false,t:"Hei! Jeg er Minijuristen – still meg spørsmål om varsler, endringer, frister eller omtvistede krav. Jeg viser alltid rettsgrunnlaget, og for komplekse tvister anbefaler jeg advokat."}],jin:"",
+ atab:"brukere",rolleSom:"KARI",
+ brukere:[{n:"Kari Nordmann",r:"COMPANY_ADMIN"},{n:"Nina Prosjektsen",r:"PROJECT_MANAGER"},{n:"Jon Leder",r:"PROJECT_MANAGER"},{n:"Per Ås",r:"FOREMAN"},{n:"Ola Hansen",r:"WORKER"},{n:"Pavel Kowalski",r:"WORKER"}],
+ epd:[{p:"Pukk 22/120",s:"Franzefoss Bondkall",q:"412 tonn",epd:"NEPD-2456 (EPD-Norge)",co2:1690},{p:"PE-rør 315mm SDR11",s:"Pipelife",q:"860 m",epd:"Leverandør-API (ISO 23386)",co2:5230},{p:"Betong B35 lavkarbon",s:"Unicon",q:"120 m³",epd:"Faktura-match (Tripletex)",co2:26400},{p:"Kabelsand 0/8",s:"Feiring Bruk",q:"96 tonn",epd:null,co2:null}],fak:false,
+ feedArk:false,
+ feed:[{n:"Per Ås",kl:"i dag 10:12",t:"Grop B klar for VA-laget fra mandag. Husk SJA før salve C4.",foto:true},{n:"Siri Berg",kl:"i dag 08:40",t:"Stikning felt C ferdig – data i prosjektmappen.",foto:false},{n:"Ola Hansen",kl:"i går 14:55",t:"Mulig endring registrert: mer fjell enn tegning i felt C (med bilder).",foto:true}],
+ std:[{t:"Varsel om endring (NS 8407 pkt. 32)",v:"v3",ny:false},{t:"RUH-skjema",v:"v5",ny:true},{t:"SJA-mal",v:"v2",ny:false},{t:"Byggemøtereferat",v:"v4",ny:false}],
+ app:{view:"login",infoOk:false,lass:6,lassMan:0,ny:true,velg:false,dekl:false,eoSent:false,
+  chk:[{t:"Bremser og styring OK",v:null},{t:"Lys/speil/ryggekamera OK",v:null},{t:"Ingen lekkasjer",v:null},{t:"Brannslukker på plass",v:null}],signert:false},
+ base:{base:240,maal:216,fakt:128,andel:0.62}
+};
+var RL={PORTAL_ADMIN:["Admin (Bjugstad)","pd"],COMPANY_ADMIN:["Admin bedrift","pp"],PROJECT_MANAGER:["Prosjektleder","pb"],FOREMAN:["Arbeidsleder","pw"],WORKER:["Arbeider","pg"]};
+var KAN_LEGGE={KARI:["PROJECT_MANAGER","FOREMAN","WORKER"],PER:["WORKER"],OLA:[]};
+function pro(){for(var i=0;i<PRO.length;i++)if(PRO[i].id===S.pid)return PRO[i];return PRO[0];}
+function demoNote(t){return '<div class="demo">🧪 Demo-modus: '+t+' I produksjon går dette mot portalens API.</div>';}
+
+/* ───────────────────────── OVERSIKT ───────────────────────── */
+function vOversikt(){
+ var ub=S.masse.lass.filter(function(l){return !l.ok;}).length;
+ var h='<h1>God formiddag, Kari 👋</h1><p class="sub">Samlet bilde på tvers av prosjektene i Entreprenør AS. Varslene under er klikkbare og tar deg til riktig modul.</p>';
+ h+='<div class="grid g4" style="margin-bottom:11px"><div class="met"><div class="v">6</div><div class="l">Aktive prosjekter</div></div><div class="met" style="background:var(--teal2)"><div class="v">'+(FLEET.length)+'</div><div class="l">Maskiner i aktiv flåte</div></div><div class="met" style="background:var(--navy2)"><div class="v">'+CREW.filter(function(c){return c.inne;}).length+'</div><div class="l">Innsjekket mannskap nå</div></div><div class="met" style="background:#0369a1"><div class="v">145,1 t</div><div class="l">CO2e hittil i år</div></div></div>';
+ h+='<div class="grid g2"><div class="card"><h2>Krever handling</h2>'
+ +'<div class="row"><span>⚠ 1 «mulig endring» venter på vurdering (Bjørvika)</span><button class="btn sm" onclick="go(\'eoview\')">Vurder →</button></div>'
+ +'<div class="row"><span>🚛 '+ub+' ubekreftede lass – telles ikke i rapporter</span><button class="btn sm" onclick="S.view=\'proj\';S.ptab=\'masse\';render()">Bekreft →</button></div>'
+ +'<div class="row"><span>⏱ 3 timelister venter på godkjenning</span><button class="btn sm" onclick="S.view=\'mann\';S.mtab=\'tid\';render()">Godkjenn →</button></div>'
+ +'<div class="row"><span>🛠 K-08 Mobilkran: sakkyndig kontroll UTLØPT</span><button class="btn sm" onclick="S.view=\'flate\';S.ftab=\'dok\';render()">Se →</button></div>'
+ +'<div class="row"><span>📄 Avvik «Dieselsøl» har 1 åpent tiltak (frist 20.11)</span><button class="btn sm" onclick="S.view=\'hms\';S.htab=\'avvik\';render()">Følg opp →</button></div>'
+ +'<div class="row"><span>🧾 Rapport til Bymiljøetaten (Løren): 2 felt mangler</span><button class="btn sm" onclick="S.view=\'rap\';render()">Fyll ut →</button></div></div>'
+ +'<div class="card"><h2>Siste fra anleggene</h2>';
+ for(var i=0;i<S.feed.length;i++){var f=S.feed[i];h+='<div class="row"><span><b>'+esc(f.n)+'</b> · <span class="mini">'+esc(f.kl)+'</span><br>'+esc(f.t)+'</span>'+(f.foto?'<span class="pill pn">📷</span>':'')+'</div>';}
+ h+='<div style="margin-top:8px"><button class="btn sm" onclick="go(\'feed\')">Åpne feeden →</button></div></div></div>';
+ h+='<div class="card"><h2>CO2-mål 2026 (baseline 2025: '+S.base.base+' t 🔒 · mål −10 %)</h2>';
+ var forv=Math.round(S.base.maal*S.base.andel);var ok=S.base.fakt<=forv;
+ h+='<div class="bar" style="margin:4px 0 3px"><i style="width:'+Math.round(S.base.fakt/S.base.maal*100)+'%;background:'+(ok?'var(--ok)':'var(--warn)')+'"></i></div>'
+ +'<div style="display:flex;justify-content:space-between" class="mini"><span>'+S.base.fakt+' t hittil</span><span>målbane nå: '+forv+' t · '+(ok?'✓ på sporet':'bak målbane')+'</span><span>'+S.base.maal+' t</span></div></div>';
+ return h;
+}
+
+/* ───────────────────────── ANLEGGSKART ───────────────────────── */
+function basemapRect(){
+ if(S.basemap==="SKJEMATISK")return '<rect width="760" height="470" fill="#eef2f6"/>';
+ if(S.basemap==="KART")return '<rect width="760" height="470" fill="#f6f8f5"/><path d="M0 430 L760 390" stroke="#d8dee6" stroke-width="22" fill="none"/><path d="M0 430 L760 390" stroke="#fff" stroke-width="2" stroke-dasharray="14 12" fill="none"/><path d="M700 0 L650 470" stroke="#e3e8ee" stroke-width="14" fill="none"/><text x="18" y="455" font-size="11" fill="#94a3b8">Dronning Eufemias gate</text>';
+ if(S.basemap==="FLYFOTO")return '<rect width="760" height="470" fill="#8a9a74"/><rect x="0" y="0" width="760" height="470" fill="#75895f" opacity=".4"/><circle cx="70" cy="60" r="16" fill="#5b7347"/><circle cx="95" cy="75" r="12" fill="#637c4e"/><circle cx="710" cy="80" r="18" fill="#5b7347"/><circle cx="690" cy="430" r="14" fill="#637c4e"/><rect x="630" y="20" width="110" height="70" fill="#9aa2ab" transform="rotate(4 685 55)"/><rect x="636" y="26" width="98" height="58" fill="#b4bbc2" transform="rotate(4 685 55)"/><path d="M0 435 L760 395" stroke="#6e7378" stroke-width="22" fill="none"/><rect x="120" y="100" width="420" height="300" fill="#a08a66" opacity=".75" rx="8"/><text x="18" y="24" font-size="10" fill="#fff" opacity=".9">Illustrasjon av flyfoto – i produksjon: Norge i bilder (© Kartverket/Geovekst, sjekk vilkår)</text>';
+ return '<rect width="760" height="470" fill="#5c6a5a"/><rect x="120" y="100" width="420" height="300" fill="#7d6b4d" opacity=".8" rx="8"/><path d="M0 435 L760 395" stroke="#3f464b" stroke-width="22" fill="none"/><text x="18" y="24" font-size="10" fill="#fff" opacity=".9">Illustrasjon av satellitt – i produksjon: ESRI World Imagery</text>';
+}
+function vKart(){
+ var h='<h1>Anleggskart · '+esc(pro().nr+" "+pro().navn)+'</h1><p class="sub">Soner tegnes som vektoroverlegg uavhengig av bakgrunn. Klikk på en maskin for maskinkort. Geofence-motoren gir varsler ved sonebrudd, fart og kjøring utenfor arbeidstid.</p>';
+ h+='<div class="maplag">';
+ ["SKJEMATISK","KART","FLYFOTO","SATELLITT"].forEach(function(b){h+='<button class="btn sm'+(S.basemap===b?' on':'')+'" onclick="S.basemap=\''+b+'\';render()">'+b.charAt(0)+b.slice(1).toLowerCase()+'</button>';});
+ h+='<span style="flex:1"></span><button class="btn sm'+(S.hot?' on':'')+'" onclick="S.hot=!S.hot;render()">🔥 Tomgangs-hotspots</button><button class="btn sm" onclick="naerhetsVarsel()">🚨 Simuler nærhetsvarsel</button></div>';
+ h+='<div class="card mapwrap" style="padding:8px"><svg viewBox="0 0 760 470" style="width:100%;display:block;border-radius:9px">'+basemapRect();
+ // soner
+ h+='<polygon points="120,100 360,80 400,230 150,270" fill="#0f766e18" stroke="#0f766e" stroke-width="2" stroke-dasharray="6 4"/><text x="140" y="122" font-size="12" fill="#0f766e" font-weight="600">Uttak salve C</text>';
+ h+='<polygon points="360,250 540,235 560,400 380,415" fill="#0369a118" stroke="#0369a1" stroke-width="2" stroke-dasharray="6 4"/><text x="380" y="272" font-size="12" fill="#0369a1" font-weight="600">Tippsone TIPP-2</text>';
+ h+='<rect x="570" y="320" width="150" height="110" fill="#7c3aed15" stroke="#7c3aed" stroke-width="2" stroke-dasharray="6 4" rx="8"/><text x="585" y="342" font-size="12" fill="#7c3aed" font-weight="600">Riggplass</text>';
+ h+='<polygon points="90,300 240,290 250,420 95,430" fill="#b91c1c1c" stroke="#b91c1c" stroke-width="2"/><text x="105" y="322" font-size="12" fill="#b91c1c" font-weight="700">⚠ Sperresone salve C4</text>';
+ if(S.hot){h+='<circle cx="645" cy="375" r="46" fill="#b91c1c" opacity=".3"/><circle cx="645" cy="375" r="24" fill="#b91c1c" opacity=".35"/><text x="602" y="440" font-size="10" fill="#b91c1c" font-weight="700">6 t 52 min tomgang/30 d</text><circle cx="460" cy="320" r="34" fill="#b45309" opacity=".3"/><text x="428" y="365" font-size="10" fill="#b45309" font-weight="700">3 t 56 min (kø v/tipp)</text>';}
+ // gangvei + folk
+ h+='<path d="M560 110 C 500 160, 470 200, 455 245" stroke="#475569" stroke-width="3" stroke-dasharray="2 6" fill="none"/><text x="565" y="104" font-size="10" fill="#475569">gangvei</text>';
+ [[300,200],[430,140],[640,390],[505,250]].forEach(function(p){h+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="5" fill="#f59e0b" stroke="#fff" stroke-width="1.5"/>';});
+ // maskiner
+ FLEET.forEach(function(m){
+  var c=m.st==="WORKING"?"#15803d":m.st==="IDLE"?"#b45309":"#64748b";
+  var flag=m.dok.some(function(d){return d.st==="utløpt";});
+  h+='<g style="cursor:pointer" onclick="velgMaskin(\''+m.id+'\')"><circle cx="'+m.x+'" cy="'+m.y+'" r="13" fill="'+c+'" stroke="#fff" stroke-width="2.5"/><text x="'+m.x+'" y="'+(m.y+4)+'" font-size="9" fill="#fff" text-anchor="middle" font-weight="700">'+esc(m.id.split("-")[0])+'</text><text x="'+m.x+'" y="'+(m.y+26)+'" font-size="9.5" fill="#1f2937" text-anchor="middle" font-weight="600" stroke="#ffffffcc" stroke-width="3" paint-order="stroke">'+esc(m.id)+(flag?" 🚩":"")+'</text></g>';
+ });
+ h+='</svg><div class="mini" style="margin-top:6px">● grønn = i arbeid · oransje = tomgang · grå = av · gule prikker = innsjekket mannskap (vises aggregert) · 🚩 = utløpt sakkyndig kontroll. Returnert leie («'+esc(RETURNERT.id)+' – avhentes») er skjult her, men teller i rapportperioden.</div></div>';
+ if(S.sel){var m=null;FLEET.forEach(function(x){if(x.id===S.sel)m=x;});
+  if(m){h+='<div class="card" style="border-left:4px solid var(--teal2)"><h2>Maskinkort · '+esc(m.id)+' '+esc(m.navn)+' '+pill(m.eier==="LEID"?"Leid fra Bjugstad":"Egen maskin",m.eier==="LEID"?"pb":"pn")+'</h2>'
+  +'<div class="row"><span>Status nå</span>'+pill(m.st==="WORKING"?"I arbeid":m.st==="IDLE"?"Tomgang":"Av",m.st==="WORKING"?"pg":m.st==="IDLE"?"pw":"pn")+'</div>'
+  +'<div class="row"><span>Forbruk / tomgang (30 d)</span><span>'+m.lt+' l/t · '+m.tg+' % tomgang</span></div>'
+  +'<div class="row"><span>Dokumenter</span><span>'+(m.eier==="LEID"?'hentes read-only fra Bjugstad-registeret (AP-23)':'kundens egne (MachineDocument)')+'</span></div>'
+  +'<div style="margin-top:8px;display:flex;gap:7px;flex-wrap:wrap"><button class="btn sm" onclick="S.view=\'flate\';S.ftab=\'dok\';S.fsel=\''+m.id+'\';render()">Maskindokumenter →</button><button class="btn sm" onclick="S.view=\'flate\';S.ftab=\'bench\';render()">Benchmark →</button><button class="btn sm" onclick="S.sel=null;render()">Lukk</button></div></div>';}}
+ return h;
+}
+function velgMaskin(id){S.sel=id;render();}
+function naerhetsVarsel(){alert("🔔 SANNTIDSVARSEL (sikkerhetsformål)\n\nTil fører M-1042: «Person 6,2 m bak maskinen – stans sving.»\nTil personen (app/klokke): «Du er i arbeidssonen til M-1042.»\n\nHendelsen lagres som sone/maskin/tid – uten personkobling (GDPR: drøftes med tillitsvalgte før aktivering).");}
+
+/* ───────────────────────── PROSJEKT ───────────────────────── */
+function vProsjekt(){
+ var p=pro();
+ var h='<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px"><h1 style="margin:0">Prosjekt · '+esc(p.nr+" "+p.navn)+'</h1>'
+ +'<button class="btn sm" onclick="S.pvelg=!S.pvelg;render()">Bytt prosjekt ▾</button>'+pill(p.status,p.status==="Aktiv"?"pg":"pn")+'</div>';
+ if(S.pvelg){h+='<div class="card"><input placeholder="Søk prosjektnr eller navn…" value="'+esc(S.psok)+'" oninput="S.psok=this.value;render()" style="width:100%;margin-bottom:7px">';
+  PRO.filter(function(x){var q=S.psok.toLowerCase();return !q||((x.nr+" "+x.navn).toLowerCase().indexOf(q)>=0);}).forEach(function(x){
+   h+='<button class="opt" onclick="S.pid=\''+x.id+'\';S.pvelg=false;render()">'+esc(x.nr)+' · '+esc(x.navn)+' <span class="mini">('+esc(x.sted)+')</span> '+(x.id==="p1"?pill("full demodata","pb"):"")+'</button>';});
+  h+='</div>';}
+ h+='<p class="sub">Alt som gjelder dette prosjektet samlet: nøkkelinfo, anleggskart, masse & lass og endringsordre.</p>';
+ h+='<div class="tabs">'+[["info","Info & KPI"],["kart","Anleggskart"],["masse","Masse & lass"],["eo","Endringsordre"]].map(function(t){return '<button class="'+(S.ptab===t[0]?"on":"")+'" onclick="S.ptab=\''+t[0]+'\';render()">'+t[1]+'</button>';}).join("")+'</div>';
+ if(S.ptab==="kart")return h+vKart();
+ if(S.ptab==="masse")return h+vMasse();
+ if(S.ptab==="eo")return h+vEo();
+ // info
+ h+='<div class="grid g2"><div class="card"><h2>Prosjektinfo '+(S.redig?'':'<button class="btn sm" style="float:right" onclick="S.redig=true;render()">✎ Rediger</button>')+'</h2>';
+ var felter=[["Byggherre","bh"],["Kontrakt","kontrakt"],["Kontraktssum","sum"],["Oppstart","start"],["Sluttfrist","slutt"],["Prosjektleder","pl"],["Sted","sted"]];
+ felter.forEach(function(f){h+='<div class="row"><span class="mini" style="min-width:95px">'+f[0]+'</span>'+(S.redig?'<input value="'+esc(p[f[1]])+'" oninput="PRO['+PRO.indexOf(p)+'].'+f[1]+'=this.value" style="flex:1">':'<b>'+esc(p[f[1]])+'</b>')+'</div>';});
+ if(S.redig)h+='<div style="margin-top:8px"><button class="btn-p btn sm" onclick="S.redig=false;render()">Lagre</button></div>';
+ h+='</div><div class="card"><h2>KPI & kontraktsmål</h2>'
+ +'<div class="row"><span>Fremdrift mot kontraktens milepæler</span><b>62 %</b></div><div class="bar"><i style="width:62%"></i></div>'
+ +'<div class="row"><span>Timer mot kalkyle (18 400 av 26 000)</span><b>71 %</b></div><div class="bar"><i style="width:71%;background:var(--warn)"></i></div>'
+ +'<div class="row"><span>Masse UT mot plan</span><b>'+Math.round((9100+5950+410)/(12500+6200+900)*100)+' %</b></div>'
+ +'<div class="row"><span>Avvik (åpne / lukket i år)</span><b>2 / 11</b></div>'
+ +'<div class="row"><span>CO2 hittil (maskiner + materialer)</span><b>45,5 t</b></div>'
+ +'<div class="row"><span>⚠ Varsel</span><span class="pill pw">Timeforbruk ligger 9 pp over fremdrift – se Rapportering</span></div></div></div>';
+ h+='<div class="card"><h2>Leide maskiner på prosjektet (fra leieavtalene)</h2>';
+ FLEET.filter(function(m){return m.eier==="LEID";}).forEach(function(m){h+='<div class="row"><span>'+esc(m.id)+' '+esc(m.navn)+'</span><span style="display:flex;gap:5px">'+pill("Aktiv leieavtale","pb")+'<button class="btn sm" onclick="S.view=\'flate\';S.ftab=\'dok\';S.fsel=\''+m.id+'\';render()">Maskinkort →</button></span></div>';});
+ h+='<div class="mini" style="margin-top:6px">Maskindokumentene (sakkyndig kontroll m.m.) hentes read-only fra Bjugstad-registeret via leieavtalen (AP-23).</div></div>';
+ return h;
+}
+
+/* ───── Masse & lass ───── */
+function vMasse(){
+ var h='<div class="grid g2"><div class="card"><h2>Masseregnskap – plan vs. registrert</h2>';
+ S.masse.plan.forEach(function(r){var pct=Math.min(100,Math.round(r.reg/r.plan*100));
+  h+='<div style="padding:7px 0;border-top:1px solid #eef2f6"><div style="display:flex;justify-content:space-between;font-size:12.3px"><span><b>'+esc(r.t)+'</b> '+pill(r.ret,r.ret==="UT"?"pw":"pb")+(r.t.indexOf("Forurenset")===0?' '+pill("deklarasjonspliktig","pd"):'')+'</span><span>'+nb(r.reg)+' / '+nb(r.plan)+' m³</span></div><div class="bar" style="margin-top:4px"><i style="width:'+pct+'%"></i></div></div>';});
+ h+='<div class="mini" style="margin-top:6px">Kun massetype-bekreftede lass telles. Overskudd/behov deles med Massekoordinering på tvers av prosjektene.</div></div>';
+ var ub=S.masse.lass.filter(function(l){return !l.ok;});
+ h+='<div class="card"><h2>Lassliste i dag (auto fra GPS) '+(ub.length?pill(ub.length+" UBEKREFTET","pw"):pill("alle bekreftet","pg"))+'</h2>';
+ S.masse.lass.forEach(function(l,i){h+='<div class="row"><span>'+esc(l.kl)+' · '+esc(l.m)+' · '+l.t+' t'+(l.ty?' · '+esc(l.ty):'')+'</span><span style="display:flex;gap:4px">'+(l.ok?pill("Bekreftet","pg")+pill(l.src,"pn"):'<button class="btn sm" onclick="bekreftLass('+i+')">Bekreft massetype</button>')+'</span></div>';});
+ if(ub.length)h+='<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-p sm" onclick="bulkLass()">Formann: bulk-bekreft som Sprengstein</button></div>';
+ h+='<div class="mini" style="margin-top:6px">⚠ Ubekreftede lass telles ikke i rapporter til byggherre/kommune eller i fakturagrunnlag. Farlige masser (forurenset jord) kan aldri bulk-bekreftes – krever deklarasjonsnr per lass.</div>'
+ +'<div style="margin-top:8px"><button class="btn sm" onclick="veielapp()">📷 Registrer veielapp fra grustak</button></div></div></div>';
+ return h;
+}
+function bekreftLass(i){
+ var valg=prompt("Massetype for lasset "+S.masse.lass[i].kl+" (forslag: Sprengstein – sonens standard + dine siste lass):\n1 = Sprengstein\n2 = Jord (ren)\n3 = Forurenset jord (krever deklarasjon)","1");
+ if(valg===null)return;
+ if(valg==="3"){var d=prompt("Deklarasjonsnummer (påkrevd for forurenset jord):");if(!d){alert("Forurenset jord kan ikke bekreftes uten deklarasjonsnummer.");return;}S.masse.lass[i].ty="Forurenset jord (dekl. "+d+")";}
+ else S.masse.lass[i].ty=valg==="2"?"Jord (ren)":"Sprengstein";
+ S.masse.lass[i].ok=true;S.masse.lass[i].src="SJÅFØR";render();
+}
+function bulkLass(){S.masse.lass.forEach(function(l){if(!l.ok){l.ok=true;l.ty="Sprengstein";l.src="FORMANN";}});render();alert("Bulk-bekreftet ✓ – lassene teller nå i masseregnskap og fakturagrunnlag. Bekrefter + tidspunkt er logget per linje (audit).");}
+function veielapp(){
+ alert("📷 Veielapp-foto (demo)\n\nOCR leser: Franzefoss Bondkall · seddel 88412 · 27,6 t · Pukk 22/120.\nDu bekrefter feltene → kobles som materialleveranse.\n\nEPD slås opp automatisk (leverandør-API → NOBB → EPD-Norge): NEPD-2456, 4,1 kg CO2e/tonn → 113 kg CO2e lagt til prosjektets materialregnskap.");
+ S.epd.unshift({p:"Pukk 22/120 (veielapp 88412)",s:"Franzefoss Bondkall",q:"27,6 tonn",epd:"NEPD-2456 (EPD-Norge, auto)",co2:113});render();
+}
+
+/* ───── Endringsordre ───── */
+function eoBhNavn(k){return {NOT_NOTIFIED:"Ikke varslet",NOTIFIED_AWAITING:"Varslet – venter svar",UNDER_DISCUSSION:"Under diskusjon",ACCEPTED:"Akseptert",PARTIALLY_ACCEPTED:"Delvis akseptert",PARTIALLY_REJECTED:"Delvis avvist",REJECTED:"Avvist"}[k]||k;}
+function vEo(){
+ var h='<div class="card" style="border-left:4px solid var(--warn)"><h2>⚠ Mulige endringer fra felt – venter vurdering</h2>';
+ var poss=S.eo.list.filter(function(e){return e.st==="POSSIBLE";});
+ if(!poss.length)h+='<div class="mini">Ingen – alt er vurdert.</div>';
+ poss.forEach(function(e){h+='<div class="row"><span><b>'+esc(e.tit)+'</b><br><span class="mini">Opphav: '+esc(e.opph)+' · registrert i felt m/foto</span></span><span style="display:flex;gap:5px"><button class="btn sm btn-p" onclick="eoVurder('+e.id+',true)">Reell endring</button><button class="btn sm" onclick="eoVurder('+e.id+',false)">Ingen endring</button></span></div>';});
+ h+='</div>';
+ h+='<div class="card"><h2>Aktive endringsordre</h2>';
+ S.eo.list.filter(function(e){return e.st==="CHANGE";}).forEach(function(e){
+  h+='<div style="border:1px solid var(--line);border-radius:11px;padding:10px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:5px"><b>'+esc(e.eo)+' · '+esc(e.tit)+'</b><span style="display:flex;gap:4px">'+pill("Byggherre: "+eoBhNavn(e.bh),e.bh==="ACCEPTED"?"pg":e.bh==="REJECTED"?"pd":"pw")+'</span></div>'
+  +'<div class="mini" style="margin:3px 0 6px">Opphav: '+esc(e.opph)+' · oppdateringsintervall: <select onchange="eoInt('+e.id+',this.value)"><option'+(e.int==="WEEKLY_FRIDAY"?" selected":"")+' value="WEEKLY_FRIDAY">hver fredag</option><option'+(e.int==="LAST_WORKDAY_MONTH"?" selected":"")+' value="LAST_WORKDAY_MONTH">siste arbeidsdag i mnd</option><option'+(e.int==="MANUAL"?" selected":"")+' value="MANUAL">manuelt</option></select></div>';
+  e.logg.forEach(function(l){h+='<div class="row"><span>'+pill(l.k,"pn")+' '+esc(l.t)+'</span><span class="mini">'+esc(l.d)+'</span></div>';});
+  h+='<div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" onclick="eoLogg('+e.id+')">＋ Loggfør (lass/timer/materiell/dagbok)</button>'
+  +'<button class="btn sm" onclick="eoBh('+e.id+')">Send oppdatering til byggherre nå</button>'
+  +'<button class="btn sm" onclick="eoFerdig('+e.id+')">Ferdigstill → arkiv</button></div>'
+  +'<div class="mini" style="margin-top:5px">⚖ Minijurist: varslet «uten ugrunnet opphold», tidsnære oppdateringer sendes etter intervallet (HR-2019-1225-A-sporet). Omtvistet beløp kan faktureres særskilt.</div></div>';});
+ h+='</div>';
+ h+='<div class="grid g2"><div class="card"><h2>Arkiv: ingen endring</h2>';
+ S.eo.list.filter(function(e){return e.st==="NO_CHANGE";}).forEach(function(e){h+='<div class="row"><span><b>'+esc(e.tit)+'</b><br><span class="mini">Årsak: '+esc(e.arsak)+' · felt er varslet</span></span>'+pill("Arkivert","pn")+'</div>';});
+ h+='</div><div class="card"><h2>Arkiv: ferdigstilte EO</h2>';
+ S.eo.list.filter(function(e){return e.st==="COMPLETED";}).forEach(function(e){h+='<div class="row"><span><b>'+esc(e.eo)+' · '+esc(e.tit)+'</b></span>'+pill(eoBhNavn(e.bh),"pg")+'</div>';});
+ h+='</div></div>';
+ return h;
+}
+function eoVurder(id,ja){
+ var e=null;S.eo.list.forEach(function(x){if(x.id===id)e=x;});if(!e)return;
+ if(ja){var n=S.eo.list.filter(function(x){return x.st==="CHANGE"||x.st==="COMPLETED";}).length+1;e.st="CHANGE";e.eo="EO-0"+n;e.bh="NOT_NOTIFIED";alert("Vurdert som REELL ENDRING ✓\n• "+e.eo+" opprettet\n• Ola (som meldte den i felt) er varslet\n• Husk varsel til byggherre uten ugrunnet opphold – knappen ligger på EO-kortet.");}
+ else{var a=prompt("Årsak (påkrevd ved «ingen endring» – felt varsles med denne):");if(!a)return;e.st="NO_CHANGE";e.arsak=a;alert("Arkivert som INGEN ENDRING – felt er varslet med årsaken.");}
+ render();
+}
+function eoLogg(id){var e=null;S.eo.list.forEach(function(x){if(x.id===id)e=x;});var t=prompt("Hva skal loggføres på "+e.eo+"? (f.eks. «4 lass pukk», «2 t gravemaskin», dagboknotat)");if(!t)return;e.logg.unshift({k:"DIARY",t:t,d:"i dag"});render();}
+function eoBh(id){var e=null;S.eo.list.forEach(function(x){if(x.id===id)e=x;});if(e.bh==="NOT_NOTIFIED")e.bh="NOTIFIED_AWAITING";render();alert("Oppdatering sendt byggherre ✓ (logg + vedlegg). Status: «"+eoBhNavn(e.bh)+"». Byggherrens svar settes manuelt når det kommer: akseptert / delvis / avvist / under diskusjon.");}
+function eoFerdig(id){var e=null;S.eo.list.forEach(function(x){if(x.id===id)e=x;});e.st="COMPLETED";render();}
+function go(v){if(v==="eoview"){S.view="proj";S.ptab="eo";}else S.view=v;render();}
+
+/* ───────────────────────── RAPPORTERING ───────────────────────── */
+function vRap(){
+ var h='<h1>Rapportering</h1><p class="sub">Krav fra lov/forskrift (grønn ramme = fylles automatisk fra portaldata, oransje = krever manuell utfylling), byggherrekrav fra kontrakten – og CO2-regnskapet med baseline og materialer. AI hjelper med utkast, du godkjenner alltid før sending.</p>';
+ h+='<div class="card"><div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap"><b style="font-size:12.5px">Omfang:</b><button class="btn sm" onclick="S.rvelg=!S.rvelg;render()">'+S.rpids.length+' prosjekt(er) valgt ▾</button>'
+ +'<label style="font-size:12px;display:flex;gap:5px;align-items:center"><input type="checkbox" '+(S.rue?"checked":"")+' onchange="S.rue=this.checked;render()" style="width:auto"> Ta med underentreprenører (med samtykke)</label></div>';
+ if(S.rvelg){h+='<div style="margin-top:8px">';PRO.forEach(function(p){var on=S.rpids.indexOf(p.id)>=0;h+='<label style="display:flex;gap:6px;font-size:12px;padding:3px 0;align-items:center"><input type="checkbox" '+(on?"checked":"")+' onchange="togglePid(\''+p.id+'\')" style="width:auto"> '+esc(p.nr+" "+p.navn)+'</label>';});h+='</div>';}
+ h+='</div>';
+ h+='<div class="tabs">'+[["krav","Rapportkrav"],["co2","CO2-regnskap"]].map(function(t){return '<button class="'+(S.rtab===t[0]?"on":"")+'" onclick="S.rtab=\''+t[0]+'\';render()">'+t[1]+'</button>';}).join("")+'</div>';
+ if(S.rtab==="co2")return h+vCo2();
+ h+='<div class="card"><h2>Masseoversikt til kommunen (forurensningsforskriften) '+pill("LOVKRAV","pd")+'</h2>'
+ +'<div class="feltG">✔ Masse UT per type og mottak – 15 460 m³ (auto fra bekreftede lasslister)</div>'
+ +'<div class="feltG">✔ Forurenset jord: 410 m³ m/deklarasjonsnr per lass (auto)</div>'
+ +'<div class="feltO">✎ Vurdering av støv-/støytiltak i perioden – <i>må fylles ut manuelt</i></div>'
+ +'<div class="feltG">✔ Transportdistanser og mottakssteder (auto fra GPS)</div>'
+ +'<div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap"><button class="btn sm btn-p" onclick="aiUtkast()">🤖 AI-utkast til manuelle felt ('+S.aik+' igjen i dag)</button><button class="btn sm" onclick="alert(\'Demo: her genereres PDF og rapporten sendes – alltid etter at et menneske har godkjent innholdet.\')">Forhåndsvis & send</button></div>'
+ +(S.aisvar?'<div class="feltO" style="margin-top:8px"><b>AI-utkast (må godkjennes):</b> «I perioden er det benyttet vanning av anleggsvei ved tørre dager og støyskjerm mot Dronning Eufemias gate. Ingen naboklager registrert. Grenseverdier i T-1442 overholdt iht. målinger uke 44–46.» <span class="mini">Kilder: HMS-logg, feed, måleimport. Kvote: '+S.aik+' igjen.</span></div>':'')
+ +'</div>';
+ h+='<div class="grid g2"><div class="card"><h2>Byggherrerapport – Oslo S Utvikling '+pill("KONTRAKTSKRAV","pw")+'</h2>'
+ +'<div class="feltG">✔ Fremdrift mot milepæler (auto fra KPI)</div><div class="feltG">✔ Timer egne/innleide/UE (auto, godkjente timer)</div><div class="feltG">✔ EO-status m/økonomi (auto fra EO-modulen)</div><div class="feltO">✎ Kommentar fra prosjektleder</div></div>'
+ +'<div class="card"><h2>Byggedagbok (NS 8407 pkt. 21) '+pill("KONTRAKTSKRAV","pw")+'</h2>'
+ +'<div class="feltG">✔ Bemanning og maskiner på plassen (auto fra innsjekk/flåte)</div><div class="feltG">✔ Vær (auto fra MET/Yr – AP-22): 2°C, oppholdsvær</div><div class="feltG">✔ Hendelser: RUH, stans, besøk (auto fra HMS/feed)</div><div class="feltO">✎ Dagens arbeider – kort beskrivelse</div></div></div>';
+ return h;
+}
+function togglePid(id){var i=S.rpids.indexOf(id);if(i>=0){if(S.rpids.length>1)S.rpids.splice(i,1);}else S.rpids.push(id);render();}
+function aiUtkast(){if(S.aik<=0){alert("AI-kvoten for i dag er brukt opp (styres i Admin).");return;}S.aik--;S.aisvar=true;render();}
+function vCo2(){
+ var mat=0,mgl=0;S.epd.forEach(function(l){if(l.co2!=null)mat+=l.co2;else mgl++;});
+ var forv=Math.round(S.base.maal*S.base.andel);var ok=S.base.fakt<=forv;
+ var h='<div class="grid g4" style="margin-bottom:11px"><div class="met"><div class="v">96,2 t</div><div class="l">Anleggsdiesel</div></div><div class="met" style="background:var(--teal2)"><div class="v">'+(Math.round(mat/100)/10).toLocaleString("nb-NO")+' t</div><div class="l">Materialer (EPD A1–A3)</div></div><div class="met" style="background:#0369a1"><div class="v">3,1 t</div><div class="l">Strøm (el-maskiner)</div></div><div class="met" style="background:var(--navy2)"><div class="v">'+((Math.round((96200+3100+mat)/100))/10).toLocaleString("nb-NO")+' t</div><div class="l">Totalt CO2e i omfanget</div></div></div>';
+ h+='<div class="card"><h2>Baseline & reduksjonsmål</h2><div class="row"><span>Baseline 2025 (låst '+ '🔒) · mål −10 % → '+S.base.maal+' t</span>'+pill(ok?"På sporet":"Bak målbane",ok?"pg":"pw")+'</div><div class="bar" style="margin-top:4px"><i style="width:'+Math.round(S.base.fakt/S.base.maal*100)+'%;background:'+(ok?"var(--ok)":"var(--warn)")+'"></i></div><div class="mini" style="margin-top:3px">'+S.base.fakt+' t hittil · målbane nå '+forv+' t. Baseline kan ikke endres etter låsing – ny versjon kreves (sporbart).</div>'
+ +'<div class="mini" style="margin-top:6px">Utslippsfaktorer: diesel 2,66 / HVO 0,35 / el (NO-miks) 0,019 kg CO2e per enhet – <b>verifiseres av integrator før produksjon</b>. Periode-flåte: historisk leide maskiner (f.eks. '+esc(RETURNERT.id)+') telles i perioden selv om avtalen er avsluttet.</div></div>';
+ h+='<div class="card"><h2>Materialleveranser (EPD) '+(mgl?pill(mgl+" trenger EPD – telles ikke","pw"):pill("alle har EPD","pg"))+'</h2>';
+ S.epd.forEach(function(l,i){h+='<div class="row"><span><b>'+esc(l.p)+'</b> · '+esc(l.s)+' · '+esc(l.q)+'<br><span class="mini">'+(l.epd?esc(l.epd):"—")+'</span></span>'+(l.co2!=null?pill(nb(Math.round(l.co2))+" kg CO2e","pg"):'<button class="btn sm" onclick="kobleEpd('+i+')">Koble EPD</button>')+'</div>';});
+ if(!S.fak)h+='<div style="margin-top:8px"><button class="btn sm btn-p" onclick="fakImport()">⬇ Hent leveranser fra regnskaps-API (Tripletex)</button></div>';
+ h+='<div class="mini" style="margin-top:6px">Kildekjede (AP-20): leverandør-API → NOBB → EPD-Norge/ECO Portal (ISO 22057) → faktura-match → manuell PDF.</div></div>';
+ return h;
+}
+function kobleEpd(i){S.epd[i].epd="NEPD-oppslag ✓ (EPD-Norge)";S.epd[i].co2=S.epd[i].p.indexOf("Kabelsand")===0?260:1240;render();}
+function fakImport(){S.fak=true;S.epd.push({p:"Fiberduk kl. 3",s:"Ahlsell",q:"2 400 m²",epd:"Faktura-match (Tripletex)",co2:820},{p:"Sprengstein tilkjørt",s:"NCC Steinskogen",q:"310 tonn",epd:null,co2:null});render();alert("Hentet 2 leveranselinjer fra fakturaer i Tripletex (AP-15):\n• Fiberduk – EPD matchet automatisk ✓\n• Sprengstein NCC – ingen EPD-match → «trenger EPD», telles ikke.");}
+
+/* ───────────────────────── FLÅTE ───────────────────────── */
+function vFlate(){
+ var h='<h1>Flåte</h1><p class="sub">Kun egne maskiner og maskiner med aktiv leieavtale vises («'+esc(RETURNERT.id)+' – avhentes» er skjult, men teller i rapportperioder). Spør Flåte-AI om hva som helst i flåtedataene.</p>';
+ h+='<div class="card" style="border-left:4px solid var(--teal2)"><div style="display:flex;gap:7px"><input style="flex:1" placeholder="Spør Flåte-AI… f.eks. «hvilken maskin bruker mest diesel?» eller «lønner det seg å leie?»" value="'+esc(S.fai)+'" oninput="S.fai=this.value" onkeydown="if(event.key===\'Enter\')fAsk()"><button class="btn btn-p" onclick="fAsk()">Spør</button></div>'
+ +(S.faisvar?'<div style="margin-top:9px;background:#f1f5f9;border-radius:10px;padding:9px 11px;font-size:12.4px;white-space:pre-wrap">'+esc(S.faisvar)+'</div>':'')+'</div>';
+ h+='<div class="tabs">'+[["liste","Maskiner"],["bench","Benchmark"],["vedl","Vedlikehold"],["dok","Maskindokumenter"]].map(function(t){return '<button class="'+(S.ftab===t[0]?"on":"")+'" onclick="S.ftab=\''+t[0]+'\';render()">'+t[1]+'</button>';}).join("")+'</div>';
+ if(S.ftab==="bench"){
+  h+='<div class="card"><h2>Hver maskin mot flåtesnittet for sin maskintype (30 d)</h2>';
+  FLEET.filter(function(m){return m.timer>0;}).sort(function(a,b){return (b.tg-b.tsn)-(a.tg-a.tsn);}).forEach(function(m){
+   var dLt=m.sn>0?Math.round((m.lt-m.sn)/m.sn*100):0;var dTg=m.tg-m.tsn;
+   h+='<div class="row"><span><b>'+esc(m.id)+' '+esc(m.navn)+'</b> · '+m.timer+' t<br><span class="mini">'+m.lt+' l/t (snitt '+m.sn+') · tomgang '+m.tg+' % (snitt '+m.tsn+' %)</span></span><span style="display:flex;gap:4px">'+pill((dLt>0?"+":"")+dLt+" % l/t",dLt>5?"pd":dLt<-5?"pg":"pn")+pill((dTg>0?"+":"")+dTg+" pp tomgang",dTg>5?"pd":dTg<-5?"pg":"pn")+'</span></div>';});
+  h+='<div class="mini" style="margin-top:6px">💡 Løftes M-1042 og G-12 til flåtesnittet, spares ca. <b>1 130 l diesel/mnd ≈ 3,0 t CO2e</b>.</div></div>';
+  return h;
+ }
+ if(S.ftab==="vedl"){
+  h+='<div class="card"><h2>Vedlikehold med enkel prediksjon (snittbruk siste 30 d)</h2>';
+  FLEET.filter(function(m){return m.serv!=="—";}).forEach(function(m){h+='<div class="row"><span><b>'+esc(m.id)+'</b> · '+esc(m.serv)+'</span>'+pill(m.serv.indexOf("12 dager")>0||m.serv.indexOf("9 dager")>0?"Planlegg verksted":"OK","pw")+'</div>';});
+  h+='<div class="row"><span><b>Feilkoder siste uke</b> · M-1042: P2263 (turbo-ytelse) – fra OEM-telemetri (AEMP)</span>'+pill("Ny","pb")+'</div></div>';
+  return h;
+ }
+ if(S.ftab==="dok"){
+  var sel=S.fsel||"M-1042";
+  h+='<div class="card"><h2>Maskindokumenter · <select onchange="S.fsel=this.value;render()">'+FLEET.map(function(m){return '<option value="'+m.id+'"'+(m.id===sel?" selected":"")+'>'+esc(m.id+" "+m.navn)+'</option>';}).join("")+'</select></h2>';
+  var m=null;FLEET.forEach(function(x){if(x.id===sel)m=x;});
+  h+='<div class="mini" style="margin-bottom:7px">'+(m.eier==="LEID"?'🔵 LEID maskin: dokumentene hentes <b>read-only fra Bjugstad-registeret</b> via leieavtalen (AP-23). Fristansvaret ligger hos utleier – du laster ikke opp noe her.':'⚪ EGEN maskin: dere laster opp og eier fristene selv (MachineDocument).')+'</div>';
+  if(!m.dok.length)h+='<div class="mini">Ingen dokumenter registrert.</div>';
+  m.dok.forEach(function(d){h+='<div class="row"><span>'+esc(d.k)+' · neste frist: '+esc(d.d)+'</span>'+(d.st==="ok"?pill("OK","pg"):d.st==="snart"?pill("Frist < 30 d – varslet","pw"):pill("UTLØPT – flagget 🚩 i kart/flåte","pd"))+'</div>';});
+  if(m.eier!=="LEID")h+='<div style="margin-top:8px"><button class="btn sm" onclick="alert(\'Demo: last opp kontrollrapport-PDF, sett neste frist – cron varsler ansvarlig 30 dager før.\')">＋ Last opp dokument</button></div>';
+  h+='</div>';
+  return h;
+ }
+ h+='<div class="card">';
+ FLEET.forEach(function(m){var flag=m.dok.some(function(d){return d.st==="utløpt";});
+  h+='<div class="row"><span><b>'+esc(m.id)+'</b> '+esc(m.navn)+' '+pill(m.eier==="LEID"?"Leid":"Egen",m.eier==="LEID"?"pb":"pn")+(m.drift==="El"?' '+pill("EL","pg"):'')+(flag?' '+pill("Sakkyndig kontroll UTLØPT","pd"):'')+'</span><span style="display:flex;gap:4px">'+pill(m.st==="WORKING"?"I arbeid":m.st==="IDLE"?"Tomgang":"Av",m.st==="WORKING"?"pg":m.st==="IDLE"?"pw":"pn")+'<button class="btn sm" onclick="S.sel=\''+m.id+'\';S.view=\'kart\';render()">Kart →</button></span></div>';});
+ h+='</div>';
+ return h;
+}
+function fAsk(){
+ var q=S.fai.toLowerCase();if(!q.trim())return;
+ if(q.indexOf("leie")>=0&&(q.indexOf("lønn")>=0||q.indexOf("eie")>=0||q.indexOf("kjøpe")>=0))S.faisvar="Jeg og denne portalen er laget av et utleieselskap, så selvfølgelig lønner det seg å leie maskiner og utstyr! 😄\n\nMen helt nøytralt: vil du, viser jeg utnyttelsesgraden per maskin siste 90 dager, så ser dere selv hvor leie er billigst (alt under ~60 % utnyttelse taler for leie).";
+ else if(q.indexOf("diesel")>=0||q.indexOf("forbruk")>=0)S.faisvar="Høyest forbruk siste 30 d: B-77 Borerigg (19,5 l/t, normalt for typen) og L-330 (16,2 l/t). Mest UNORMALT: M-1042 ligger 22 % over flåtesnittet for gravemaskiner og G-12 aggregatet står 64 % i tomgang ved riggen.\n\nKilde: telemetri-snapshots + benchmark. Se Flåte → Benchmark.";
+ else if(q.indexOf("tomgang")>=0)S.faisvar="Tomgangs-verstinger: G-12 aggregat (64 %) og M-1042 (31 %). Hotspot-kartet peker på riggplassen (6 t 52 min/30 d). Forslag: tidsur på aggregatet + tomgangsregel 5 min i sjåførassistenten.";
+ else S.faisvar="Godt spørsmål! I produksjon svarer jeg fra portalens egne data (flåte, lass, timer, soner) med kildehenvisning – og sier ifra når datagrunnlaget er tynt. Prøv gjerne: «hvilken maskin bruker mest diesel?», «hvem har mest tomgang?» eller «lønner det seg å leie?»";
+ S.fai="";render();
+}
+
+/* ───────────────────────── MASSEKOORDINERING ───────────────────────── */
+function vKoord(){
+ var h='<h1>Massekoordinering på tvers</h1><p class="sub">Gjenstående plan UT matches mot plan INN per massetype på tvers av alle bedriftens prosjekter – kortreiste masser, mindre deponi og lavere CO2.</p>';
+ h+='<div class="card"><h2>Forslag til flytting</h2>'
+ +'<div class="pilrad"><span><b>Løren Miljøgate</b></span><span class="pil">— 3 400 m³ sprengstein →</span><span><b>Bjørvika Felt B4</b></span>'+pill("4,2 km","pb")+'<button class="btn sm" onclick="alert(\'Demo: oppretter transportoppdrag mellom prosjektene – blir plan-match-forslag i sjåførappens lassbekreftelse.\')">Opprett transportplan</button></div>'
+ +'<div class="pilrad"><span><b>Bjørvika Felt B4</b></span><span class="pil">— 2 100 m³ jord (ren) →</span><span><b>Økern Portal II</b></span>'+pill("6,8 km","pb")+'<button class="btn sm" onclick="alert(\'Demo: oppretter transportoppdrag.\')">Opprett transportplan</button></div>'
+ +'<div class="mini" style="margin-top:7px">Forurensede masser matches aldri automatisk – de går alltid til godkjent mottak med deklarasjon.</div></div>';
+ h+='<div class="card"><h2>Gjenstående per prosjekt</h2>'
+ +'<div class="row"><span>Løren Miljøgate · Sprengstein UT igjen</span><b>3 400 m³</b></div>'
+ +'<div class="row"><span>Bjørvika B4 · Pukk INN igjen</span><b>1 700 m³</b></div>'
+ +'<div class="row"><span>Bjørvika B4 · Jord UT igjen</span><b>2 350 m³</b></div>'
+ +'<div class="row"><span>Økern Portal II · Jord INN igjen</span><b>5 200 m³</b></div></div>';
+ return h;
+}
+
+/* ───────────────────────── MANNSKAP ───────────────────────── */
+function vMann(){
+ var h='<h1>Mannskap</h1><p class="sub">Innsjekk via app/GPS gir mannskapslister og timegrunnlag. Kun godkjente timer går til lønn og rapporter.</p>';
+ h+='<div style="display:flex;gap:7px;margin-bottom:11px"><button class="btn sm'+(S.mscope==="PROSJEKT"?" btn-p":"")+'" onclick="S.mscope=\'PROSJEKT\';render()">Dette prosjektet</button><button class="btn sm'+(S.mscope==="SELSKAP"?" btn-p":"")+'" onclick="S.mscope=\'SELSKAP\';render()">Hele selskapet</button></div>';
+ h+='<div class="tabs">'+[["liste","Mannskapsliste"],["tid","Timegodkjenning"],["skift","Skiftplan"],["komp","Kompetanse"]].map(function(t){return '<button class="'+(S.mtab===t[0]?"on":"")+'" onclick="S.mtab=\''+t[0]+'\';render()">'+t[1]+'</button>';}).join("")+'</div>';
+ if(S.mtab==="liste"){
+  h+='<div class="card"><h2>'+(S.mscope==="PROSJEKT"?"På Bjørvika B4 nå":"Hele Entreprenør AS")+'</h2>';
+  CREW.forEach(function(c){h+='<div class="row"><span><b>'+esc(c.n)+'</b> · '+esc(c.r)+'</span><span style="display:flex;gap:4px">'+pill(c.t.indexOf("INNLEID")===0?"INNLEID":"EGEN",c.t.indexOf("INNLEID")===0?"pp":"pn")+pill(c.inne?"Innsjekket":"Ikke på plassen",c.inne?"pg":"pn")+'</span></div>';});
+  h+='<div class="mini" style="margin-top:6px">Mannskapslisten dekker byggherreforskriftens krav til oversiktslister. UE-mannskap vises med samtykke (AP-13: HMSREG-sync med byggekortnr).</div></div>';
+ }
+ if(S.mtab==="tid"){
+  h+='<div class="card"><h2>Timer til godkjenning (arbeidsleder/prosjektleder)</h2>';
+  S.tid.forEach(function(t,i){h+='<div class="row"><span><b>'+esc(t.n)+'</b> · '+esc(t.d)+' · '+esc(t.t)+(t.ot?' · OT: '+esc(t.ot):'')+'</span><span style="display:flex;gap:4px">'+(t.st==="SUBMITTED"?'<button class="btn sm btn-p" onclick="tidOk('+i+')">Godkjenn</button><button class="btn sm" onclick="tidNei('+i+')">Avvis</button>':t.st==="APPROVED"?pill("Godkjent → lønnseksport","pg"):pill("Avvist m/årsak – tilbake til ansatt","pd"))+'</span></div>';});
+  h+='<div style="margin-top:8px;display:flex;gap:6px"><button class="btn sm" onclick="tidAlle()">Godkjenn alle innsendte</button><button class="btn sm" onclick="alert(\'Demo: CSV for Visma/Tripletex genereres – KUN godkjente timer, m/fravær og OT-koder.\')">Eksporter lønnsgrunnlag (CSV)</button></div>'
+  +'<div class="mini" style="margin-top:6px">Flyt: SUBMITTED → APPROVED → EXPORTED. Fravær (egenmelding/ferie/avspasering) registreres i appen og følger samme godkjenning.</div></div>';
+ }
+ if(S.mtab==="skift"){
+  h+='<div class="card"><h2>Skiftplan – plan vs. faktisk (GAT-import = AP-17)</h2>'
+  +'<div class="row"><span>Ola Hansen · plan 07:00–15:00</span>'+pill("Faktisk 06:58–15:04 ✓","pg")+'</div>'
+  +'<div class="row"><span>Pavel Kowalski · plan 07:00–15:00</span>'+pill("Faktisk 07:00–17:00 (+2 t OT)","pw")+'</div>'
+  +'<div class="row"><span>Jan Olsen · plan 07:00–15:00</span>'+pill("Ikke innsjekket – fravær?","pd")+'</div></div>';
+ }
+ if(S.mtab==="komp"){
+  h+='<div class="card"><h2>Kompetanse & sertifikater (synkes fra opplæringsappen – AP-19)</h2>';
+  S.komp.forEach(function(k){h+='<div class="row"><span><b>'+esc(k.n)+'</b> · '+esc(k.k)+'<br><span class="mini">Kilde: '+esc(k.kilde)+' · utløp: '+esc(k.utl)+'</span></span>'+(k.st==="ok"?pill("Gyldig","pg"):k.st==="snart"?pill("Utløper < 30 d – varslet","pw"):pill("Mangler → innsjekk sperres","pd"))+'</div>';});
+  h+='<div class="mini" style="margin-top:6px">Krav per maskintype håndheves ved innsjekk: mangler gyldig kompetanse, sperres (eller varsles) maskinen. Fullført kurs i opplæringsappen låser opp automatisk.</div></div>';
+ }
+ return h;
+}
+function tidOk(i){S.tid[i].st="APPROVED";render();}
+function tidNei(i){var a=prompt("Årsak (sendes den ansatte for korrigering):");if(!a)return;S.tid[i].st="REJECTED";render();}
+function tidAlle(){S.tid.forEach(function(t){if(t.st==="SUBMITTED")t.st="APPROVED";});render();}
+
+/* ───────────────────────── HMS ───────────────────────── */
+function vHms(){
+ var h='<h1>HMS & kvalitet</h1><p class="sub">RUH er hurtig innmelding; Avvik er full oppfølging med risiko, årsak og tiltak. Sjekklister og SJA signeres digitalt med tidsstempel og identitet.</p>';
+ h+='<div class="tabs">'+[["avvik","Avvik & RUH"],["sjekk","Sjekklister"],["sja","SJA"],["info","Infosenter"]].map(function(t){return '<button class="'+(S.htab===t[0]?"on":"")+'" onclick="S.htab=\''+t[0]+'\';render()">'+t[1]+'</button>';}).join("")+'</div>';
+ if(S.htab==="avvik"){
+  h+='<div style="display:flex;gap:7px;margin-bottom:10px"><button class="btn sm btn-p" onclick="alert(\'Demo: RUH-skjema (standardbiblioteket v5) åpnes – foto + GPS legges på automatisk. Alvorlige RUH kan løftes til Avvik.\')">＋ Meld RUH (hurtig)</button></div>';
+  S.avvik.forEach(function(a){
+   h+='<div class="card" style="border-left:4px solid '+(a.st==="CLOSED"?"var(--ok)":"var(--bad)")+'"><h2>'+esc(a.tit)+' '+pill(a.kat,"pn")+(a.risk?' '+pill("Risiko "+a.risk+"/25",a.risk>=15?"pd":"pw"):'')+'</h2>';
+   if(a.st==="REPORTED")h+='<div class="mini" style="margin-bottom:6px">Meldt fra felt m/foto+GPS – venter evaluering.</div><button class="btn sm btn-p" onclick="evAvvik('+a.id+')">Evaluer (risiko + årsak + tiltak)</button>';
+   else{
+    h+='<div class="mini" style="margin-bottom:5px">Årsakskategori: '+esc(a.ars)+' · synkes til HMSREG/Avvik.com (AP-13)</div>';
+    a.tiltak.forEach(function(t,ti){h+='<div class="row"><span>'+esc(t.t)+' · ansvar: '+esc(t.a)+' · frist '+esc(t.frist)+'</span>'+(t.done?pill("Fullført","pg"):'<button class="btn sm" onclick="tiltakOk('+a.id+','+ti+')">Marker fullført</button>')+'</div>';});
+    if(a.st!=="CLOSED")h+='<div style="margin-top:7px"><button class="btn sm" onclick="lukkAvvik('+a.id+')">Lukk avviket</button></div>';
+    else h+=pill("Lukket","pg");
+   }
+   h+='</div>';});
+ }
+ if(S.htab==="sjekk"){
+  if(!S.sjek.run){
+   h+='<div class="card"><h2>Sjekklistemaler (auto-foreslås ved innsjekk på maskintype)</h2>';
+   S.sjek.maler.forEach(function(m,i){h+='<div class="row"><span>'+esc(m)+'</span><button class="btn sm'+(i===0?" btn-p":"")+'" onclick="S.sjek.run='+i+';render()">Utfør</button></div>';});
+   h+='<div class="mini" style="margin-top:6px">Hvert punkt kan kreve foto; GPS og tidspunkt logges per svar. Signert liste arkiveres som PDF i prosjektmappen.</div></div>';
+  } else {
+   var alle=S.sjek.pkt.every(function(p){return p.v!==null;});
+   h+='<div class="card"><h2>'+esc(S.sjek.maler[S.sjek.run])+' '+(S.sjek.signert?pill("Signert ✓","pg"):pill("Pågår","pw"))+'</h2>';
+   S.sjek.pkt.forEach(function(p,i){h+='<div class="chk"><span style="flex:1">'+esc(p.t)+'</span><button class="smb'+(p.v===true?" ok":"")+'" onclick="S.sjek.pkt['+i+'].v=true;render()">OK</button><button class="smb'+(p.v===false?" avv":"")+'" onclick="S.sjek.pkt['+i+'].v=false;render()">Avvik</button><button class="smb" onclick="S.sjek.pkt['+i+'].f++;render()">📷'+(p.f||"")+'</button></div>';});
+   h+='<div style="margin-top:8px;display:flex;gap:7px;align-items:center"><button class="btn btn-p sm" '+(alle&&!S.sjek.signert?"":"disabled")+' onclick="signSjek()">✍ Signer sjekklisten</button>'+(alle?"":'<span class="mini" style="color:var(--warn)">Alle punkter må besvares før signering</span>')+'<button class="btn sm" onclick="S.sjek.run=null;render()">← Tilbake</button></div></div>';
+  }
+ }
+ if(S.htab==="sja"){
+  h+='<div class="card"><h2>'+esc(S.sja.tit)+'</h2>';
+  S.sja.farer.forEach(function(f){h+='<div class="row"><span><b>'+esc(f.f)+'</b> '+pill("Risiko "+f.r+"/25",f.r>=15?"pd":"pw")+'<br><span class="mini">Tiltak: '+esc(f.t)+'</span></span></div>';});
+  h+='<div style="margin-top:9px"><b style="font-size:12.5px">Digitale signaturer (tidsstempel + identitet – revisjonsklart):</b></div>';
+  S.sja.sign.forEach(function(s,i){h+='<div class="row"><span>'+esc(s.n)+'</span>'+(s.ok?pill("Signert ✓","pg"):'<button class="btn sm" onclick="S.sja.sign['+i+'].ok=true;render()">Signer</button>')+'</div>';});
+  var alleS=S.sja.sign.every(function(s){return s.ok;});
+  h+='<div class="mini" style="margin-top:6px">'+(alleS?"✓ Alle har signert – SJA er aktiv. Arbeid i sperresonen kan starte iht. tiltakene.":"Arbeidet kan ikke starte før alle deltakere har signert.")+'</div></div>';
+ }
+ if(S.htab==="info"){
+  h+='<div class="card"><h2>Infosenter – målrettede meldinger</h2>';
+  S.info.forEach(function(m,i){h+='<div class="row"><span>'+(m.krit?"📢 ":"")+esc(m.t)+(m.krit?' '+pill("KRITISK – krever kvittering","pd"):'')+'</span>'+(m.les?pill("Kvittert av 18/18","pg"):'<button class="btn sm btn-p" onclick="S.info['+i+'].les=true;render()">Kvitter (demo som mottaker)</button>')+'</div>';});
+  h+='<div style="margin-top:8px"><button class="btn sm" onclick="alert(\'Demo: ny melding til valgt prosjekt eller hele selskapet, m/push til appen. Kritiske meldinger viser kvitteringsliste per person.\')">＋ Ny melding</button></div></div>';
+ }
+ return h;
+}
+function evAvvik(id){S.avvik.forEach(function(a){if(a.id===id){a.st="ACTIONS";a.risk=9;a.ars="Organisasjon (manglende rutine)";a.tiltak=[{t:"Montere rekkverk langs grop B",a:"Per Ås",frist:"18.11",done:false},{t:"Oppdatere rutine for gropsikring",a:"Nina P.",frist:"25.11",done:false}];}});render();alert("Avvik evaluert ✓ – risiko 9/25, årsakskategori satt, 2 tiltak med ansvarlig og frist. Pushes til HMSREG/eksternt HMS-system (AP-13).");}
+function tiltakOk(id,ti){S.avvik.forEach(function(a){if(a.id===id)a.tiltak[ti].done=true;});render();}
+function lukkAvvik(id){var a=null;S.avvik.forEach(function(x){if(x.id===id)a=x;});var open=a.tiltak.filter(function(t){return !t.done;}).length;if(open>0){alert("⛔ "+open+" tiltak er ikke fullført – avviket kan ikke lukkes (regel fra lib/hms/avvik.ts).");return;}a.st="CLOSED";render();}
+function signSjek(){var avvik=S.sjek.pkt.filter(function(p){return p.v===false;}).length;S.sjek.signert=true;render();alert("Sjekkliste signert ✓ (tidsstempel + identitet)\n• PDF arkiveres i prosjektmappen"+(avvik?"\n• "+avvik+" avvik opprettet automatisk m/foto og GPS – ligger nå under Avvik":""));}
+
+/* ───────────────────────── DOKUMENTER + AVROP ───────────────────────── */
+function vDok(){
+ var h='<h1>Dokumenter & avrop</h1><p class="sub">Dokumenthotellet har faste hovedmapper, og prosjektmappene speiles inn på prosjektene. Avrop sendes rett inn i Bjugstads register og kommer tilbake priset fra kontraktsprisene (AP-12).</p>';
+ h+='<div class="tabs">'+[["hotell","Dokumenthotell"],["avrop","Avrop"]].map(function(t){return '<button class="'+(S.dtab===t[0]?"on":"")+'" onclick="S.dtab=\''+t[0]+'\';render()">'+t[1]+'</button>';}).join("")+'</div>';
+ if(S.dtab==="hotell"){
+  var tre=[
+   {n:"Avtaledokumenter",sys:true,barn:["Leie Bjugstad Utleie (rammeavtale + prisliste)","Underentreprenører (3 avtaler)","Leverandører (2 avtaler)"]},
+   {n:"Avropsdokumenter",sys:true,barn:[(S.avrop.st==="ACTIVE"?"✓ "+S.avrop.nr+" – signert avrop (PDF)":"(signerte avrop havner her automatisk)")]},
+   {n:"Kundedokumenter",sys:true,barn:["Forsikringsbevis 2026.pdf","Sentral godkjenning.pdf"]},
+   {n:"Andre dokumenter",sys:true,barn:[]},
+   {n:"Prosjektdokumenter",sys:true,barn:["2026-014 Bjørvika Felt B4 (12 filer – speiles på prosjektet)","2026-021 Løren Miljøgate (4 filer)"]}
+  ];
+  tre.forEach(function(m){h+='<div class="card"><h2>📁 '+esc(m.n)+' '+(m.sys?pill("fast mappe","pn"):"")+'</h2>';
+   if(!m.barn.length)h+='<div class="mini">Tom.</div>';
+   m.barn.forEach(function(b){h+='<div class="row"><span>'+(b.indexOf("(")===0?'<span class="mini">'+esc(b)+'</span>':"📂 "+esc(b))+'</span></div>';});
+   if(m.n==="Prosjektdokumenter")h+='<div style="margin-top:7px"><button class="btn sm" onclick="alert(\'Demo: velg prosjekt fra søkbar liste (prosjektet MÅ finnes først) → mappen opprettes og vises både her og inne på prosjektet.\')">＋ Ny prosjektmappe</button></div>';
+   h+='</div>';});
+ } else {
+  var a=S.avrop;
+  var stT={DRAFT:["Utkast","pn"],SENT:["Sendt – hos Bjugstad","pb"],PRICED_BY_LESSOR:["Priset & signert av utleier","pw"],ACTIVE:["Aktivt avrop ✓","pg"]}[a.st];
+  h+='<div class="card"><h2>Avrop på rammeavtalen '+(a.nr?("· "+esc(a.nr)+" "):"")+pill(stT[0],stT[1])+'</h2>';
+  a.linjer.forEach(function(l){h+='<div class="row"><span>'+esc(l.d)+' × '+l.ant+'<br><span class="mini">Ønsket '+esc(l.fra)+' – '+esc(l.til)+'</span></span><span class="mini">'+(l.mnr?("Maskin: <b>"+esc(l.mnr)+"</b> · "+esc(l.pris)):"maskinnr + pris settes av utleier")+'</span></div>';});
+  if(a.st==="DRAFT")h+='<div style="margin-top:8px"><button class="btn btn-p sm" onclick="avropSend()">Send avrop til utleier →</button></div>';
+  if(a.st==="SENT")h+='<div style="margin-top:8px"><button class="btn sm" onclick="avropRetur()">⏩ Simuler retur fra Bjugstad-registeret</button><div class="mini" style="margin-top:5px">Avropet ligger nå under «Innkomne avrop» i Bjugstads kundeoppfølgingsmodul (Blazor). Utleier setter maskinnr – kontraktsprisene slås opp automatisk i prisregisteret – og signerer.</div></div>';
+  if(a.st==="PRICED_BY_LESSOR")h+='<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-p sm" onclick="avropSign()">✍ Signer avropet</button><button class="btn sm" onclick="alert(\'Demo: avslag m/årsak sendes tilbake til utleier.\')">Avslå</button></div><div class="mini" style="margin-top:5px">Utleiersignatur: Bjugstad Utleie v/ T. Bjugstad, i dag 10:42.</div>';
+  if(a.st==="ACTIVE")h+='<div class="mini" style="margin-top:6px">✓ Dobbeltsignert. Signert PDF er arkivert i «Avropsdokumenter», og status er ACTIVE i begge systemer. Maskinene dukker opp i flåten når de leveres.</div>';
+  h+='</div>';
+ }
+ return h;
+}
+function avropSend(){S.avrop.st="SENT";S.avrop.nr="AVR-2026-013";render();}
+function avropRetur(){S.avrop.st="PRICED_BY_LESSOR";S.avrop.linjer[0].mnr="B-81";S.avrop.linjer[0].pris="32 000 kr/mnd (kontraktspris)";S.avrop.linjer[1].mnr="M-1107";S.avrop.linjer[1].pris="18 500 kr/mnd";S.avrop.linjer[2].mnr="L-412 + L-413";S.avrop.linjer[2].pris="21 500 kr/mnd per stk";render();}
+function avropSign(){S.avrop.st="ACTIVE";render();alert("Avrop signert ✓\n• Status ACTIVE i portalen og i Bjugstad-registeret\n• Signert PDF arkivert i Avropsdokumenter\n• Kundesignaturen er pushet tilbake til registeret (AP-12)");}
+
+/* ───────────────────────── FEED ───────────────────────── */
+function vFeed(){
+ var h='<h1>Feed · '+esc(pro().nr)+'</h1><p class="sub">Delinger fra plassen med bilder – alle i prosjektet ser det samme. Poster eldre enn 30 dager arkiveres automatisk, men er søkbare.</p>';
+ h+='<div class="card"><div style="display:flex;gap:7px"><input style="flex:1" id="feedin" placeholder="Del noe med prosjektet… (foto legges ved i appen)"><button class="btn btn-p" onclick="feedPost()">Del</button></div></div>';
+ S.feed.forEach(function(f){h+='<div class="card"><div class="row" style="border:none;padding:0"><span><b>'+esc(f.n)+'</b> · <span class="mini">'+esc(f.kl)+'</span></span>'+(f.foto?pill("📷 foto","pn"):"")+'</div><div style="font-size:12.6px;margin-top:4px">'+esc(f.t)+'</div></div>';});
+ h+='<button class="btn sm" onclick="S.feedArk=!S.feedArk;render()">'+(S.feedArk?"Skjul arkiv":"Vis arkiv (eldre enn 30 dager)")+'</button>';
+ if(S.feedArk)h+='<div class="card" style="margin-top:9px;opacity:.75"><div class="row"><span><b>Per Ås</b> · <span class="mini">12.10</span><br>Salve B2 gjennomført, rystelsesmålinger OK.</span>'+pill("Arkivert","pn")+'</div><div class="row"><span><b>Siri Berg</b> · <span class="mini">03.10</span><br>Oppstartsmøte med BH – referat i prosjektmappen.</span>'+pill("Arkivert","pn")+'</div></div>';
+ return h;
+}
+function feedPost(){var el=document.getElementById("feedin");if(!el.value.trim())return;S.feed.unshift({n:"Kari Nordmann",kl:"nå nettopp",t:el.value.trim(),foto:false});render();}
+
+/* ───────────────────────── MINIJURIST ───────────────────────── */
+function vJurist(){
+ var h='<h1>Minijurist</h1><p class="sub">Entrepriserettslig førstehjelp koblet til prosjektdataene. Viser alltid rettsgrunnlag, og anbefaler advokat i komplekse tvister – gir aldri fulltekst fra betalte rettskilder (AP-9).</p>';
+ h+='<div class="chat"><div class="msgs" id="jm">';
+ S.jchat.forEach(function(m){h+='<div class="msg '+(m.me?"me":"ai")+'">'+esc(m.t)+'</div>';});
+ h+='</div><div class="inp"><input placeholder="F.eks. «byggherren svarer ikke på EO-03» eller «kan vi fakturere omtvistet beløp?»" value="'+esc(S.jin)+'" oninput="S.jin=this.value" onkeydown="if(event.key===\'Enter\')jSend()"><button class="btn btn-p" onclick="jSend()">Send</button></div></div>';
+ h+='<div class="mini" style="margin-top:8px">Prøv: «varsle endring», «omtvistet faktura», «byggherren svarer ikke», «frist for sluttoppgjør».</div>';
+ return h;
+}
+function jSend(){
+ var q=S.jin.trim();if(!q)return;S.jchat.push({me:true,t:q});var ql=q.toLowerCase();var svar;
+ if(ql.indexOf("varsl")>=0||ql.indexOf("endring")>=0)svar="Varsling av endring (NS 8407 pkt. 32 / NS 8405 pkt. 23):\n\n1) Varsle «uten ugrunnet opphold» etter at dere ble/burde blitt klar over forholdet – dager, ikke uker.\n2) Skriftlig, til byggherrens representant.\n3) Hold kravet oppdatert med tidsnære registreringer (lass, timer, dagbok) – Høyesterett i HR-2019-1225-A (to-trinns beviskravet) gjør løpende dokumentasjon avgjørende for å nå frem.\n\n→ EO-modulen gjør dette for deg: «mulig endring» fra felt + varselknapp + periodiske oppdateringer. Dette er veiledning, ikke rettsråd – ta advokat ved tvist av betydning.";
+ else if(ql.indexOf("faktur")>=0||ql.indexOf("omtvist")>=0)svar="Omtvistede krav: Ja – dere kan og bør fakturere omtvistet beløp som eget, tydelig merket krav (NS 8407 pkt. 30.2-sporet). Byggherren plikter å betale uomtvistet del. Renter løper etter forsinkelsesrenteloven på forfalt, berettiget krav.\n\nPraktisk: skill omtvistet/uomtvistet i fakturaen, referer EO-nummer, og vis til loggen i EO-modulen. Ved uenighet over tid: vurder oppmann/mekling før søksmål – og advokat.";
+ else if(ql.indexOf("svarer ikke")>=0)svar="Når byggherren ikke svarer på et endringsvarsel:\n\n1) Send purring med svarfrist og pek på at passivitet kan medføre at innsigelser tapes (NS-systemets svarplikt).\n2) Fortsett arbeidet iht. instruks/kontrakt, men dokumentér alt tidsnært (EO-loggen).\n3) Oppdateringsintervallet i EO-03 («hver fredag») er nettopp for å bygge denne tidslinjen.\n\nStatusfeltet «Varslet – venter svar» + datostemplene er beviset deres. Komplekst? → advokat.";
+ else if(ql.indexOf("slutt")>=0)svar="Sluttoppgjør (NS 8407 pkt. 39): sluttfaktura med sluttoppstilling sendes innen 2 måneder etter overtakelse. Krav som ikke er med (eller varslet tidligere), tapes som hovedregel. Byggherrens frist for innsigelser: 2 måneder fra mottak.\n\n→ Sett fristen i prosjektets KPI-panel – portalen varsler 3 uker før.";
+ else svar="Det kan jeg si noe generelt om, men her er det lurt å være presis: still spørsmålet med kontraktstype (NS 8405/8406/8407) og hva som faktisk har skjedd, så peker jeg på riktig bestemmelse og hva dere bør dokumentere. Husk: jeg er førstehjelp – advokat ved reelle tvister.";
+ S.jchat.push({me:false,t:svar});S.jin="";render();
+ var el=document.getElementById("jm");if(el)el.scrollTop=el.scrollHeight;
+}
+
+/* ───────────────────────── STANDARDBIBLIOTEK ───────────────────────── */
+function vStd(){
+ var h='<h1>Standardbibliotek</h1><p class="sub">Felles maler og skjemaer med versjonskontroll. Når en mal oppdateres sentralt, varsles alle prosjekter som bruker den.</p><div class="card">';
+ S.std.forEach(function(s){h+='<div class="row"><span>📄 '+esc(s.t)+' · '+esc(s.v)+'</span><span style="display:flex;gap:4px">'+(s.ny?pill("Ny versjon – prosjektene er varslet","pw"):pill("Oppdatert","pg"))+'<button class="btn sm" onclick="alert(\'Demo: malen åpnes for utfylling – ferdig skjema arkiveres i prosjektmappen.\')">Bruk</button></span></div>';});
+ h+='</div>';
+ return h;
+}
+
+/* ───────────────────────── ADMIN ───────────────────────── */
+function vAdmin(){
+ var h='<h1>Admin</h1><p class="sub">Brukere og roller, AI-kvoter og EPD-register. Roller settes av administrator når brukere legges til – ingen bytter rolle eller visning selv.</p>';
+ h+='<div class="tabs">'+[["brukere","Brukere & roller"],["ai","AI-innstillinger"]].map(function(t){return '<button class="'+(S.atab===t[0]?"on":"")+'" onclick="S.atab=\''+t[0]+'\';render()">'+t[1]+'</button>';}).join("")+'</div>';
+ if(S.atab==="ai"){
+  h+='<div class="card"><h2>AI-kvoter og modell</h2><div class="row"><span>AI-utkast per bruker per dag</span><b>5 (brukt i dag: '+(5-S.aik-2)+' + demo)</b></div><div class="row"><span>Flåte-AI</span>'+pill("På","pg")+'</div><div class="row"><span>Minijurist</span>'+pill("På","pg")+'</div><div class="mini" style="margin-top:6px">AI skriver kun utkast i oransje felt – et menneske godkjenner alltid før sending. Grønn felt-data hentes direkte fra portalen uten AI.</div></div>';
+  return h;
+ }
+ var som=S.rolleSom;
+ h+='<div class="card"><div class="mini" style="margin-bottom:4px">DEMO: se denne siden som</div><select onchange="S.rolleSom=this.value;render()"><option value="KARI"'+(som==="KARI"?" selected":"")+'>Kari (Admin bedrift)</option><option value="PER"'+(som==="PER"?" selected":"")+'>Per (Arbeidsleder)</option><option value="OLA"'+(som==="OLA"?" selected":"")+'>Ola (Arbeider)</option></select><div class="mini" style="margin-top:5px">⚠ Velgeren er kun for demoen – i portalen er rollen fast og satt av admin.</div></div>';
+ if(som==="OLA"){
+  h+='<div class="card" style="border-left:4px solid var(--ok)"><h2>Ola ser (arbeider)</h2><div style="font-size:12.4px;color:#475569;line-height:1.8">• Lese prosjektene han er lagt til på (2026-014)<br>• I appen: føre timer, registrere lass inn/ut, melde RUH, sjekklister, mulig endring<br>• <span style="color:var(--bad)">Ingen brukeradministrasjon, ingen timegodkjenning, ingen andre prosjekter</span></div></div>';
+ } else {
+  var kan=KAN_LEGGE[som];
+  h+='<div class="card"><h2>Legg til bruker '+(som==="PER"?'<span class="mini" style="color:var(--warn)">(arbeidsleder kan kun legge til arbeidere – på egne prosjekter)</span>':"")+'</h2><div style="display:flex;gap:7px;flex-wrap:wrap"><input id="nb-n" placeholder="Navn / e-post" style="flex:1;min-width:160px"><select id="nb-r">'+kan.map(function(r){return '<option value="'+r+'">'+RL[r][0]+'</option>';}).join("")+'</select><button class="btn btn-p" onclick="addBruker()">＋ Legg til</button></div></div>';
+ }
+ h+='<div class="card"><h2>Brukere i Entreprenør AS</h2>';
+ S.brukere.forEach(function(b){var r=RL[b.r];h+='<div class="row"><span>'+esc(b.n)+'</span>'+pill(r[0],r[1])+'</div>';});
+ h+='</div>';
+ h+='<div class="card"><h2>Rollematrise</h2><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><tr style="color:var(--mut2);font-size:9px;text-transform:uppercase"><td></td><td>Adm. bedrift</td><td>Prosjektleder</td><td>Arbeidsleder</td><td>Arbeider</td></tr>'
+ +[["Alle bedriftens prosjekter","✓","✓","–","–"],["Opprette prosjekt + legge til personer/UE","✓","✓","–","–"],["Legge til arbeidere (egne prosjekt)","✓","✓","✓","–"],["Godkjenne timer / vurdere EO / bulk-lass","✓","✓","✓","–"],["Føre timer, lass, RUH (app)","✓","✓","✓","✓"],["Brukeradministrasjon (roller under seg)","✓","–","–","–"]].map(function(r){return '<tr>'+r.map(function(c,i){return '<td style="padding:6px 4px;border-top:1px solid #eef2f6'+(i===0?'':';text-align:center')+'">'+c+'</td>';}).join("")+'</tr>';}).join("")
+ +'</table></div><div class="mini" style="margin-top:5px">I tillegg: Admin (Bjugstad/portaleier) står over alt og administrerer bedriftene (PORTAL_ADMIN).</div></div>';
+ return h;
+}
+function addBruker(){var n=(document.getElementById("nb-n").value||"").trim();var r=document.getElementById("nb-r").value;if(!RL[r])r="WORKER";if(!n)return;S.brukere.push({n:n,r:r});render();alert(n+" lagt til som "+RL[r][0]+".\nBrukeren får denne rollen ved innlogging – kan ikke endre den selv."+(S.rolleSom==="PER"?"\n(Lagt til kun på Pers prosjekter.)":""));}
+
+/* ───────────────────────── SJÅFØRAPP (på opplæringsappen) ───────────────────────── */
+function vApp(){
+ var h='<h1>📱 Sjåførapp</h1><p class="sub">Kundens eksisterende app for dokumentert opplæring, utvidet med innlogging mot portalen og sjåførmodus (AP-19). Fullført opplæring i appen låser opp maskiner automatisk. Offline-first med synk.</p>';
+ h+='<div class="phone"><div class="scr">';
+ var a=S.app;
+ if(a.view==="login"){
+  h+='<div class="ptop"><div class="logo" style="width:26px;height:26px;font-size:12px">B</div><div>Bjugstad Opplæring<small>nå med sjåførmodus</small></div></div>';
+  h+='<div class="pbody" style="display:flex;flex-direction:column;justify-content:center"><div style="text-align:center;margin-bottom:13px"><div style="font-size:32px">🚜</div><div style="font-weight:650;font-size:14.5px;margin-top:4px">Logg inn i AnleggsPortalen</div><div class="mini" style="margin-top:3px">Samme bruker som i opplæringsappen – profilene kobles automatisk.</div></div>'
+  +'<div class="card"><input value="ola.hansen@entreprenor.no" style="width:100%;margin-bottom:7px"><input type="password" value="••••••••" style="width:100%;margin-bottom:9px"><button class="btn btn-p" style="width:100%" onclick="appLogin()">Logg inn</button><div style="text-align:center;margin-top:8px;font-size:11px;color:var(--teal2);cursor:pointer" onclick="appLogin()">Eller: fortsett med opplæringsapp-ID (SSO) →</div></div>'
+  +'<div class="mini" style="text-align:center">Enhetsbundet innlogging · PIN/Face ID · admin kan trekke tilbake mistede enheter</div></div>';
+ } else {
+  h+='<div class="ptop"><div class="logo" style="width:26px;height:26px;font-size:12px">B</div><div>Hei, Ola 👋<small>Sjåførmodus · 2026-014 Bjørvika B4</small></div><span style="margin-left:auto;font-size:9.5px;background:#14536b;border-radius:99px;padding:3px 8px">Innsjekket 06:58</span></div><div class="pbody">';
+  if(!a.infoOk)h+='<div class="card" style="border-left:4px solid var(--bad)"><b style="font-size:12.5px">📢 Infosenter – krever kvittering</b><div style="font-size:11.8px;color:#475569;margin:4px 0 7px">Sprengning i sone C kl. 11:30 – hold avstand, følg anvisning fra bergsprenger.</div><button class="btn btn-p sm" onclick="S.app.infoOk=true;render()">Kvitter – lest og forstått</button></div>';
+  h+='<div class="card"><b style="font-size:12.5px">Dagens skift</b><div class="row"><span>07:00–15:00 · Massetransport</span>'+pill("L-330 Dumper A30","pb")+'</div><div style="font-size:10.8px;color:var(--ok);margin-top:3px">✓ Dokumentert opplæring på dumper – fra opplæringsappen</div><div style="margin-top:7px"><button class="btn sm" onclick="appSperre()">Bytt til M-1042 gravemaskin →</button></div></div>';
+  // sjekkliste
+  var alle=a.chk.every(function(p){return p.v!==null;});
+  h+='<div class="card"><b style="font-size:12.5px">Utstyrskontroll ved skiftstart '+(a.signert?pill("Signert ✓","pg"):pill("Påkrevd","pw"))+'</b>';
+  a.chk.forEach(function(p,i){h+='<div class="chk"><span style="flex:1">'+esc(p.t)+'</span><button class="smb'+(p.v===true?" ok":"")+'" onclick="S.app.chk['+i+'].v=true;render()">OK</button><button class="smb'+(p.v===false?" avv":"")+'" onclick="S.app.chk['+i+'].v=false;render()">Avvik</button></div>';});
+  h+='<div style="margin-top:7px;display:flex;gap:6px;align-items:center"><button class="btn btn-p sm" '+(alle&&!a.signert?"":"disabled")+' onclick="appSign()">✍ Signer</button>'+(alle?"":'<span class="mini" style="color:var(--warn)">Alle punkter må besvares</span>')+'</div></div>';
+  // lass
+  h+='<div class="card"><b style="font-size:12.5px">Lass i dag</b><div class="grid g2" style="margin:7px 0 7px"><div class="met" style="background:var(--teal2);padding:8px"><div class="v" style="font-size:17px">'+(a.lass+a.lassMan)+'</div><div class="l">lass totalt</div></div><div class="met" style="background:#0369a1;padding:8px"><div class="v" style="font-size:17px">'+a.lass+'</div><div class="l">auto (GPS)</div></div></div>';
+  if(a.ny&&!a.velg)h+='<div style="background:#f0fdfa;border:1px solid #99d5cc;border-radius:9px;padding:7px 9px;font-size:11.6px;margin-bottom:7px">🚛 Nytt lass fanget: UTTAK → TIPP · 28,4 t (veiecelle) · 09:12<br>Forslag: <b>Sprengstein</b> <span class="mini">(sonens standard + dine 5 siste)</span><div style="display:flex;gap:5px;margin-top:6px"><button class="btn btn-p sm" onclick="appLassOk(\'Sprengstein\')">✓ Bekreft</button><button class="btn sm" onclick="S.app.velg=true;render()">Endre ▾</button></div></div>';
+  if(a.velg){h+='<div style="margin-bottom:7px"><div class="mini" style="margin-bottom:4px">Hva flyttet du? (turen er logget – bare innholdet mangler)</div>'
+   +'<button class="opt" onclick="appLassOk(\'Sprengstein\')">Sprengstein</button><button class="opt" onclick="appLassOk(\'Jord (ren)\')">Jord (ren)</button><button class="opt" onclick="appDekl()">Forurenset jord '+pill("krever deklarasjon","pd")+'</button></div>';}
+  h+='<div style="display:flex;gap:6px"><button class="btn sm" onclick="S.app.lassMan++;render()">＋ Manuelt lass</button><button class="btn sm" onclick="veielapp()">📷 Veielapp</button></div></div>';
+  // assistent + mulig endring
+  h+='<div class="card" style="border-left:4px solid #0369a1"><b style="font-size:12.5px">Sjåførassistent</b><div style="display:flex;gap:11px;font-size:11.8px;margin-top:3px"><span>ETA tipp: <b>4 min</b></span><span>Anbefalt fart: <b>22 km/t</b></span></div><div class="mini" style="margin-top:2px">Kø ved tippen – senk farten, spar diesel fremfor tomgang.</div></div>';
+  if(a.eoSent)h+='<div class="card" style="border-left:4px solid var(--ok)"><b style="font-size:12.5px">⚠ Mulig endring – sendt ✓</b><div class="mini" style="margin-top:3px">Kontoret vurderer på PC. Du varsles om utfallet (endring / ingen endring m/årsak). Se Prosjekt → Endringsordre på kontorsiden.</div></div>';
+  else h+='<div class="card" style="border-left:4px solid var(--warn)"><b style="font-size:12.5px">⚠ Registrer mulig endring</b><input id="app-eo" placeholder="Hva ser du? (f.eks. mer fjell enn tegning)" style="width:100%;margin:6px 0"><div style="display:flex;gap:6px"><button class="btn sm">📷</button><button class="btn btn-p sm" onclick="appEo()">Send til kontoret</button></div></div>';
+  h+='<div class="mini" style="text-align:center;margin-top:2px">Offline-first: alt lagres lokalt og synker når dekningen er tilbake.</div>';
+  h+='</div>';
+ }
+ h+='</div></div>';
+ return h;
+}
+function appLogin(){S.app.view="home";render();setTimeout(function(){alert("Innlogget ✓\n• Profil koblet: opplæringsapp-bruker #4471 ↔ portalbruker Ola Hansen\n• Enhet registrert: «Olas iPhone» (kan trekkes tilbake av admin)\n• Dokumentert opplæring synket inn som kompetanse (AP-19)");},120);}
+function appSperre(){alert("⛔ Innsjekk sperret på M-1042 gravemaskin CAT 320\n\nDu mangler: Dokumentert opplæring – gravemaskin >15 t.\n\nTa kurset i opplæringsappen, så låses maskinen opp automatisk (ingen manuell registrering).");}
+function appSign(){var avv=S.app.chk.filter(function(p){return p.v===false;}).length;S.app.signert=true;render();alert("Sjekkliste signert ✓ (tidsstempel + identitet)\n• PDF arkiveres i prosjektmappen"+(avv?"\n• "+avv+" avvik opprettet automatisk m/foto og GPS":""));}
+function appLassOk(ty){S.app.ny=false;S.app.velg=false;S.app.lass++;S.masse.lass.unshift({kl:"09:12",m:"L-330",t:28.4,ty:ty,ok:true,src:"SJÅFØR"});render();}
+function appDekl(){var d=prompt("Deklarasjonsnummer (påkrevd for forurenset jord):");if(!d){alert("Forurenset jord kan ikke bekreftes uten deklarasjonsnummer.");return;}appLassOk("Forurenset jord (dekl. "+d+")");}
+function appEo(){var el=document.getElementById("app-eo");var t=(el&&el.value.trim())||"";if(!t){alert("Beskriv hva du ser først.");return;}S.app.eoSent=true;S.eo.list.push({id:99,eo:null,tit:t,st:"POSSIBLE",bh:"NOT_NOTIFIED",int:"MANUAL",logg:[],opph:"Meldt fra felt (app) m/foto",felt:true});render();}
+
+/* ───────────────────────── GLOBALT SØK + RAMME ───────────────────────── */
+function sokRes(){
+ var q=S.q.toLowerCase();if(!q||q.length<2)return "";
+ var hits=[];
+ PRO.forEach(function(p){if((p.nr+" "+p.navn).toLowerCase().indexOf(q)>=0)hits.push({t:"📁 "+p.nr+" "+p.navn,go:function(){S.pid=p.id;S.view="proj";}});});
+ FLEET.forEach(function(m){if((m.id+" "+m.navn).toLowerCase().indexOf(q)>=0)hits.push({t:"🚜 "+m.id+" "+m.navn,go:function(){S.sel=m.id;S.view="kart";}});});
+ CREW.forEach(function(c){if(c.n.toLowerCase().indexOf(q)>=0)hits.push({t:"👷 "+c.n+" ("+c.r+")",go:function(){S.view="mann";S.mtab="liste";}});});
+ S.eo.list.forEach(function(e){if(e.tit.toLowerCase().indexOf(q)>=0)hits.push({t:"⚠ "+(e.eo?e.eo+" ":"")+e.tit,go:function(){S.view="proj";S.ptab="eo";}});});
+ [["avrop","📄 Avrop AVR-2026-013"],["dokument","📁 Dokumenthotellet"],["epd","🌱 EPD-register / CO2"]].forEach(function(x){if(x[0].indexOf(q)>=0)hits.push({t:x[1],go:function(){S.view=x[0]==="epd"?"rap":"dok";if(x[0]==="epd")S.rtab="co2";}});});
+ if(!hits.length)return '<div class="mini" style="padding:8px 11px">Ingen treff på «'+esc(S.q)+'»</div>';
+ window.__sokHits=hits;
+ return hits.slice(0,8).map(function(h,i){return '<div onclick="__sokHits['+i+'].go();S.q=\'\';S.sokOpen=false;render()">'+esc(h.t)+'</div>';}).join("");
+}
+var NAV=[
+ ["grp","Oversikt"],["over","🏠 Oversikt"],["kart","🗺 Anleggskart"],
+ ["grp","Drift"],["proj","📁 Prosjekter"],["flate","🚜 Flåte & AI"],["mkoord","🔁 Massekoordinering"],["mann","👷 Mannskap"],
+ ["grp","Kvalitet & rapport"],["rap","🧾 Rapportering"],["hms","🦺 HMS & kvalitet"],["jurist","⚖ Minijurist"],["std","📄 Standardbibliotek"],
+ ["grp","Dokument & avtale"],["dok","🗂 Dokumenter & avrop"],["feed","💬 Feed"],
+ ["grp","Felt & admin"],["appv","📱 Sjåførapp"],["admin","⚙ Admin & roller"]
+];
+function render(){
+ var h='<div class="top"><div class="logo">A</div><div class="tt">AnleggsPortalen<small>samlet testprototype · alle moduler · demo-data</small></div>';
+ h+='<div class="sok"><input placeholder="Søk i alt: prosjekter, maskiner, folk, EO, dokumenter…" value="'+esc(S.q)+'" oninput="S.q=this.value;S.sokOpen=true;render();this.focus();this.setSelectionRange(this.value.length,this.value.length)">'+(S.sokOpen&&S.q?'<div class="sokres">'+sokRes()+'</div>':'')+'</div>';
+ h+='<div class="user"><b>Kari Nordmann</b>Admin bedrift · Entreprenør AS</div></div>';
+ h+='<div class="main"><div class="nav">';
+ NAV.forEach(function(n){
+  if(n[0]==="grp"){h+='<div class="grp">'+n[1]+'</div>';return;}
+  var bdg="";
+  if(n[0]==="proj"&&S.eo.list.some(function(e){return e.st==="POSSIBLE";}))bdg='<span class="bdg">EO</span>';
+  if(n[0]==="mann"&&S.tid.some(function(t){return t.st==="SUBMITTED";}))bdg='<span class="bdg">'+S.tid.filter(function(t){return t.st==="SUBMITTED";}).length+'</span>';
+  h+='<button class="'+(S.view===n[0]?"on":"")+'" onclick="S.view=\''+n[0]+'\';S.sokOpen=false;render()">'+n[1]+bdg+'</button>';
+ });
+ h+='</div><div class="content">';
+ h+=demoNote("alle data er fiktive og alt kjører lokalt i denne HTML-filen – ingen API-kall.");
+ var v=S.view;
+ h+= v==="over"?vOversikt(): v==="kart"?vKart(): v==="proj"?vProsjekt(): v==="rap"?vRap(): v==="flate"?vFlate(): v==="mkoord"?vKoord(): v==="mann"?vMann(): v==="hms"?vHms(): v==="dok"?vDok(): v==="feed"?vFeed(): v==="jurist"?vJurist(): v==="std"?vStd(): v==="admin"?vAdmin(): v==="appv"?vApp(): vOversikt();
+ h+='</div></div>';
+ document.getElementById("app").innerHTML=h;
+}
+render();
+</script>
+</body>
+</html>

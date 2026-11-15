@@ -1,0 +1,106 @@
+// ============================================================================
+//  SCHEMA-TILLEGG DEL 5
+//  - Admin-del: massetype-katalog + egendefinerte prosjektfelt (styres KUN av
+//    portaladministrator, dvs. dere som leverandør)
+//  - Utvidede faste prosjektfelt (kontraktstype, størrelse, byggherretype m.m.)
+//  - Masseplan: planlagt volum/tonn INN og UT per massetype, valgt ved
+//    prosjektoppstart. Registreringer får retning IN/OUT.
+// ============================================================================
+
+
+// ─────────────────────────  ADMIN: MASSETYPE-KATALOG  ───────────────────────
+
+// Global katalog. KUN portaladmin (leverandør) kan endre. Kundene velger ved
+// prosjektoppstart hvilke av disse som skal være valgbare i portal og app.
+model MassTypeCatalog {
+  id        String  @id @default(cuid())
+  name      String  @unique          // "Jord", "Sprengstein", "Leire", "Asfaltflak"…
+  unit      String  @default("m3")   // "m3" | "tonn"
+  defaultClassification String @default("UNKNOWN") // CLEAN/CONTAMINATED/…
+  tonnPerM3   Float @default(1.6)  // omregning volum↔vekt per materiale (del 8)
+  swellFactor Float @default(1.0)  // løs vs. fast masse
+  active    Boolean @default(true)
+  sortOrder Int     @default(0)
+  createdAt DateTime @default(now())
+}
+
+// Massetyper valgt for et prosjekt (prosjektoppstart)
+model ProjectMassType {
+  id            String @id @default(cuid())
+  projectId     String
+  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  massTypeId    String
+  massType      MassTypeCatalog @relation(fields: [massTypeId], references: [id])
+
+  // Planlagt mengde inn/ut av prosjektet (i katalogtypens enhet)
+  plannedIn  Float @default(0)
+  plannedOut Float @default(0)
+
+  @@unique([projectId, massTypeId])
+  @@index([projectId])
+}
+
+// Retning på masseflytting. Legg til på MassMovement (del 3):
+//
+//  enum MassDirection { IN OUT }
+//  model MassMovement {
+//    ...
+//    direction  MassDirection @default(OUT)
+//    massTypeId String?       // FK mot MassTypeCatalog (erstatter fritekst over tid)
+//    unit       String @default("m3")  // "m3" | "tonn" – følger katalogtypen
+//  }
+
+
+// ───────────────  ADMIN: EGENDEFINERTE PROSJEKTFELT  ────────────────────────
+
+enum FieldType { TEXT NUMBER DATE SELECT BOOLEAN }
+
+// Feltdefinisjoner styres KUN av portaladmin. Vises på alle prosjekter.
+model ProjectFieldDefinition {
+  id        String    @id @default(cuid())
+  label     String                      // "Rammeavtalenummer", "SHA-koordinator"…
+  fieldType FieldType @default(TEXT)
+  options   String[]  @default([])     // ved SELECT
+  required  Boolean   @default(false)
+  active    Boolean   @default(true)
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  values ProjectFieldValue[]
+}
+
+model ProjectFieldValue {
+  id           String @id @default(cuid())
+  projectId    String
+  project      Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  definitionId String
+  definition   ProjectFieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  value        String
+
+  @@unique([projectId, definitionId])
+  @@index([projectId])
+}
+
+
+// ─────────────  UTVIDEDE FASTE PROSJEKTFELT (legg til på Project)  ──────────
+//
+//  enum ClientType { PRIVATE PUBLIC }
+//  enum ContractType { NS8405 NS8406 NS8407 NS8417 OTHER }
+//
+//  model Project {
+//    ...
+//    contractType   ContractType?
+//    contractSizeNok Float?          // kontraktssum / størrelse
+//    clientType     ClientType?      // privat eller offentlig byggherre
+//    clientAddress  String?          // byggherrens adresse
+//    clientEmail    String?          // byggherrens e-post (org-nivå)
+//    // clientContactEmail finnes fra del 1 (kontaktperson)
+//
+//    massTypes   ProjectMassType[]
+//    fieldValues ProjectFieldValue[]
+//  }
+//
+//  Merk: portaladmin identifiseres med User.isPortalAdmin Boolean @default(false)
+//  (eller deres eksisterende leverandør-rolle). Alle /api/admin/*-ruter krever
+//  denne – vanlige kunder har aldri tilgang.
+// ============================================================================

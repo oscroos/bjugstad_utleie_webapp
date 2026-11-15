@@ -20,6 +20,8 @@ export type DataColumn<T> = {
   dateValue?: (row: T) => Date | string | null | undefined;
   headerClassName?: string;
   cellClassName?: string;
+  /** Render only the header label, without sort and filter controls (for action columns). */
+  plain?: boolean;
 };
 
 type DataTableProps<T> = {
@@ -33,6 +35,8 @@ type DataTableProps<T> = {
   getRowClassName?: (row: T) => string | undefined;
   onVisibleRowsChange?: (rows: T[]) => void;
   fillHeight?: boolean;
+  /** Square top corners, for tables that sit below a card header instead of at the top of a card. */
+  squareTop?: boolean;
 };
 
 type SortState = {
@@ -121,6 +125,7 @@ export function DataTable<T>({
   getRowClassName,
   onVisibleRowsChange,
   fillHeight = false,
+  squareTop = false,
 }: DataTableProps<T>) {
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [sortState, setSortState] = useState<SortState>({
@@ -347,7 +352,8 @@ export function DataTable<T>({
     <div className={cx(fillHeight ? "flex h-full min-h-0 flex-col" : "space-y-3")}>
       <div
         className={cx(
-          "relative rounded-t-2xl",
+          "relative",
+          !squareTop && "rounded-t-2xl",
           fillHeight
             ? "datatable-scroll-compact min-h-0 flex-1 overflow-x-auto overflow-y-auto"
             : "overflow-x-auto overflow-y-visible",
@@ -387,12 +393,13 @@ export function DataTable<T>({
                     className={cx(
                       "px-4 py-3",
                       column.headerClassName,
-                      first && "rounded-tl-2xl",
-                      last && "rounded-tr-2xl",
+                      !squareTop && first && "rounded-tl-2xl",
+                      !squareTop && last && "rounded-tr-2xl",
                     )}
                   >
                     <div className="flex items-center gap-2">
                       <span>{column.header}</span>
+                      {!column.plain && (
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
@@ -518,6 +525,7 @@ export function DataTable<T>({
                           )}
                         </div>
                       </div>
+                      )}
                     </div>
                   </th>
                 );

@@ -1,0 +1,125 @@
+// ============================================================================
+//  SCHEMA-TILLEGG DEL 8 – dybde-paritet (undersidene til Trackunit/Ditio/MM)
+//  Feilkoder & helse · Utnyttelsesmål · Auto-sonedeteksjon · Omregningsformler
+//  Skift & overtid · Lønnseksport · Arbeidsordre · Sjåførassistent & helling ·
+//  Sjekklistemaler · Varslinger
+// ============================================================================
+
+// ── Feilkoder normalisert på tvers av OEM (Trackunit-paritet) ───────────────
+enum FaultSeverity { INFO WARNING CRITICAL }
+
+model MachineFaultCode {
+  id        String @id @default(cuid())
+  machineId String
+  code      String            // normalisert kode
+  oemCode   String?           // original OEM-kode
+  severity  FaultSeverity @default(WARNING)
+  message   String
+  active    Boolean @default(true)
+  firstSeen DateTime @default(now())
+  clearedAt DateTime?
+  @@index([machineId, active])
+}
+
+// ── Utnyttelsesmål med tomgangsvarsel (Trackunit-paritet) ───────────────────
+model UtilizationTarget {
+  id             String @id @default(cuid())
+  organizationId String
+  machineType    String?          // null = alle
+  minUtilizationPct Float?        // varsle under
+  maxIdlePct        Float?        // varsle over
+  maxIdleMinutesAlert Int?        // sanntidsvarsel: sammenhengende tomgang
+  @@index([organizationId])
+}
+
+// ── Auto-foreslåtte laste-/tippsteder (Ditio Flow-paritet) ──────────────────
+// Klynger av stillstand m/lastesyklus-mønster → foreslått sone. Bekreftes av
+// prosjektleder og blir SiteZone (LOAD/DUMP).
+model ZoneSuggestion {
+  id        String @id @default(cuid())
+  projectId String
+  type      String            // LOAD | DUMP
+  lat       Float
+  lng       Float
+  radiusM   Float @default(40)
+  hitCount  Int   @default(1) // antall observerte sykluser
+  status    String @default("SUGGESTED") // SUGGESTED | CONFIRMED | DISMISSED
+  createdAt DateTime @default(now())
+  @@index([projectId, status])
+}
+
+// ── Omregningsformel per massetype (Ditio Flow-paritet) ─────────────────────
+// Legg til på MassTypeCatalog:
+//   tonnPerM3    Float @default(1.6)   // omregning volum↔vekt per materiale
+//   swellFactor  Float @default(1.0)   // utvidelse løs vs. fast masse
+
+// ── Skiftplan + overtid (Ditio Core-paritet) ────────────────────────────────
+model Shift {
+  id        String @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  date      DateTime
+  fromTime  String            // "07:00"
+  toTime    String            // "15:00"
+  role      String?           // "Maskinfører", "Grunnarbeider"
+  @@index([projectId, date])
+  @@index([userId, date])
+}
+// TimeEntry (del 7) utvides med:
+//   overtimeHours Float @default(0)   // beregnes automatisk (>9t/dag el. utenfor skift)
+//   payrollExportedAt DateTime?
+
+// ── Arbeidsordre mot kontraktsposter (Ditio Core-paritet) ───────────────────
+enum WorkOrderStatus { PLANNED IN_PROGRESS DONE }
+
+model WorkOrder {
+  id           String @id @default(cuid())
+  projectId    String
+  project      Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title        String
+  contractItemRef String?      // kontraktspost/prosesskode (NS 3420)
+  estimateQty  Float?
+  estimateUnit String?         // m3, lm, stk, timer
+  progressQty  Float @default(0)
+  status       WorkOrderStatus @default(PLANNED)
+  // Avvik flagges når progress/timeforbruk avviker fra estimat
+  deviationNote String?
+  @@index([projectId, status])
+}
+
+// ── Sjåførassistent & hellingsprofil (Ditio Flow-paritet) ───────────────────
+model RoadSegmentProfile {
+  id        String @id @default(cuid())
+  projectId String
+  name      String            // "Anleggsvei sør"
+  path      Json              // [[lat,lng],...]
+  gradientPct Float           // maks helling
+  warning   Boolean @default(false) // for bratt → drivstoff/slitasje-varsel
+  @@index([projectId])
+}
+
+// ── Sjekklistemaler (Trackunit/Ditio-paritet) ───────────────────────────────
+model ChecklistTemplate {
+  id        String @id @default(cuid())
+  name      String            // "Daglig kontroll gravemaskin", "Vernerunde"
+  items     Json              // [{label, required}]
+  scope     String @default("ORG") // ORG | PORTAL (admin-delt mal)
+  organizationId String?
+  createdAt DateTime @default(now())
+}
+
+// ── Varslinger (push/e-post-kø) ─────────────────────────────────────────────
+model Notification {
+  id        String @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  kind      String            // IDLE_ALERT | FAULT | ZONE_EVENT | REPORT_DUE | FEED
+  refType   String?
+  refId     String?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId, readAt])
+}
+// Utsending (push via appen / e-post) er integrasjonspunkt i cron/hendelser.

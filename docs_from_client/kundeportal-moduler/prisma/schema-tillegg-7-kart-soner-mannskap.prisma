@@ -1,0 +1,189 @@
+// ============================================================================
+//  SCHEMA-TILLEGG DEL 7 – MachineMax/Trackunit/Ditio-paritet
+//  Kart & posisjoner · Soner (geofence) · Umotorisert utstyr & småverktøy ·
+//  Sensorer for ukoblede maskiner · Operatørtilgang · Vedlikehold ·
+//  Mannskap/innsjekk/timeføring · Live feed · Sjekklister · Auto-lasstelling
+// ============================================================================
+
+enum MachineStatus { WORKING IDLE OFF }
+
+// Siste og historiske posisjoner (fra telemetri, sensor eller app)
+model MachinePosition {
+  id        String @id @default(cuid())
+  machineId String
+  projectId String?
+  lat       Float
+  lng       Float
+  heading   Float?
+  speedKmh  Float?
+  status    MachineStatus @default(OFF)
+  at        DateTime
+  source    String @default("TELEMETRY") // TELEMETRY | SENSOR | APP
+  @@index([machineId, at])
+  @@index([projectId, at])
+}
+
+// MachineMax-paritet: batterisensor på utstyr uten fabrikktelemetri
+model SensorUnit {
+  id         String @id @default(cuid())
+  machineId  String @unique
+  sensorRef  String            // serienr på sensoren
+  batteryPct Int?
+  lastSeenAt DateTime?
+}
+
+// Trackunit Kin/Spot-paritet: BLE-tags på småutstyr og redskap
+model AssetTag {
+  id        String @id @default(cuid())
+  name      String            // "Vibroplate Wacker", "Hydraulikkhammer"
+  tagRef    String @unique    // BLE-tag-ID
+  projectId String?
+  lastLat   Float?
+  lastLng   Float?
+  lastSeenAt DateTime?
+  attachedToMachineId String? // redskap montert på maskin
+  @@index([projectId])
+}
+
+// ── Soner (geofence) på prosjektet ──────────────────────────────────────────
+enum ZoneType { SITE_BOUNDARY SPEED NO_GO LOAD DUMP }
+
+model SiteZone {
+  id        String @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  type      ZoneType
+  polygon   Json              // [[lat,lng],...]
+  maxSpeedKmh Int?            // for SPEED
+  workHoursFrom String?       // "06:00" – utenfor => out-of-hours-varsel
+  workHoursTo   String?       // "22:00"
+  createdAt DateTime @default(now())
+  @@index([projectId])
+}
+
+enum ZoneEventType { SPEEDING ENTERED_NO_GO OUT_OF_HOURS LEFT_SITE UNAUTHORIZED_ACCESS }
+
+model ZoneEvent {
+  id        String @id @default(cuid())
+  projectId String
+  zoneId    String?
+  machineId String?
+  userId    String?
+  type      ZoneEventType
+  details   String?
+  at        DateTime @default(now())
+  acknowledged Boolean @default(false)
+  @@index([projectId, at])
+}
+
+// ── Operatørtilgang og kompetanse (Trackunit Pass / MachineMax People) ──────
+model OperatorAccess {
+  id            String @id @default(cuid())
+  machineId     String
+  userId        String
+  competenceRef String?        // sertifikat/kompetansebevis-ref (dokumentlager)
+  validTo       DateTime?
+  @@unique([machineId, userId])
+}
+
+model MachineUnlockEvent {
+  id        String @id @default(cuid())
+  machineId String
+  userId    String
+  at        DateTime @default(now())
+  granted   Boolean
+  reason    String?            // "mangler kompetanse", "utenfor arbeidstid"
+  @@index([machineId, at])
+}
+
+// ── Vedlikehold (timebasert, fra telemetri-timetellere) ─────────────────────
+enum MaintenanceStatus { PLANNED DUE OVERDUE DONE }
+
+model MaintenanceTask {
+  id          String @id @default(cuid())
+  machineId   String
+  title       String            // "500t-service", "Årskontroll"
+  dueAtHours  Float?            // forfaller ved timeteller
+  dueDate     DateTime?
+  status      MaintenanceStatus @default(PLANNED)
+  completedAt DateTime?
+  notes       String?
+  @@index([machineId, status])
+}
+
+// ── Mannskap: innsjekk og aktivitetsbasert timeføring (Ditio Core) ──────────
+model CrewCheckin {
+  id         String @id @default(cuid())
+  projectId  String
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId     String
+  checkinAt  DateTime
+  checkoutAt DateTime?
+  source     String @default("APP")   // APP(GPS) | QR | MANUAL
+  lat        Float?
+  lng        Float?
+  @@index([projectId, checkinAt])
+}
+
+model TimeEntry {
+  id        String @id @default(cuid())
+  projectId String
+  userId    String
+  activity  String            // "Graving felt B", "Massetransport"
+  hours     Float
+  date      DateTime
+  source    String @default("AUTO")   // AUTO (fra innsjekk/aktivitet) | MANUAL
+  approved  Boolean @default(false)
+  invoiceRef String?          // fakturagrunnlag-kobling (ERP-integrasjon)
+  @@index([projectId, date])
+  @@index([userId, date])
+}
+
+// ── Live feed fra anlegget (Ditio infosenter) ───────────────────────────────
+model SiteFeedPost {
+  id         String @id @default(cuid())
+  projectId  String
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId     String
+  text       String
+  photoDocIds String[] @default([])
+  createdAt  DateTime @default(now())
+  @@index([projectId, createdAt])
+}
+
+// ── Sjekklister med kartpunkt og foto (Ditio Core) ──────────────────────────
+model Checklist {
+  id          String @id @default(cuid())
+  projectId   String
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  items       Json              // [{label, ok, comment}]
+  lat         Float?
+  lng         Float?
+  photoDocIds String[] @default([])
+  completedById String?
+  completedAt DateTime?
+  @@index([projectId])
+}
+
+// ── Auto-lasstelling fra GPS (Ditio Flow) ───────────────────────────────────
+// Syklus detekteres når maskin går LOAD-sone → DUMP-sone. Genererer forslag
+// til lass (kobles mot LoadTicket/MassMovement for bekreftelse eller auto).
+model HaulCycle {
+  id          String @id @default(cuid())
+  projectId   String
+  machineId   String
+  startedAt   DateTime
+  endedAt     DateTime?
+  loadZoneId  String?
+  dumpZoneId  String?
+  distanceKm  Float?
+  estPayloadTonnes Float?      // fra maskintype/telemetri
+  loadTicketId String?         // satt når syklusen er bekreftet som lass
+  auto        Boolean @default(true)
+  @@index([projectId, startedAt])
+}
+
+// Back-relasjoner på Project: siteZones, crewCheckins, feedPosts, checklists
+// AEMP-eksport (ISO 15143-3): egen rute /api/flate/aemp – ingen ny modell.

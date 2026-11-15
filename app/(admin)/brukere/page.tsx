@@ -41,13 +41,13 @@ export default async function BrukerePage() {
       </header>
 
       <Suspense fallback={<UsersSectionLoading />}>
-        <UsersSection />
+        <UsersSection currentUserId={session.user?.id ?? null} />
       </Suspense>
     </main>
   );
 }
 
-async function UsersSection() {
+async function UsersSection({ currentUserId }: { currentUserId: string | null }) {
   const { users, error } = await loadUsersForAdmin();
 
   if (error) {
@@ -64,7 +64,7 @@ async function UsersSection() {
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <UsersTable users={users} />
+      <UsersTable users={users} currentUserId={currentUserId} />
     </section>
   );
 }

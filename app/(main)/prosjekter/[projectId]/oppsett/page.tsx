@@ -76,8 +76,8 @@ export default async function ProsjektOppsettPage({ params }: PageProps) {
     return (
       <main className="space-y-6 p-8">
         <header className="space-y-2">
-          <Link href="/prosjekter" className="text-sm font-semibold text-blue-700 hover:text-blue-900">
-            Tilbake til prosjekter
+          <Link href={`/prosjekter/${project.id}`} className="text-sm font-semibold text-blue-700 hover:text-blue-900">
+            Tilbake til prosjektet
           </Link>
           <div>
             <h1 className="text-3xl font-semibold text-slate-900">Prosjektoppsett</h1>

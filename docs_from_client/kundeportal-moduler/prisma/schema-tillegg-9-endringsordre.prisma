@@ -1,0 +1,53 @@
+// ============================================================================
+//  SCHEMA-TILLEGG DEL 9 – ENDRINGSORDRE (EO) m.m.
+// ============================================================================
+enum ChangeOrderStatus {
+  POSSIBLE    // «Mulig endring» – opprettet fra felt, venter på kontorvurdering
+  CHANGE      // Reell endring – kontoret har bekreftet, EO-nummer settes
+  NO_CHANGE   // Ikke reell endring – arkiveres m/årsak, felt varsles
+  COMPLETED   // Ferdigstilt – eget arkiv
+}
+enum ClientResponse {
+  NOT_NOTIFIED NOTIFIED_AWAITING UNDER_DISCUSSION
+  ACCEPTED PARTIALLY_ACCEPTED PARTIALLY_REJECTED REJECTED
+}
+enum UpdateInterval { WEEKLY_FRIDAY LAST_WORKDAY_MONTH MANUAL }
+
+model ChangeOrder {
+  id          String @id @default(cuid())
+  projectId   String
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  eoNumber    String?
+  title       String
+  description String
+  originRef   String?             // post/beskrivelse/tegning endringen har opphav i
+  photoDocIds String[] @default([])
+  status      ChangeOrderStatus @default(POSSIBLE)
+  noChangeReason String?
+  clientResponse ClientResponse @default(NOT_NOTIFIED)
+  updateInterval UpdateInterval @default(MANUAL)
+  createdById String
+  createdInField Boolean @default(false)
+  notifiedClientAt DateTime?
+  lastUpdateSentAt DateTime?
+  completedAt DateTime?
+  entries     ChangeOrderEntry[]
+  createdAt   DateTime @default(now())
+  @@index([projectId, status])
+}
+enum EoEntryKind { LOAD HOURS MATERIAL DIARY }
+model ChangeOrderEntry {
+  id            String @id @default(cuid())
+  changeOrderId String
+  changeOrder   ChangeOrder @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+  kind          EoEntryKind
+  description   String
+  quantity      Float?
+  unit          String?
+  photoDocIds   String[] @default([])
+  at            DateTime @default(now())
+  createdById   String
+  @@index([changeOrderId, at])
+}
+// SiteFeedPost += archivedAt DateTime? (cron arkiverer > 30 dager)
+// CrewCheckin/TimeEntry += personnelType String @default("EMPLOYEE") // EMPLOYEE | HIRED

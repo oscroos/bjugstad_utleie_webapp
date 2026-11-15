@@ -1,0 +1,194 @@
+// ============================================================================
+//  SCHEMA-TILLEGG DEL 4
+//  - CO2-/miljøregnskap (utslippsfaktorer + beregningsgrunnlag)
+//  - RUH/avvik og vernerunder (mater rapporteringen automatisk)
+//  - Audit-logg (hvem gjorde hva når)
+//  - AI-bruk / rate limiting
+//  - App-synk (offline-først registrering fra felt-appen)
+// ============================================================================
+
+
+// ─────────────────────────  CO2 / MILJØREGNSKAP  ────────────────────────────
+
+enum FuelType {
+  DIESEL      // anleggsdiesel
+  HVO         // HVO100 biodiesel
+  ELECTRIC    // elektrisk (kWh)
+  BIOGAS
+  PETROL
+  HYDROGEN
+}
+
+enum MachineOwnership {
+  OWNED   // egen maskin
+  RENTED  // leid maskin (fra utleiemodulen)
+  SUBCONTRACTOR // UE sin maskin
+}
+
+// Utslippsfaktorer – felles referansedata (kg CO2e per enhet).
+// Seedes med standardverdier (DFØ/Miljødirektoratet) og kan overstyres.
+model EmissionFactor {
+  id        String   @id @default(cuid())
+  fuelType  FuelType @unique
+  unit      String   // "liter" | "kWh" | "kg"
+  kgCo2ePerUnit Float
+  source    String?  // f.eks. "Miljødirektoratet 2025"
+  validFrom DateTime @default(now())
+}
+
+// Én forbruksregistrering: en maskin brukte X enheter drivstoff/energi i en
+// periode, på et prosjekt. Registreres manuelt, fra appen, eller avledes fra
+// maskinmodulens driftstimer.
+model FuelUsage {
+  id        String @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  machineId   String?          // peker mot deres Machine-modell   // <-- EKSISTERENDE
+  machineName String           // speilet for visning/historikk
+  ownership   MachineOwnership @default(OWNED)
+
+  // Hvis maskinen tilhører en UE:
+  subcontractorOrgId String?
+
+  fuelType  FuelType
+  amount    Float    // antall enheter (liter/kWh)
+  periodStart DateTime
+  periodEnd   DateTime
+
+  source    String  @default("MANUAL") // MANUAL | APP | MACHINE_MODULE
+  appSyncId String? @unique            // idempotens ved app-synk
+
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([projectId, periodStart])
+  @@index([projectId, ownership])
+}
+
+// Utslipp fra massetransport kobles via MassMovement (del 3): transportKm +
+// FuelType på flyttingen. Legg til disse feltene på MassMovement:
+//
+//  model MassMovement {
+//    ...
+//    transportKm   Float?
+//    transportFuel FuelType?
+//    roundTrips    Int?     // antall turer
+//  }
+
+
+// ─────────────────────  RUH / AVVIK OG VERNERUNDER  ─────────────────────────
+
+enum RuhSeverity {
+  OBSERVATION   // observasjon / farlig forhold
+  NEAR_MISS     // nestenulykke
+  INJURY_NO_LOST_TIME // personskade uten fravær
+  INJURY_LOST_TIME    // personskade med fravær (varslingspliktig!)
+  ENVIRONMENTAL // miljøhendelse
+}
+
+enum RuhStatus { OPEN IN_PROGRESS CLOSED }
+
+model RuhReport {
+  id        String @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  severity    RuhSeverity
+  title       String
+  description String?
+  location    String?
+  occurredAt  DateTime
+  status      RuhStatus @default(OPEN)
+  correctiveAction String?
+
+  photoDocIds String[] @default([]) // bilder fra appen → dokumentlager
+
+  source    String  @default("MANUAL") // MANUAL | APP
+  appSyncId String? @unique
+
+  reportedById String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([projectId, occurredAt])
+  @@index([projectId, severity])
+}
+
+model SafetyRound {
+  id        String @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  performedAt  DateTime
+  participants String   // fritekst: hvem deltok
+  findingsCount Int     @default(0)
+  notes        String?
+  photoDocIds  String[] @default([])
+
+  source    String  @default("MANUAL")
+  appSyncId String? @unique
+
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([projectId, performedAt])
+}
+
+
+// ────────────────────────────  AUDIT-LOGG  ──────────────────────────────────
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         String   // "project.create", "requirement.confirm", "standard.upload", ...
+  entityType     String   // "Project" | "ReportingRequirement" | ...
+  entityId       String?
+  metadata       Json?    // f.eks. { sharedToCommon: true, fileName: "..." }
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId])
+}
+
+
+// ──────────────────────  AI-BRUK / RATE LIMITING  ───────────────────────────
+
+model AiUsage {
+  id             String   @id @default(cuid())
+  organizationId String
+  kind           String   // "analyse" | "report" | "minijurist"
+  // Cache-nøkkel: hash av input (dokumentsett + standarder). Gjenbruk ved treff.
+  inputHash      String?
+  resultRef      String?  // peker til lagret resultat ved cache-treff
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, kind, createdAt])
+  @@index([inputHash])
+}
+
+
+// ─────────────────────────  APP-SYNK (offline-først)  ───────────────────────
+
+// Appen sender batcher av hendelser med klient-generert UUID (appSyncId) for
+// idempotens. Denne modellen sporer mottak, så re-sending etter nettbrudd
+// aldri dupliserer data.
+model AppSyncBatch {
+  id             String   @id @default(cuid())
+  organizationId String
+  deviceId       String
+  userId         String
+  itemCount      Int
+  receivedAt     DateTime @default(now())
+
+  @@index([organizationId, receivedAt])
+}
+
+
+// ============================================================================
+//  BACK-RELASJONER Å LEGGE TIL PÅ Project:
+//    fuelUsages   FuelUsage[]
+//    ruhReports   RuhReport[]
+//    safetyRounds SafetyRound[]
+// ============================================================================

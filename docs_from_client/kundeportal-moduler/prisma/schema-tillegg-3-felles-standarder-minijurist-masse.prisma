@@ -1,0 +1,174 @@
+// ============================================================================
+//  SCHEMA-TILLEGG DEL 3
+//  - Felles standardbibliotek (delt på tvers av portalen, med versjonssporing)
+//  - Bidrag-med-samtykke til felles kunnskapsbase
+//  - Minijuristen-modul
+//  - Massehåndteringsmodul
+// ============================================================================
+
+
+// ─────────────────────  FELLES STANDARDBIBLIOTEK (delt)  ────────────────────
+
+enum StandardType { NS LAW REGULATION OTHER }
+enum AccessType   { LINK UPLOAD }
+
+// Én standard/lov/forskrift. Delt ressurs – ikke knyttet til én organisasjon.
+model Standard {
+  id        String @id @default(cuid())
+  type      StandardType
+  code      String   // "NS 8407", "Byggherreforskriften", "TEK17"
+  title     String
+  publisher String?  // Standard Norge, Lovdata, DiBK …
+
+  // Nyeste kjente PUBLISERTE versjon (vedlikeholdes av leverandør / oppslag).
+  // Brukes til å varsle om nyere versjon enn den vi HAR.
+  latestKnownVersion String?
+  latestKnownDate    DateTime?
+  officialUrl        String? // offisiell kilde (for LINK-minimum og oppslag)
+
+  versions StandardVersion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([type, code])
+}
+
+// En konkret versjon vi HAR i biblioteket – enten som lenke eller opplastet dok.
+model StandardVersion {
+  id            String @id @default(cuid())
+  standardId    String
+  standard      Standard @relation(fields: [standardId], references: [id], onDelete: Cascade)
+
+  version       String    // "2011", "2022-06", "utgave 3"
+  publishedDate DateTime?
+
+  accessType    AccessType
+  sourceUrl     String?   // ved LINK
+  documentId    String?   // ved UPLOAD – peker mot deres dokumentlager
+  fileName      String?
+  extractedText String?   // uttrukket tekst for AI (kun delbart innhold)
+
+  isLatestHeld  Boolean @default(false) // nyeste versjon vi faktisk har
+
+  // Bidragssporing
+  uploadedByOrgId     String?  // hvem lastet opp (null = leverandør/kuratert)
+  contributedToShared Boolean @default(false) // godkjent delt til fellesbiblioteket
+
+  createdAt DateTime @default(now())
+
+  @@index([standardId])
+}
+
+// Voksende felles kunnskapsbase. KUN innhold som er samtykket delt havner her.
+// Konfidensielle kontraktdokumenter deles ALDRI hit automatisk.
+model SharedKnowledgeDoc {
+  id            String @id @default(cuid())
+  title         String
+  kind          String   // "standard" | "veiledning" | "q&a" | …
+  sourceOrgId   String?  // bidragsyter (kan anonymiseres)
+  standardCode  String?  // hvis knyttet til en standard
+  text          String
+  consentGiven  Boolean  @default(false) // eksplisitt delingssamtykke
+  createdAt     DateTime @default(now())
+
+  @@index([standardCode])
+}
+
+
+// ────────────────────────────  MINIJURISTEN  ────────────────────────────────
+
+model MinijuristThread {
+  id        String @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title     String
+  createdById String
+  createdBy   User @relation("MinijuristThreads", fields: [createdById], references: [id]) // <-- EKSISTERENDE
+  // Kunden kan tillate at anonymiserte spørsmål/svar beriker fellesbasen
+  shareToKnowledgeBase Boolean @default(false)
+  messages  MinijuristMessage[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model MinijuristMessage {
+  id        String @id @default(cuid())
+  threadId  String
+  thread    MinijuristThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role      String   // "user" | "assistant"
+  content   String
+  // Kilder AI brukte + evt. versjonsvarsler, som JSON for sporbarhet
+  citations Json?
+  createdAt DateTime @default(now())
+
+  @@index([threadId])
+}
+
+
+// ──────────────────────────  MASSEHÅNDTERING  ───────────────────────────────
+
+enum MassClassification {
+  CLEAN        // rene masser
+  CONTAMINATED // forurenset
+  HAZARDOUS    // farlig avfall
+  UNKNOWN      // ikke klassifisert
+}
+enum MassMovementStatus { PLANNED IN_TRANSIT DELIVERED REJECTED }
+
+model MassMovement {
+  id        String @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  massType       String              // "jord", "sprengstein", "leire" …
+  classification MassClassification @default(UNKNOWN)
+  volumeM3       Float?
+
+  originLocation      String?
+  destinationName     String?        // mottak/deponi
+  destinationOrgId    String?        // hvis mottaker er registrert i portalen
+  transporter         String?
+
+  // Dokumentasjon
+  analysisRef    String?             // henvisning til prøvetaking/analyse
+  receiptDocId   String?             // mottakskvittering (dokumentlager)
+  declarationRef String?             // avfallsdeklarering (Avfallsdeklarering.no)
+
+  status      MassMovementStatus @default(PLANNED)
+  movedAt     DateTime?
+  notes       String?
+
+  // Transport (mater CO2-regnskapet i del 4)
+  transportKm   Float?
+  transportFuel FuelType?
+  roundTrips    Int?
+
+  // Idempotens ved app-synk (del 4)
+  appSyncId String? @unique
+
+  createdById String
+  createdBy   User @relation("MassMovements", fields: [createdById], references: [id]) // <-- EKSISTERENDE
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, status])
+}
+
+
+// ============================================================================
+//  BACK-RELASJONER Å LEGGE TIL
+//  model Project {
+//    ...
+//    minijuristThreads MinijuristThread[]
+//    massMovements     MassMovement[]
+//  }
+//  model User {
+//    ...
+//    minijuristThreads MinijuristThread[] @relation("MinijuristThreads")
+//    massMovements     MassMovement[]     @relation("MassMovements")
+//  }
+// ============================================================================

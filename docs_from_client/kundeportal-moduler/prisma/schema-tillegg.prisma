@@ -1,0 +1,300 @@
+// ============================================================================
+//  SCHEMA-TILLEGG: Prosjektmodul + Rapporteringsmodul
+// ----------------------------------------------------------------------------
+//  Lim disse modellene inn i din eksisterende prisma/schema.prisma.
+//
+//  ANTAKELSER om eksisterende modeller (juster navn til deres faktiske schema):
+//    - Organization : enhver virksomhet registrert i portalen (både kunder og
+//                     mulige underentreprenører). Kunder = organisasjoner.
+//    - User         : bruker som tilhører én Organization.
+//    - Machine      : maskin fra utleie-/maskinmodulen.
+//    - RentalAgreement : utleieavtale.
+//    - Document     : dokument fra kontraktdokument-modulen.
+//
+//  Der en modell under refererer til en eksisterende modell, er det markert
+//  med  // <-- EKSISTERENDE. Legg til de tilhørende back-relasjonene på de
+//  eksisterende modellene (se nederst i fila for kopiklare felt).
+// ============================================================================
+
+
+// ─────────────────────────────  PROSJEKTMODUL  ─────────────────────────────
+
+model Project {
+  id            String @id @default(cuid())
+
+  // Kjernedata
+  projectNumber String        // prosjektnummer
+  name          String
+  description   String?
+
+  // Adresse (bygg-/anleggssted)
+  addressLine   String?
+  postalCode    String?
+  city          String?
+
+  // Byggherre
+  clientName          String?  // byggherre (navn)
+  clientOrgNumber     String?
+  clientContactName   String?
+  clientContactEmail  String?
+  clientContactPhone  String?
+
+  status        ProjectStatus @default(ACTIVE)
+  startDate     DateTime?
+  endDate       DateTime?
+
+  // Eier-organisasjon = kunden som opprettet prosjektet
+  organizationId String
+  organization   Organization @relation("OrgProjects", fields: [organizationId], references: [id]) // <-- EKSISTERENDE
+
+  createdById   String
+  createdBy     User @relation("ProjectsCreated", fields: [createdById], references: [id])          // <-- EKSISTERENDE
+
+  // Deltakere fra egen organisasjon + underentreprenører (andre org i portalen)
+  participants   ProjectParticipant[]
+  subcontractors ProjectSubcontractor[]
+
+  // Koblinger som ALLE andre moduler henter prosjekt fra
+  reportingRequirements ReportingRequirement[]
+  reports               Report[]
+  nsStandards           ProjectNsStandard[]
+  contractDocuments     ProjectContractDocument[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, projectNumber]) // prosjektnummer unikt pr kunde
+  @@index([organizationId])
+}
+
+enum ProjectStatus {
+  PLANNING   // planlegging
+  ACTIVE     // aktiv
+  ON_HOLD    // på vent
+  COMPLETED  // ferdigstilt
+  ARCHIVED   // arkivert
+}
+
+// Deltaker fra egen organisasjon
+model ProjectParticipant {
+  id        String @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User @relation("ProjectParticipations", fields: [userId], references: [id], onDelete: Cascade) // <-- EKSISTERENDE
+  role      ProjectRole @default(MEMBER)
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+}
+
+enum ProjectRole {
+  OWNER
+  PROJECT_MANAGER // prosjektleder
+  MEMBER          // deltaker
+  VIEWER          // lesetilgang
+}
+
+// Underentreprenør (UE) = annen organisasjon registrert i portalen
+model ProjectSubcontractor {
+  id                 String @id @default(cuid())
+  projectId          String
+  project            Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  subcontractorOrgId String
+  subcontractorOrg   Organization @relation("OrgSubcontracts", fields: [subcontractorOrgId], references: [id]) // <-- EKSISTERENDE
+  scopeOfWork        String?  // fagområde / hva UE utfører
+  contactName        String?
+  contactEmail       String?
+  createdAt          DateTime @default(now())
+
+  @@unique([projectId, subcontractorOrgId])
+  @@index([projectId])
+}
+
+
+// ────────────────────────────  RAPPORTERINGSMODUL  ─────────────────────────
+
+// De tre kildene rapporteringskrav skilles på:
+enum RequirementSource {
+  LAW         // Norske lover og forskrifter (kuratert bibliotek + AI)
+  NS_STANDARD // NS-standarder (kunden legger inn selv)
+  CONTRACT    // Kontraktspesifikt (AI leser dokumentene kunden drar inn)
+}
+
+enum ReportInterval {
+  ONE_TIME     // engangs
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  SEMI_ANNUAL
+  ANNUAL
+  EVENT_BASED  // hendelsesstyrt (f.eks. ved avvik/ulykke)
+  CUSTOM
+}
+
+enum RequirementOrigin {
+  MANUAL        // lagt inn manuelt av kunden
+  AI_SUGGESTED  // foreslått av AI
+}
+
+enum RequirementStatus {
+  PROPOSED  // foreslått av AI, ikke bekreftet
+  ACTIVE    // bekreftet og i bruk
+  DISMISSED // avvist av kunden
+}
+
+// Ett rapporteringskrav knyttet til ett prosjekt
+model ReportingRequirement {
+  id          String @id @default(cuid())
+  projectId   String
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  source      RequirementSource
+  title       String
+  description String?
+
+  // Hjemmel / referanse: f.eks. "Byggherreforskriften § 11" / "NS 8407 pkt. 24" /
+  // "Kontrakt vedlegg C, pkt 3.2"
+  legalReference String?
+
+  interval       ReportInterval @default(MONTHLY)
+  intervalDetail String?  // fritekst når interval = CUSTOM/EVENT_BASED
+
+  // Til hvilken instans og person det skal rapporteres
+  recipientInstance String? // f.eks. Arbeidstilsynet, byggherre, kommunen
+  recipientName     String?
+  recipientEmail    String?
+
+  // Sporbarhet
+  origin       RequirementOrigin @default(MANUAL)
+  aiConfidence Float?             // 0–1 når AI-foreslått
+  aiRationale  String?            // AIs begrunnelse / kildehenvisning
+  status       RequirementStatus  @default(PROPOSED)
+
+  // Hvilke datafelt kreves, og hvor de kommer fra
+  dataFields ReportDataField[]
+
+  reports Report[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, source])
+  @@index([projectId, status])
+}
+
+enum DataSourceType {
+  PORTAL_MACHINE   // hentes automatisk fra maskiner
+  PORTAL_AGREEMENT // hentes fra utleieavtaler
+  PORTAL_DOCUMENT  // hentes fra dokumentmodulen
+  MANUAL_INPUT     // kunden må legge inn selv
+  CALCULATED       // beregnes fra andre felt
+}
+
+// Ett datapunkt kravet trenger. Dette er kjernen i "hva finnes i portalen vs.
+// hva må kunden legge inn": availableInPortal + sourceType.
+model ReportDataField {
+  id            String @id @default(cuid())
+  requirementId String
+  requirement   ReportingRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  label             String          // f.eks. "Driftstimer for gravemaskin"
+  sourceType        DataSourceType
+  sourceRef         String?         // maskinvennlig peker, f.eks. "machine.operatingHours"
+  availableInPortal Boolean @default(false)
+  required          Boolean @default(true)
+  note              String?         // AIs merknad, f.eks. "Mangler timeavlesning for mars"
+
+  @@index([requirementId])
+}
+
+// NS-standarder kunden legger inn selv
+model ProjectNsStandard {
+  id         String @id @default(cuid())
+  projectId  String
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  standardNo String  // f.eks. "NS 8407"
+  title      String?
+  clause     String? // relevant punkt/kapittel
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  @@index([projectId])
+}
+
+// Kontraktdokumenter dratt inn for AI-analyse. Peker mot eksisterende Document.
+model ProjectContractDocument {
+  id         String @id @default(cuid())
+  projectId  String
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  documentId String   // FK mot deres eksisterende Document-modell   // <-- EKSISTERENDE
+  fileName   String?  // speilet for enkel visning
+  analyzed   Boolean  @default(false)
+  analyzedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  @@unique([projectId, documentId])
+  @@index([projectId])
+}
+
+// En konkret rapport (instans i tid) generert/utfylt for et krav
+model Report {
+  id            String @id @default(cuid())
+  projectId     String
+  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requirementId String?
+  requirement   ReportingRequirement? @relation(fields: [requirementId], references: [id])
+
+  title       String
+  periodStart DateTime?
+  periodEnd   DateTime?
+  dueDate     DateTime?
+  status      ReportStatus @default(DRAFT)
+
+  // Strukturert innhold (utfylte datafelt) + AI-generert rapporttekst
+  content       Json?
+  generatedBody String?
+
+  submittedAt DateTime?
+  createdById String
+  createdBy   User @relation("ReportsCreated", fields: [createdById], references: [id]) // <-- EKSISTERENDE
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, status])
+}
+
+enum ReportStatus {
+  DRAFT     // utkast
+  READY     // klar til innsending
+  SUBMITTED // sendt
+  OVERDUE   // forfalt
+}
+
+
+// ============================================================================
+//  BACK-RELASJONER Å LEGGE TIL PÅ EKSISTERENDE MODELLER
+//  (kopier feltene inn i de aktuelle modellene dine)
+// ============================================================================
+//
+//  model Organization {
+//    ...
+//    projects            Project[]              @relation("OrgProjects")
+//    subcontractedOn     ProjectSubcontractor[] @relation("OrgSubcontracts")
+//  }
+//
+//  model User {
+//    ...
+//    projectsCreated       Project[]            @relation("ProjectsCreated")
+//    projectParticipations ProjectParticipant[] @relation("ProjectParticipations")
+//    reportsCreated        Report[]             @relation("ReportsCreated")
+//  }
+//
+//  // Document, Machine, RentalAgreement kobles løst via id-referanser
+//  // (ProjectContractDocument.documentId, ReportDataField.sourceRef) slik at
+//  // rapporteringsmodulen ikke tvinger endringer i utleie-/dokumentmodulen.
+// ============================================================================

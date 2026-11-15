@@ -382,6 +382,7 @@ model Project {
   massTypes          ProjectMassType[]
   fieldValues        ProjectFieldValue[]
   kpis               ProjectKpi[]
+  zones              ProjectZone[]
   docFolders         DocFolder[]
   callOffLines       CallOffLine[]
   positionHistory    MachinePositionHistory[]
@@ -392,6 +393,25 @@ model Project {
   @@index([clientName], map: "idx_projects_client_name")
   @@index([status], map: "idx_projects_status")
   @@map("projects")
+}
+
+// Site zones ("anleggssoner") drawn on the project map. Geometry is a GeoJSON
+// Polygon in WGS84 ([lng, lat] pairs, closed ring). Nothing consumes the zones
+// yet; they are the foundation for geofence alerts later.
+model ProjectZone {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  name      String
+  color     String
+  sortOrder Int      @default(0) @map("sort_order")
+  geometry  Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId], map: "idx_project_zones_project_id")
+  @@map("project_zones")
 }
 
 model ProjectParticipant {

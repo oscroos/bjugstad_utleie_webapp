@@ -1,0 +1,224 @@
+// ============================================================================
+//  SCHEMA-TILLEGG DEL 6 – Fremby-paritet
+//  Maskintelemetri · Digitale lasslister (m/EPD) · Kontraktsmål (KPI) ·
+//  Kostnadsfordeling · Datadeling med samtykke · Energimålere
+// ============================================================================
+
+
+// ─────────────────────  MASKINTELEMETRI (automatisk innhenting)  ────────────
+
+enum TelemetryProvider {
+  VOLVO_CE      // Volvo CareTrack / Connect
+  CAT           // Cat VisionLink
+  KOMATSU       // Komtrax
+  SCANIA        // Scania FMS
+  VOLVO_TRUCKS
+  TRACKUNIT     // aggregator (dekker mange merker)
+  TELTONIKA     // egne GPS-enheter (FMB/FMC-serien, push via Codec 8E)
+  MICTRACK      // egne GPS-enheter (MT-serien, push)
+  HITACHI
+  LIEBHERR
+  JCB
+  OTHER
+}
+
+// Kobling mellom en maskin og dens telematikk-kilde
+model MachineTelemetryLink {
+  id         String @id @default(cuid())
+  machineId  String @unique       // deres Machine-modell        // <-- EKSISTERENDE
+  provider   TelemetryProvider
+  externalId String               // maskinens ID hos leverandøren (VIN/serienr)
+  // Legitimasjon lagres IKKE her – pekes til secret-store per org/leverandør
+  credentialRef String?
+  active     Boolean @default(true)
+  lastSyncAt DateTime?
+  createdAt  DateTime @default(now())
+}
+
+// Normalisert døgn-/periodesnapshot per maskin (uansett merke).
+// Fylles av synk-jobben (cron) via connector-laget i lib/flate/telemetri.ts.
+model TelemetrySnapshot {
+  id        String @id @default(cuid())
+  machineId String
+  projectId String?              // auto-allokert via utleieavtale/geofence
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  engineHours  Float?   // motortimer i perioden
+  idleHours    Float?   // tomgangstimer
+  fuelLiters   Float?   // diesel/HVO
+  energyKwh    Float?   // elektriske maskiner / lading
+  distanceKm   Float?
+  payloadTonnes Float?  // tonnasje (der maskinen rapporterer det)
+
+  provider TelemetryProvider
+  raw      Json?        // original-payload for sporbarhet
+
+  createdAt DateTime @default(now())
+
+  @@unique([machineId, periodStart, provider])
+  @@index([projectId, periodStart])
+}
+
+
+// ─────────────────  DIGITALE LASSLISTER (veiesedler + EPD)  ─────────────────
+
+// Ett lass = én digital veieseddel. Kilder: vektsystem-integrasjon, felt-app,
+// eller manuell. Kobles til massetype og mater både massebalanse og CO2.
+model LoadTicket {
+  id        String @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  direction  MassDirection      // IN / OUT (samme enum som MassMovement)
+  massTypeId String?
+  weightTonnes Float
+  volumeM3     Float?
+
+  originLocation String?
+  destinationName String?
+  vehicleReg   String?          // kjøretøy (regnr)
+  transporterOrgId String?      // UE/transportør i portalen
+  distanceKm   Float?
+
+  // EPD: miljødeklarasjon for materialet (pukk/grus/asfalt m.m.)
+  epdRef        String?         // EPD-nummer/registerreferanse
+  epdKgCo2ePerTonne Float?      // A1–A3 e.l. – brukes i CO2-regnskapet
+
+  weighedAt DateTime
+  source    String @default("MANUAL") // SCALE_API | APP | MANUAL
+  appSyncId String? @unique
+  receiptDocId String?          // foto/PDF av veieseddel
+
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([projectId, weighedAt])
+  @@index([projectId, direction, massTypeId])
+}
+
+
+// ─────────────  KONTRAKTSMÅL / DATADREVNE KONTRAKTSPUNKTER (KPI)  ───────────
+
+enum KpiMetric {
+  MAX_CO2_KG            // maks totalutslipp (kg CO2e)
+  MAX_IDLE_PCT          // maks tomgangsandel (%)
+  MIN_ELECTRIC_PCT      // min elektrifiseringsgrad (% av energi/timer)
+  MIN_HVO_PCT           // min andel fornybart drivstoff
+  MAX_DIESEL_LITERS
+  MIN_MASS_REUSE_PCT    // min gjenbruksandel av masser
+  CUSTOM
+}
+
+model ContractKpi {
+  id        String @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  metric      KpiMetric
+  label       String        // vist navn, f.eks. "Maks 120 tonn CO2e"
+  targetValue Float
+  unit        String        // "kg", "%", "liter"
+  contractRef String?       // hvor i kontrakten kravet står
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+}
+// Status beregnes live av lib/flate/kpi.ts fra telemetri + lasslister + CO2.
+
+
+// ──────────────  KOSTNADSFORDELING (maskin → prosjekt)  ─────────────────────
+
+// Kostnadsprofil per maskin. Timeskost = finansiering + service/vedlikehold
+// (+ evt. internpåslag); drivstoff kommer fra faktisk forbruk × literpris.
+model MachineCostProfile {
+  id        String @id @default(cuid())
+  machineId String @unique
+  financeCostPerHour Float @default(0)
+  serviceCostPerHour Float @default(0)
+  internalMarkupPct  Float @default(0)   // påslag ved internutleie
+  fuelPricePerLiter  Float @default(0)
+  energyPricePerKwh  Float @default(0)
+  updatedAt DateTime @updatedAt
+}
+// Allokering: lib/flate/kostnad.ts × TelemetrySnapshot.engineHours per prosjekt.
+
+
+// ─────────────  DATADELING MED SAMTYKKE (UE → entreprenør → byggherre)  ─────
+
+enum ShareScope { TELEMETRY LOADTICKETS CO2_SUMMARY HMS_SUMMARY }
+
+// Eksplisitt, gjenkallbart samtykke: eier-org deler utvalgte datatyper for ETT
+// prosjekt med mottaker-org. Ingen deling uten aktiv grant (Fremby-prinsippet
+// «shared only with the owner's consent» – som også er riktig GDPR-praksis).
+model DataShareGrant {
+  id             String @id @default(cuid())
+  projectId      String
+  ownerOrgId     String        // den som eier dataene (f.eks. UE)
+  recipientOrgId String        // den som får se (entreprenør/byggherre)
+  scopes         ShareScope[]
+  active         Boolean @default(true)
+  grantedById    String
+  grantedAt      DateTime @default(now())
+  revokedAt      DateTime?
+
+  @@unique([projectId, ownerOrgId, recipientOrgId])
+  @@index([recipientOrgId, active])
+}
+
+
+// ─────────────────────  ENERGIMÅLERE (byggestrøm / enøk)  ───────────────────
+
+model EnergyMeter {
+  id        String @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String            // "Byggestrøm tavle A", "Ladepunkt 1"
+  meterType String @default("SITE_POWER") // SITE_POWER | CHARGER | HEATER
+  readings  EnergyReading[]
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+}
+
+model EnergyReading {
+  id      String @id @default(cuid())
+  meterId String
+  meter   EnergyMeter @relation(fields: [meterId], references: [id], onDelete: Cascade)
+  readAt  DateTime
+  kwh     Float      // forbruk siden forrige avlesning
+  source  String @default("MANUAL") // API | APP | MANUAL
+
+  @@index([meterId, readAt])
+}
+
+
+// ============================================================================
+//  BACK-RELASJONER på Project:
+//    loadTickets  LoadTicket[]
+//    contractKpis ContractKpi[]
+//    energyMeters EnergyMeter[]
+//  Massebalanse på tvers (avdeling/region/hele org) beregnes av
+//  lib/masse/balanse.ts over LoadTicket + MassMovement uten nye modeller.
+// ============================================================================
+
+
+// ─────────────  FELLES RETTSKILDEBASE (minijuristen, AP-9)  ─────────────────
+// Kun referanser og korte sammendrag i egne ord + kildehenvisning – aldri
+// fulltekst (jf. Lovdata/opphavsrett). Deles på tvers av kunder.
+model LegalSourceRef {
+  id        String   @id @default(cuid())
+  reference String   @unique   // "HR-2019-1225-A", "LH-2019-27272", "NS 8407 pkt. 5"
+  court     String?            // "Høyesterett", "Eidsivating lagmannsrett", null for lov/standard
+  decidedAt DateTime?
+  topics    String[] @default([])  // ["plunder og heft","beviskrav","varsling"]
+  summary   String             // kort referat i egne ord, maks ~1000 tegn
+  sourceUrl String?            // hvor den ble funnet (lovdata.no, domstol.no, ...)
+  addedBy   String   @default("MINIJURIST") // MINIJURIST | ADMIN
+  verified  Boolean  @default(false)        // kvalitetssikret av menneske
+  createdAt DateTime @default(now())
+
+  @@index([topics])
+}

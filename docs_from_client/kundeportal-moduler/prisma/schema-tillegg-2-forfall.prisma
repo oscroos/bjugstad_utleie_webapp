@@ -1,0 +1,18 @@
+// ============================================================================
+//  SCHEMA-TILLEGG DEL 2 – Planlegging / forfall for rapportering
+//  Legg disse feltene til på ReportingRequirement (fra del 1). Kjør deretter
+//  ny migrasjon.
+// ============================================================================
+//
+//  model ReportingRequirement {
+//    ... (eksisterende felt fra del 1) ...
+//
+//    // Planlegging av forfall
+//    scheduleAnchor DateTime?  // startpunkt for intervallberegning (default: prosjektstart/nå)
+//    nextDueDate    DateTime?  // cachet neste forfall, oppdateres når rapporter genereres
+//    active         Boolean  @default(true) // kan pauses uten å slettes
+//  }
+//
+//  // Report (fra del 1) har allerede dueDate, periodStart, periodEnd, status.
+//  // Ingen nye modeller kreves for forfallshåndteringen.
+// ============================================================================

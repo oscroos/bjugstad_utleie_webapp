@@ -42,3 +42,8 @@ export const SESSION_USER_FIELDS = [
     "acceptedTermsVersion",
     "lastLoginAt",
 ] as const;
+
+// Cookie that remembers the last project a user opened, so the Prosjekter tab
+// can land straight on it instead of showing a list first.
+export const LAST_PROJECT_COOKIE = "bu_last_project";
+export const LAST_PROJECT_COOKIE_MAX_AGE_SECONDS = 365 * 24 * 60 * 60; // 1 year

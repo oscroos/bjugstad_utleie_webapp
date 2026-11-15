@@ -38,9 +38,10 @@ type UserAccess = {
 
 type UsersTableProps = {
   users: UserRow[];
+  currentUserId?: string | null;
 };
 
-export default function UsersTable({ users }: UsersTableProps) {
+export default function UsersTable({ users, currentUserId }: UsersTableProps) {
   const [dialogState, setDialogState] = useState<AccessDialogState>({
     open: false,
     loading: false,
@@ -126,12 +127,25 @@ export default function UsersTable({ users }: UsersTableProps) {
       id: "name",
       header: "Navn",
       accessor: (user) => user.name ?? "",
-      cell: (user) => (
-        <div>
-          <div className="font-medium text-slate-900">{user.name ?? "-"}</div>
-          <div className="text-xs text-slate-500">{user.id}</div>
-        </div>
-      ),
+      cell: (user) => {
+        const isCurrentUser = user.id === currentUserId;
+        return (
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-slate-900">{user.name ?? "-"}</span>
+              {isCurrentUser && (
+                <span
+                  className="inline-flex items-center rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-800"
+                  title="Dette er din bruker"
+                >
+                  Deg
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-slate-500">{user.id}</div>
+          </div>
+        );
+      },
       sortValue: (user) => (user.name ?? "").toLowerCase(),
       filterValue: (user) => (user.name ? user.name.trim() : "-"),
     },
@@ -298,6 +312,11 @@ export default function UsersTable({ users }: UsersTableProps) {
         data={users}
         columns={columns}
         getRowId={(user) => user.id}
+        getRowClassName={(user) =>
+          user.id === currentUserId
+            ? "bg-blue-50/70 shadow-[inset_3px_0_0_0_var(--color-blue-500)] hover:bg-blue-50"
+            : undefined
+        }
         emptyMessage="Ingen brukere funnet."
         onRowClick={openUserDialog}
       />

@@ -3,12 +3,12 @@
 // which is configured with the Vipps provider. If no session, redirect to /login
 // (NextAuth will use the Vipps flow when the user clicks the login button).
 
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 // Use Edge-safe auth to avoid bundling Prisma/native binaries in middleware
 import { auth } from "@/lib/auth-edge";
-import { IS_DEV, LATEST_TERMS_VERSION } from "@/lib/constants";
+import { IS_DEV, LAST_PROJECT_COOKIE, LATEST_TERMS_VERSION } from "@/lib/constants";
 
-export async function middleware(req: Request) {
+export async function middleware(req: NextRequest) {
   const url = new URL(req.url);
   const pathname = url.pathname;
 
@@ -61,6 +61,16 @@ export async function middleware(req: Request) {
     const login = new URL("/login", url.origin);
     login.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(login);
+  }
+
+  // The Prosjekter tab has no list page: send the user straight to the project
+  // they opened last. Doing it here avoids rendering /prosjekter only to redirect
+  // on the client. "nullstill" means the remembered project was not accessible.
+  if (pathname === "/prosjekter" && !url.searchParams.has("nullstill")) {
+    const lastProjectId = req.cookies.get(LAST_PROJECT_COOKIE)?.value;
+    if (lastProjectId && /^[a-z0-9]{8,40}$/i.test(lastProjectId)) {
+      return NextResponse.redirect(new URL(`/prosjekter/${lastProjectId}`, url.origin));
+    }
   }
 
   return NextResponse.next();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, use, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import {
@@ -27,6 +27,7 @@ import {
   type ProjectStatusValue,
 } from "@/lib/project-status";
 import type { ProjectListItem, ProjectMachinesResult, ProjectWorkspace } from "@/lib/projects";
+import { MachinesSectionSkeleton } from "../ProjectSkeletons";
 import ProjectSwitcher from "../ProjectSwitcher";
 import ProjectDocumentsPanel from "./ProjectDocumentsPanel";
 import ProjectMachinesSection from "./ProjectMachinesSection";
@@ -34,11 +35,14 @@ import ProjectZonesEditor from "./ProjectZonesEditor";
 
 type Viewer = { id?: string | null; role?: string | null };
 
+export type MapCenter = { lat: number; lng: number };
+
 type ProjectWorkspaceClientProps = {
   project: ProjectWorkspace;
   projects: ProjectListItem[];
-  machines: ProjectMachinesResult;
-  mapFallbackCenter: { lat: number; lng: number } | null;
+  /** Streamed from the server; resolves when the Bjugstad rental lookup is done. */
+  machinesPromise: Promise<ProjectMachinesResult>;
+  mapFallbackCenterPromise: Promise<MapCenter | null>;
   viewer: Viewer;
   canCreateProject: boolean;
   canEdit: boolean;
@@ -63,8 +67,8 @@ const secondaryButtonClass =
 export default function ProjectWorkspaceClient({
   project,
   projects,
-  machines,
-  mapFallbackCenter,
+  machinesPromise,
+  mapFallbackCenterPromise,
   viewer,
   canCreateProject,
   canEdit,
@@ -115,7 +119,7 @@ export default function ProjectWorkspaceClient({
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition ${
+              className={`flex shrink-0 cursor-pointer items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition ${
                 active
                   ? "border-blue-700 text-blue-700"
                   : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900"
@@ -129,10 +133,10 @@ export default function ProjectWorkspaceClient({
       </nav>
 
       {activeTab === "info" ? (
-        <ProjectInfoTab project={project} machines={machines} viewer={viewer} canEdit={canEdit} />
+        <ProjectInfoTab project={project} machinesPromise={machinesPromise} viewer={viewer} canEdit={canEdit} />
       ) : null}
       {activeTab === "map" ? (
-        <ProjectMapTab project={project} canEdit={canEdit} fallbackCenter={mapFallbackCenter} />
+        <ProjectMapTab project={project} canEdit={canEdit} fallbackCenterPromise={mapFallbackCenterPromise} />
       ) : null}
       {activeTab === "masses" ? <ProjectMassesTab project={project} canEdit={canEdit} /> : null}
       {activeTab === "documents" ? <ProjectDocumentsTab projectId={project.id} canEdit={canEdit} /> : null}
@@ -142,12 +146,12 @@ export default function ProjectWorkspaceClient({
 
 function ProjectInfoTab({
   project,
-  machines,
+  machinesPromise,
   viewer,
   canEdit,
 }: {
   project: ProjectWorkspace;
-  machines: ProjectMachinesResult;
+  machinesPromise: Promise<ProjectMachinesResult>;
   viewer: Viewer;
   canEdit: boolean;
 }) {
@@ -351,13 +355,34 @@ function ProjectInfoTab({
         </section>
       </div>
 
-      <ProjectMachinesSection
-        machines={machines.machines}
-        error={machines.error}
-        projectNumber={project.projectNumber}
-        viewer={viewer}
-      />
+      <Suspense fallback={<MachinesSectionSkeleton />}>
+        <StreamedMachinesSection
+          machinesPromise={machinesPromise}
+          projectNumber={project.projectNumber}
+          viewer={viewer}
+        />
+      </Suspense>
     </div>
+  );
+}
+
+function StreamedMachinesSection({
+  machinesPromise,
+  projectNumber,
+  viewer,
+}: {
+  machinesPromise: Promise<ProjectMachinesResult>;
+  projectNumber: string;
+  viewer: Viewer;
+}) {
+  const machines = use(machinesPromise);
+  return (
+    <ProjectMachinesSection
+      machines={machines.machines}
+      error={machines.error}
+      projectNumber={projectNumber}
+      viewer={viewer}
+    />
   );
 }
 
@@ -536,11 +561,11 @@ function computeTimeline(startDate: string | null, endDate: string | null) {
 function ProjectMapTab({
   project,
   canEdit,
-  fallbackCenter,
+  fallbackCenterPromise,
 }: {
   project: ProjectWorkspace;
   canEdit: boolean;
-  fallbackCenter: { lat: number; lng: number } | null;
+  fallbackCenterPromise: Promise<MapCenter | null>;
 }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -558,15 +583,57 @@ function ProjectMapTab({
         </Link>
       </div>
       <div className="p-6">
-        <ProjectZonesEditor
-          key={project.id}
-          projectId={project.id}
-          initialZones={project.zones}
-          canEdit={canEdit}
-          fallbackCenter={fallbackCenter}
-        />
+        {project.zones.length > 0 ? (
+          <ProjectZonesEditor
+            key={project.id}
+            projectId={project.id}
+            initialZones={project.zones}
+            canEdit={canEdit}
+            fallbackCenter={null}
+          />
+        ) : (
+          // Without zones the map starts on the project's machines, which come
+          // from the streamed rental lookup.
+          <Suspense fallback={<MapAreaSkeleton />}>
+            <ZonesEditorWithFallbackCenter
+              project={project}
+              canEdit={canEdit}
+              fallbackCenterPromise={fallbackCenterPromise}
+            />
+          </Suspense>
+        )}
       </div>
     </section>
+  );
+}
+
+function ZonesEditorWithFallbackCenter({
+  project,
+  canEdit,
+  fallbackCenterPromise,
+}: {
+  project: ProjectWorkspace;
+  canEdit: boolean;
+  fallbackCenterPromise: Promise<MapCenter | null>;
+}) {
+  const fallbackCenter = use(fallbackCenterPromise);
+  return (
+    <ProjectZonesEditor
+      key={project.id}
+      projectId={project.id}
+      initialZones={project.zones}
+      canEdit={canEdit}
+      fallbackCenter={fallbackCenter}
+    />
+  );
+}
+
+function MapAreaSkeleton() {
+  return (
+    <div className="flex h-[480px] w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-100 text-sm text-slate-500">
+      <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" />
+      Laster kart...
+    </div>
   );
 }
 

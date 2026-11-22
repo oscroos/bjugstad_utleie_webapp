@@ -16,7 +16,8 @@
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "seed:test-projects": "node --env-file-if-exists=.env.local scripts/seed-test-projects.mjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",

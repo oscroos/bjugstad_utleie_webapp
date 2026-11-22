@@ -66,14 +66,7 @@ export async function fetchAgreementsForUser(userId: string, role?: string | nul
         throw new Error("Forbidden");
     }
 
-    const apiKey =
-        process.env.BJUGSTAD_API_KEY_PRIMARY?.trim() ||
-        process.env.BJUGSTAD_API_KEY_SECONDARY?.trim();
-    const baseUrl = process.env.BJUGSTAD_API_BASEURL?.trim();
-
-    if (!apiKey || !baseUrl) {
-        throw new Error("Mangler konfigurasjon for Bjugstad API");
-    }
+    const { apiKey, baseUrl } = getBjugstadApiConfig();
 
     if (isAdmin) {
         return fetchAllAgreements(baseUrl, apiKey);
@@ -95,6 +88,29 @@ export async function fetchAgreementsForUser(userId: string, role?: string | nul
     );
 
     return results.flat();
+}
+
+/**
+ * Agreements for a single customer. Much cheaper than fetchAgreementsForUser for
+ * super admins, who would otherwise download every rental in the register.
+ * Callers must verify that the user may see this customer.
+ */
+export async function fetchAgreementsForCustomer(customerId: number): Promise<AgreementPayload[]> {
+    if (!Number.isInteger(customerId) || customerId <= 0) return [];
+    const { apiKey, baseUrl } = getBjugstadApiConfig();
+    return fetchCustomerAgreements(baseUrl, apiKey, customerId);
+}
+
+function getBjugstadApiConfig() {
+    const apiKey =
+        process.env.BJUGSTAD_API_KEY_PRIMARY?.trim() ||
+        process.env.BJUGSTAD_API_KEY_SECONDARY?.trim();
+    const baseUrl = process.env.BJUGSTAD_API_BASEURL?.trim();
+
+    if (!apiKey || !baseUrl) {
+        throw new Error("Mangler konfigurasjon for Bjugstad API");
+    }
+    return { apiKey, baseUrl };
 }
 
 export async function loadAgreementsForUser(

@@ -8,9 +8,14 @@ import { LAST_PROJECT_COOKIE } from "@/lib/constants";
 import { listProjectCustomersForUser, listProjectsForUser, type ProjectListItem } from "@/lib/projects";
 
 // The Prosjekter tab has no list view: it sends the user straight to a project.
-// Preference order: the project they opened last (cookie), otherwise the first
-// project in the dropdown.
-export default async function ProsjekterPage() {
+// Middleware already redirects when a last-visited cookie exists, so this page
+// mostly handles first visits: the first project in the dropdown. It still checks
+// the cookie in case middleware was bypassed.
+type PageProps = {
+  searchParams: Promise<{ nullstill?: string }>;
+};
+
+export default async function ProsjekterPage({ searchParams }: PageProps) {
   const session = await auth();
 
   if (!session) {
@@ -40,7 +45,8 @@ export default async function ProsjekterPage() {
     );
   }
 
-  const target = await pickDefaultProject(projects);
+  const { nullstill } = await searchParams;
+  const target = await pickDefaultProject(projects, nullstill !== undefined);
   if (target) {
     redirect(`/prosjekter/${target.id}`);
   }
@@ -82,11 +88,11 @@ export default async function ProsjekterPage() {
   );
 }
 
-async function pickDefaultProject(projects: ProjectListItem[]) {
+async function pickDefaultProject(projects: ProjectListItem[], ignoreRemembered: boolean) {
   if (projects.length === 0) return null;
 
   const cookieStore = await cookies();
-  const lastProjectId = cookieStore.get(LAST_PROJECT_COOKIE)?.value;
+  const lastProjectId = ignoreRemembered ? undefined : cookieStore.get(LAST_PROJECT_COOKIE)?.value;
   if (lastProjectId) {
     const remembered = projects.find((project) => project.id === lastProjectId);
     if (remembered) return remembered;

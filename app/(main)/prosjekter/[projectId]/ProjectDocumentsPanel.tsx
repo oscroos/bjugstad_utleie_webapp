@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  IconChevronRight,
   IconFileText,
   IconFolder,
+  IconFolderOpen,
   IconFolderPlus,
   IconPencil,
   IconTrash,
@@ -60,6 +62,8 @@ export default function ProjectDocumentsPanel({
 }) {
   const [tree, setTree] = useState<DocumentFolderNode[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [storageConfigured, setStorageConfigured] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [loading, setLoading] = useState(true);
@@ -80,6 +84,12 @@ export default function ProjectDocumentsPanel({
       const payload = await requestJson<DocumentsPayload>(`/api/dokumenter?projectId=${projectId}`);
       setTree(payload.tree);
       setStorageConfigured(payload.storageConfigured);
+      // Top-level folders start open; folders the user opened stay open across reloads.
+      setExpandedIds((current) => {
+        const next = new Set([...current].filter((id) => findFolderById(payload.tree, id)));
+        for (const folder of payload.tree) next.add(folder.id);
+        return next;
+      });
       setSelectedFolderId((current) =>
         current && findFolderById(payload.tree, current) ? current : payload.tree[0]?.id ?? null,
       );
@@ -258,10 +268,44 @@ export default function ProjectDocumentsPanel({
         ) : (
           <div className="grid gap-5 xl:grid-cols-[20rem_1fr]">
             <div className="rounded-xl border border-slate-200 p-3">
+              <div className="mb-2 flex items-center justify-end gap-3 px-1 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setExpandedIds(new Set(collectFolderIds(tree)))}
+                  className="cursor-pointer text-blue-700 hover:text-blue-900"
+                >
+                  Utvid alle
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExpandedIds(new Set())}
+                  className="cursor-pointer text-slate-600 hover:text-slate-900"
+                >
+                  Lukk alle
+                </button>
+              </div>
               <FolderTree
                 nodes={tree}
                 selectedFolderId={selectedFolderId}
-                onSelectFolder={setSelectedFolderId}
+                selectedFileId={selectedFileId}
+                expandedIds={expandedIds}
+                onToggle={(folderId) =>
+                  setExpandedIds((current) => {
+                    const next = new Set(current);
+                    if (next.has(folderId)) next.delete(folderId);
+                    else next.add(folderId);
+                    return next;
+                  })
+                }
+                onSelectFolder={(folderId) => {
+                  setSelectedFolderId(folderId);
+                  setSelectedFileId(null);
+                  setExpandedIds((current) => (current.has(folderId) ? current : new Set(current).add(folderId)));
+                }}
+                onSelectFile={(folderId, fileId) => {
+                  setSelectedFolderId(folderId);
+                  setSelectedFileId(fileId);
+                }}
               />
             </div>
             <div className="space-y-4">
@@ -289,7 +333,7 @@ export default function ProjectDocumentsPanel({
                   />
                 </div>
               ) : null}
-              <FilesTable files={selectedFolder?.files ?? []} />
+              <FilesTable files={selectedFolder?.files ?? []} highlightedFileId={selectedFileId} />
             </div>
           </div>
         )}
@@ -301,54 +345,119 @@ export default function ProjectDocumentsPanel({
 function FolderTree({
   nodes,
   selectedFolderId,
+  selectedFileId,
+  expandedIds,
+  onToggle,
   onSelectFolder,
+  onSelectFile,
   depth = 0,
 }: {
   nodes: DocumentFolderNode[];
   selectedFolderId: string | null;
+  selectedFileId: string | null;
+  expandedIds: Set<string>;
+  onToggle: (folderId: string) => void;
   onSelectFolder: (folderId: string) => void;
+  onSelectFile: (folderId: string, fileId: string) => void;
   depth?: number;
 }) {
   return (
-    <div className={depth === 0 ? "space-y-1" : "mt-1 space-y-1"}>
+    <ul role={depth === 0 ? "tree" : "group"} className="space-y-0.5">
       {nodes.map((folder) => {
-        const selected = folder.id === selectedFolderId;
+        const selected = folder.id === selectedFolderId && !selectedFileId;
+        const hasContent = folder.children.length > 0 || folder.files.length > 0;
+        const expanded = hasContent && expandedIds.has(folder.id);
+        const FolderIcon = expanded ? IconFolderOpen : IconFolder;
+
         return (
-          <div key={folder.id}>
-            <button
-              type="button"
-              onClick={() => onSelectFolder(folder.id)}
-              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
-                selected
-                  ? "bg-blue-50 font-semibold text-blue-800"
-                  : "text-slate-700 hover:bg-slate-50"
+          <li key={folder.id} role="treeitem" aria-expanded={hasContent ? expanded : undefined} aria-selected={selected}>
+            <div
+              className={`flex items-center gap-1 rounded-lg pr-2 text-sm transition ${
+                selected ? "bg-blue-50 font-semibold text-blue-800" : "text-slate-700 hover:bg-slate-50"
               }`}
-              style={{ paddingLeft: `${12 + depth * 16}px` }}
+              style={{ paddingLeft: `${4 + depth * 16}px` }}
             >
-              <IconFolder className="h-5 w-5 shrink-0 text-slate-500" />
-              <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-              {folder.files.length > 0 ? (
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
-                  {folder.files.length}
-                </span>
-              ) : null}
-            </button>
-            {folder.children.length > 0 ? (
-              <FolderTree
-                nodes={folder.children}
-                selectedFolderId={selectedFolderId}
-                onSelectFolder={onSelectFolder}
-                depth={depth + 1}
-              />
+              {hasContent ? (
+                <button
+                  type="button"
+                  onClick={() => onToggle(folder.id)}
+                  aria-label={expanded ? `Lukk ${folder.name}` : `Åpne ${folder.name}`}
+                  className="flex h-7 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-slate-400 hover:text-slate-700"
+                >
+                  <IconChevronRight className={`h-4 w-4 transition-transform ${expanded ? "rotate-90" : ""}`} />
+                </button>
+              ) : (
+                <span className="h-7 w-6 shrink-0" />
+              )}
+              <button
+                type="button"
+                onClick={() => onSelectFolder(folder.id)}
+                onDoubleClick={() => hasContent && onToggle(folder.id)}
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 py-1.5 text-left"
+              >
+                <FolderIcon className="h-5 w-5 shrink-0 text-slate-500" />
+                <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+                {folder.files.length > 0 ? (
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
+                    {folder.files.length}
+                  </span>
+                ) : null}
+              </button>
+            </div>
+
+            {expanded ? (
+              <div className="mt-0.5">
+                {folder.children.length > 0 ? (
+                  <FolderTree
+                    nodes={folder.children}
+                    selectedFolderId={selectedFolderId}
+                    selectedFileId={selectedFileId}
+                    expandedIds={expandedIds}
+                    onToggle={onToggle}
+                    onSelectFolder={onSelectFolder}
+                    onSelectFile={onSelectFile}
+                    depth={depth + 1}
+                  />
+                ) : null}
+                {folder.files.length > 0 ? (
+                  <ul role="group" className="space-y-0.5">
+                    {folder.files.map((file) => {
+                      const fileSelected = file.id === selectedFileId;
+                      return (
+                        <li key={file.id} role="treeitem" aria-selected={fileSelected}>
+                          <button
+                            type="button"
+                            onClick={() => onSelectFile(folder.id, file.id)}
+                            title={file.name}
+                            className={`flex w-full cursor-pointer items-center gap-2 rounded-lg py-1.5 pr-2 text-left text-sm transition ${
+                              fileSelected ? "bg-blue-50 font-semibold text-blue-800" : "text-slate-600 hover:bg-slate-50"
+                            }`}
+                            style={{ paddingLeft: `${4 + (depth + 1) * 16 + 28}px` }}
+                          >
+                            <IconFileText className="h-4 w-4 shrink-0 text-slate-400" />
+                            <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+              </div>
             ) : null}
-          </div>
+          </li>
         );
       })}
-    </div>
+    </ul>
   );
 }
 
-function FilesTable({ files }: { files: DocumentFileItem[] }) {
+function FilesTable({
+  files,
+  highlightedFileId,
+}: {
+  files: DocumentFileItem[];
+  highlightedFileId?: string | null;
+}) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200">
       <table className="min-w-full divide-y divide-slate-100 text-sm">
@@ -370,7 +479,7 @@ function FilesTable({ files }: { files: DocumentFileItem[] }) {
             </tr>
           ) : (
             files.map((file) => (
-              <tr key={file.id}>
+              <tr key={file.id} className={file.id === highlightedFileId ? "bg-blue-50" : undefined}>
                 <td className="px-4 py-4 font-semibold text-slate-900">{file.name}</td>
                 <td className="px-4 py-4 text-slate-700">{file.contentType ?? "-"}</td>
                 <td className="px-4 py-4 text-slate-700">{formatFileSize(file.sizeBytes)}</td>
@@ -406,6 +515,10 @@ function StatusBanner({
       {children}
     </div>
   );
+}
+
+function collectFolderIds(nodes: DocumentFolderNode[]): string[] {
+  return nodes.flatMap((node) => [node.id, ...collectFolderIds(node.children)]);
 }
 
 function findFolderById(nodes: DocumentFolderNode[], folderId: string): DocumentFolderNode | null {

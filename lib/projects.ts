@@ -11,7 +11,7 @@ import {
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import {
-  fetchAgreementsForUser,
+  fetchAgreementsForCustomer,
   splitAgreementsByStatus,
   type AgreementPayload,
 } from "@/lib/agreements";
@@ -712,20 +712,22 @@ export type ProjectMachinesResult = {
   error: string | null;
 };
 
-export async function listProjectMachines(
-  project: { customerId: number; projectNumber: string },
-  userId: string,
-  role?: string | null,
-): Promise<ProjectMachinesResult> {
+/**
+ * Machines on the project's rental agreements. Only the project's own customer is
+ * queried, so callers must already have checked project access.
+ */
+export async function listProjectMachines(project: {
+  customerId: number;
+  projectNumber: string;
+}): Promise<ProjectMachinesResult> {
   try {
-    const agreements = await fetchAgreementsForUser(userId, role);
+    const agreements = await fetchAgreementsForCustomer(project.customerId);
     const { active } = splitAgreementsByStatus(agreements);
     const activeIds = new Set(active.map((agreement) => agreement.id));
     const wantedNumber = normalizeProjectNumber(project.projectNumber);
 
     const machines: ProjectMachine[] = [];
     for (const agreement of agreements) {
-      if (agreement.customerId !== project.customerId) continue;
       if (normalizeProjectNumber(agreement.projectNumber) !== wantedNumber) continue;
 
       (agreement.machines ?? []).forEach((machine, index) => {

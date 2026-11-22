@@ -15,6 +15,7 @@ import {
   IconUpload,
 } from "@tabler/icons-react";
 import { formatDate } from "@/lib/formatters";
+import { useDialogs } from "@/components/dialogs/ConfirmDialog";
 
 type FolderKindValue = "SYSTEM" | "PROJECT" | "CUSTOM";
 type CallOffStatusValue =
@@ -398,6 +399,7 @@ export default function DocumentHotelClient() {
   );
 }
 
+/(function DocumentHotelPanel\(\{[\s\S]*?\n\}\) \{)/
 function DocumentHotelPanel({
   tree,
   selectedFolder,
@@ -425,6 +427,7 @@ function DocumentHotelPanel({
   onDeleteFolder: (folderId: string) => Promise<void>;
   onOpenCallOffs: () => void;
 }) {
+  const { confirm, prompt } = useDialogs();
   const [newFolderName, setNewFolderName] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const canCreateSubfolder = Boolean(selectedFolder && selectedFolder.systemKey !== "PROSJEKT");
@@ -496,8 +499,12 @@ function DocumentHotelPanel({
                       type="button"
                       className={buttonClass}
                       disabled={busy}
-                      onClick={() => {
-                        const name = window.prompt("Nytt mappenavn", selectedFolder.name);
+                      onClick={async () => {
+                        const name = await prompt({
+                      title: "Gi mappen nytt navn",
+                      inputLabel: "Mappenavn",
+                      defaultValue: selectedFolder.name,
+                    });
                         if (name?.trim()) void onRenameFolder(selectedFolder.id, name);
                       }}
                     >
@@ -508,8 +515,13 @@ function DocumentHotelPanel({
                       type="button"
                       className={buttonClass}
                       disabled={busy}
-                      onClick={() => {
-                        const confirmed = window.confirm(`Slette mappen "${selectedFolder.name}"?`);
+                      onClick={async () => {
+                        const confirmed = await confirm({
+                      title: "Slette mappen?",
+                      message: `Mappen «${selectedFolder.name}» blir slettet.`,
+                      confirmLabel: "Slett",
+                      tone: "danger",
+                    });
                         if (confirmed) void onDeleteFolder(selectedFolder.id);
                       }}
                     >
@@ -1007,6 +1019,7 @@ function CallOffList({
   );
 }
 
+/(function CallOffActions\(\{[\s\S]*?\n\}\) \{)/
 function CallOffActions({
   callOff,
   integrationConfigured,
@@ -1022,6 +1035,7 @@ function CallOffActions({
     reason?: string,
   ) => Promise<void>;
 }) {
+  const { prompt } = useDialogs();
   if (callOff.status === "DRAFT") {
     return (
       <div className="flex flex-wrap gap-2">
@@ -1064,8 +1078,13 @@ function CallOffActions({
           type="button"
           className={buttonClass}
           disabled={busy}
-          onClick={() => {
-            const reason = window.prompt("Hvorfor avslås avropet?");
+          onClick={async () => {
+            const reason = await prompt({
+              title: "Avslå avropet",
+              inputLabel: "Hvorfor avslås avropet?",
+              confirmLabel: "Avslå",
+              tone: "danger",
+            });
             if (reason) void onUpdateCallOff(callOff.id, "reject", reason);
           }}
         >

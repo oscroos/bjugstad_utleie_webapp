@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireProjectRole, writeAuditLog } from "@/lib/access";
+import { diffZones, type AuditZone } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { normalizeProjectZones, zoneToGeometry, type ProjectZone } from "@/lib/projects";
 
@@ -27,7 +28,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
   try {
     const existing = await prisma.projectZone.findMany({
       where: { projectId },
-      select: { id: true },
+      select: { id: true, name: true, color: true, geometry: true },
     });
     const existingIds = new Set(existing.map((zone) => zone.id));
     const incomingIds = new Set(
@@ -56,29 +57,33 @@ export async function PUT(request: Request, { params }: RouteContext) {
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     });
 
-    const zones: ProjectZone[] = saved.map((zone) => {
-      const geometry = zone.geometry as { coordinates: Array<Array<[number, number]>> };
-      const ring = geometry.coordinates[0] ?? [];
-      return {
-        id: zone.id,
-        name: zone.name,
-        color: zone.color,
-        coordinates: ring.slice(0, -1),
-      };
-    });
+    const zones: ProjectZone[] = saved.map(toZone);
+    const changes = diffZones(existing.map(toZone), zones);
 
-    await writeAuditLog({
-      customerId: access.project.customerId,
-      userId: access.session.user.id,
-      action: "project.zones.updated",
-      entityType: "project",
-      entityId: projectId,
-      metadata: { zoneCount: zones.length },
-    });
+    // A save that changed nothing is not an activity.
+    if (changes.length > 0) {
+      await writeAuditLog({
+        customerId: access.project.customerId,
+        userId: access.session.user.id,
+        project: access.project,
+        action: "project.zones.updated",
+        entityType: "Project",
+        entityId: projectId,
+        changes,
+        metadata: { zoneCount: zones.length },
+      });
+    }
 
     return NextResponse.json({ zones });
   } catch (error) {
     console.error(`Failed to save zones for project ${projectId}`, error);
     return NextResponse.json({ error: "Kunne ikke lagre anleggssoner" }, { status: 500 });
   }
+}
+
+// Stored geometry is a closed GeoJSON ring; the UI and the log use the open ring.
+function toZone(zone: { id: string; name: string; color: string; geometry: unknown }): AuditZone {
+  const geometry = zone.geometry as { coordinates?: Array<Array<[number, number]>> } | null;
+  const ring = geometry?.coordinates?.[0] ?? [];
+  return { id: zone.id, name: zone.name, color: zone.color, coordinates: ring.slice(0, -1) };
 }

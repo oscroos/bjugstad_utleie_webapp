@@ -1,5 +1,6 @@
 "use client";
 
+import { useDialogs } from "@/components/dialogs/ConfirmDialog";
 import { useMemo, useState, type FormEvent } from "react";
 import {
   IconCheck,
@@ -120,6 +121,7 @@ export default function CatalogAdminClient({
   initialFieldDefinitions,
 }: CatalogAdminClientProps) {
   const [massTypes, setMassTypes] = useState(initialMassTypes);
+  const { confirm } = useDialogs();
   const [fieldDefinitions, setFieldDefinitions] = useState(initialFieldDefinitions);
   const [massForm, setMassForm] = useState<MassTypeForm>(emptyMassForm);
   const [fieldForm, setFieldForm] = useState<FieldDefinitionForm>(emptyFieldForm);
@@ -256,7 +258,13 @@ export default function CatalogAdminClient({
   }
 
   async function deleteMassType(row: MassTypeRow) {
-    if (!window.confirm(`Slette massetypen "${row.name}"?`)) return;
+    const confirmed = await confirm({
+      title: "Slette massetypen?",
+      message: `«${row.name}» blir slettet. Er den i bruk på et prosjekt, blir den deaktivert i stedet.`,
+      confirmLabel: "Slett",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setBusyKey(`mass-delete-${row.id}`);
     try {
       const payload = await requestCatalog("DELETE", { kind: "massType", id: row.id });
@@ -276,7 +284,13 @@ export default function CatalogAdminClient({
   }
 
   async function deleteFieldDefinition(row: FieldDefinitionRow) {
-    if (!window.confirm(`Slette prosjektfeltet "${row.label}"?`)) return;
+    const confirmed = await confirm({
+      title: "Slette prosjektfeltet?",
+      message: `«${row.label}» blir slettet. Er det i bruk på et prosjekt, blir det deaktivert i stedet.`,
+      confirmLabel: "Slett",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setBusyKey(`field-delete-${row.id}`);
     try {
       const payload = await requestCatalog("DELETE", { kind: "fieldDefinition", id: row.id });

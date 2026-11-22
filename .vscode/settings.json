@@ -16,7 +16,7 @@
             "name": "oem-webapp-postgres",
             "database": "postgres",
             "username": "oem_webapp_admin",
-            "password": "#Bjugstad.2025!",
+            "askForPassword": true,
             "connectionTimeout": 10000
         }
     ]

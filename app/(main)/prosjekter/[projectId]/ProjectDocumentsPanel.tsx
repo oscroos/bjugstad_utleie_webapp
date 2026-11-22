@@ -12,6 +12,7 @@ import {
   IconUpload,
 } from "@tabler/icons-react";
 import { formatDate } from "@/lib/formatters";
+import { useDialogs } from "@/components/dialogs/ConfirmDialog";
 
 type FolderKindValue = "SYSTEM" | "PROJECT" | "CUSTOM";
 
@@ -70,6 +71,7 @@ export default function ProjectDocumentsPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const { confirm, prompt } = useDialogs();
 
   const selectedFolder = useMemo(
     () => (selectedFolderId ? findFolderById(tree, selectedFolderId) : null),
@@ -202,8 +204,12 @@ export default function ProjectDocumentsPanel({
                   type="button"
                   className={buttonClass}
                   disabled={busy}
-                  onClick={() => {
-                    const name = window.prompt("Nytt mappenavn", selectedFolder.name);
+                  onClick={async () => {
+                    const name = await prompt({
+                      title: "Gi mappen nytt navn",
+                      inputLabel: "Mappenavn",
+                      defaultValue: selectedFolder.name,
+                    });
                     if (name?.trim()) void renameFolder(selectedFolder.id, name);
                   }}
                 >
@@ -214,8 +220,13 @@ export default function ProjectDocumentsPanel({
                   type="button"
                   className={buttonClass}
                   disabled={busy}
-                  onClick={() => {
-                    const confirmed = window.confirm(`Slette mappen "${selectedFolder.name}"?`);
+                  onClick={async () => {
+                    const confirmed = await confirm({
+                      title: "Slette mappen?",
+                      message: `Mappen «${selectedFolder.name}» blir slettet.`,
+                      confirmLabel: "Slett",
+                      tone: "danger",
+                    });
                     if (confirmed) void deleteFolder(selectedFolder.id);
                   }}
                 >

@@ -34,9 +34,9 @@ export default function LoginPage() {
     switch (errorParam) {
       case "OAuthAccountNotLinked":
         return (
-          "E-postadressen (" +
-          emailFromVipps +
-          ") er allerede knyttet til en eksisterende bruker. Kontakt support for å koble Vipps til kontoen."
+          "E-postadressen" +
+          (emailFromVipps ? " (" + emailFromVipps + ")" : "") +
+          " er allerede knyttet til en bruker med et annet telefonnummer. Kontakt support for å koble Vipps til kontoen."
         );
       case "AccessDenied":
         return "Tilgang nektet under innlogging. Prøv igjen eller kontakt support.";
@@ -49,6 +49,10 @@ export default function LoginPage() {
         return usesDevBypass
           ? `DEV-innlogging mislyktes. Fant ikke ${DEV_BYPASS_USER_NAME}-kontoen som bypass-en forventer.`
           : "Innlogging mislyktes. Prøv igjen.";
+      case "PhoneNumberMissing":
+        return "Vi fikk ikke telefonnummeret ditt fra Vipps, og kan derfor ikke logge deg inn. Prøv igjen og godta at Vipps deler telefonnummeret ditt. Ta kontakt med support hvis det ikke hjelper.";
+      case "LoginCheckFailed":
+        return "Vi klarte ikke å kontrollere innloggingen din akkurat nå, så du ble ikke logget inn. Prøv igjen om litt, eller ta kontakt med support hvis feilen fortsetter.";
       case "UserNotFound":
         return "Vi fant ingen bruker knyttet til kontaktopplysningene dine. Ta kontakt med xxx@bjugstad.no eller din kontoansvarlige for å få brukertilgang før du logger inn igjen.";
       default:

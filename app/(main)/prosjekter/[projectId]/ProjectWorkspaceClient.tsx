@@ -14,6 +14,7 @@ import {
   IconMap2,
   IconMountain,
   IconTarget,
+  IconUsers,
 } from "@tabler/icons-react";
 import { formatDate } from "@/lib/formatters";
 import {
@@ -29,6 +30,7 @@ import {
 import type { ProjectListItem, ProjectMachinesResult, ProjectWorkspace } from "@/lib/projects";
 import { MachinesSectionSkeleton } from "../ProjectSkeletons";
 import ProjectSwitcher from "../ProjectSwitcher";
+import ProjectAccessPanel from "./ProjectAccessPanel";
 import ProjectDocumentsPanel from "./ProjectDocumentsPanel";
 import ProjectMachinesSection from "./ProjectMachinesSection";
 import ProjectZonesEditor from "./ProjectZonesEditor";
@@ -48,7 +50,7 @@ type ProjectWorkspaceClientProps = {
   canEdit: boolean;
 };
 
-type ProjectTab = "info" | "map" | "masses" | "documents";
+type ProjectTab = "info" | "map" | "masses" | "documents" | "access";
 
 const TABS: Array<{
   id: ProjectTab;
@@ -59,6 +61,7 @@ const TABS: Array<{
   { id: "map", label: "Anleggskart", icon: <IconMap2 className="h-5 w-5" /> },
   { id: "masses", label: "Masse & lasslister", icon: <IconTarget className="h-5 w-5" /> },
   { id: "documents", label: "Dokumenter", icon: <IconFileText className="h-5 w-5" /> },
+  { id: "access", label: "Brukertilganger", icon: <IconUsers className="h-5 w-5" /> },
 ];
 
 const secondaryButtonClass =
@@ -140,6 +143,13 @@ export default function ProjectWorkspaceClient({
       ) : null}
       {activeTab === "masses" ? <ProjectMassesTab project={project} canEdit={canEdit} /> : null}
       {activeTab === "documents" ? <ProjectDocumentsTab projectId={project.id} canEdit={canEdit} /> : null}
+      {activeTab === "access" ? (
+        <ProjectAccessPanel
+          key={project.id}
+          projectId={project.id}
+          customerName={project.customerName ?? `Kunde ${project.customerId}`}
+        />
+      ) : null}
     </main>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { IconLoader2, IconCircleMinus, IconPlus, IconX } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
+import { useDialogs } from "@/components/dialogs/ConfirmDialog";
 import {
   destructiveButtonClass,
   destructiveButtonCompactClass,
@@ -51,6 +52,7 @@ type UserAccessDialogProps = {
 export default function UserAccessDialog({ userId, initialUser, onClose, onChanged }: UserAccessDialogProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const { confirm } = useDialogs();
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<UserDetails | null>((initialUser as UserDetails | null) ?? null);
   const [entries, setEntries] = useState<UserAccess[]>(initialUser?.accesses ?? []);
@@ -220,9 +222,12 @@ export default function UserAccessDialog({ userId, initialUser, onClose, onChang
 
   async function handleDelete() {
     if (!userId || saving) return;
-    const confirmed = window.confirm(
-      "Er du sikker? Brukeren vil bli permanent slettet og vil ikke lenger kunne logge inn i portalen.",
-    );
+    const confirmed = await confirm({
+      title: "Slette brukeren?",
+      message: "Brukeren blir permanent slettet og kan ikke lenger logge inn i portalen.",
+      confirmLabel: "Slett bruker",
+      tone: "danger",
+    });
     if (!confirmed) return;
     setSaving(true);
     setDeleteError(null);

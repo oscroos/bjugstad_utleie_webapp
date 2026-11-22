@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import ActivityTable from "./ActivityTable";
 import ErrorPanel from "@/components/ErrorPanel";
-import { loadLoginEventsForAdmin } from "@/lib/login-events";
+import { loadActivityForAdmin } from "@/lib/activity";
 
 export default async function AktivitetPage() {
   const session = await auth();
@@ -20,7 +20,7 @@ export default async function AktivitetPage() {
         <section className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
           <h1 className="text-2xl font-semibold text-slate-900">Begrenset tilgang</h1>
           <p className="mt-3 text-slate-600">
-            Du trenger administratorrettigheter for a se innloggingsaktivitet.
+            Du trenger administratorrettigheter for å se aktivitet.
           </p>
         </section>
       </main>
@@ -33,7 +33,7 @@ export default async function AktivitetPage() {
         <div>
           <h1 className="text-3xl font-semibold text-slate-900">Aktivitet</h1>
           <p className="mt-2 text-slate-600">
-            Oversikt over de siste innloggingene i portalen.
+            De siste innloggingene og endringene i portalen, med bruker, selskap og prosjekt.
           </p>
         </div>
       </header>
@@ -46,14 +46,14 @@ export default async function AktivitetPage() {
 }
 
 async function ActivitySection() {
-  const { events, error } = await loadLoginEventsForAdmin();
+  const { items, error } = await loadActivityForAdmin();
 
   if (error) {
     return (
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <ErrorPanel
           withSidebar
-          title="Kunne ikke hente innloggingsaktivitet"
+          title="Kunne ikke hente aktivitet"
           error={error}
         />
       </section>
@@ -62,7 +62,7 @@ async function ActivitySection() {
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <ActivityTable events={events} />
+      <ActivityTable items={items} />
     </section>
   );
 }

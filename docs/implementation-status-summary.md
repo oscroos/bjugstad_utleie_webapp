@@ -8,7 +8,7 @@
 
 - Connect project KPIs to live telemetry, mass, and CO2 data instead of manual values.
 - Complete the project map and actual mass/load views through Phases 6 and 7.
-- Decide required project fields, KPI rules, and who may manage project participants.
+- Decide required project fields and KPI rules.
 - Add end-to-end tests for project setup, access, and status calculations.
 
 ## Phase 3: Document hotel and call-offs

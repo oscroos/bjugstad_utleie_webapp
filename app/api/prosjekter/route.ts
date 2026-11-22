@@ -149,6 +149,7 @@ export async function POST(request: Request) {
     await writeAuditLog({
       customerId,
       userId: session.user.id,
+      project,
       action: "project.create",
       entityType: "Project",
       entityId: project.id,

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import ErrorPanel from "@/components/ErrorPanel";
 import { requireProjectRole } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
@@ -19,6 +19,10 @@ export default async function ProsjektOppsettPage({ params }: PageProps) {
 
   if (!access) {
     notFound();
+  }
+  // Saving requires edit rights, so users with read access are sent back to the project.
+  if (access.role !== "OWNER" && access.role !== "PROJECT_MANAGER") {
+    redirect(`/prosjekter/${projectId}`);
   }
 
   try {

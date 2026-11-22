@@ -7,15 +7,61 @@
 // everyone except super admins. The Bjugstad customer sync only upserts real
 // (positive) customer ids, so it never touches this customer.
 //
+// Machines are not seeded here. The test customer has no rental agreements in the
+// Bjugstad register, so lib/test-agreements.ts builds demo agreements for TEST-001
+// and TEST-002 at request time, using real machines from the machines table. The
+// customer id and project numbers below must match that file.
+//
+// Demo users are seeded so the "Brukertilganger" tab has someone to show and add.
+// They belong to the test customer only, have no phone number and a reserved
+// .example e-mail address, so nobody can log in as them. Because they are tied to
+// the test customer, they are the one exception to "no user has access" above.
+//
 // Usage:
-//   npm run seed:test-projects            create missing test projects
+//   npm run seed:test-projects            create missing test projects, demo users and participants
 //   npm run seed:test-projects -- --reset recreate all test projects from scratch
-//   npm run seed:test-projects -- --remove delete the test customer and all its projects
+//   npm run seed:test-projects -- --remove delete the test customer, its projects and the demo users
 
 import { PrismaClient } from "@prisma/client";
 
 const TEST_CUSTOMER_ID = -1000;
 const TEST_CUSTOMER_NAME = "[TEST] Demo Entreprenør AS";
+
+// Fixed ids, so the users can be found again and removed. `projects` maps a test
+// project number to the user's role on that project.
+const TEST_USERS = [
+  {
+    id: "test-user-prosjektleder",
+    name: "[TEST] Kari Prosjektleder",
+    email: "kari.prosjektleder@demo-entreprenor.example",
+    companyRole: "user",
+    projects: { "TEST-001": "OWNER" },
+  },
+  {
+    id: "test-user-deltaker",
+    name: "[TEST] Per Deltaker",
+    email: "per.deltaker@demo-entreprenor.example",
+    companyRole: "user",
+    projects: { "TEST-001": "MEMBER" },
+  },
+  {
+    // On no project: shows up as someone who can be added.
+    id: "test-user-ledig",
+    name: "[TEST] Anne Anleggsleder",
+    email: "anne.anleggsleder@demo-entreprenor.example",
+    companyRole: "user",
+    projects: {},
+  },
+  {
+    // Company admin: has access to every test project without being a participant.
+    id: "test-user-selskapsadmin",
+    name: "[TEST] Ola Selskapsadmin",
+    email: "ola.selskapsadmin@demo-entreprenor.example",
+    companyRole: "admin",
+    projects: {},
+  },
+];
+const TEST_USER_IDS = TEST_USERS.map((user) => user.id);
 
 const args = new Set(process.argv.slice(2));
 const prisma = new PrismaClient();
@@ -129,6 +175,39 @@ async function removeAll() {
       ? `Removed ${TEST_CUSTOMER_NAME} and all its projects, zones, KPIs and folders.`
       : "No test customer found. Nothing to remove.",
   );
+  // Only the fixed demo ids are deleted, never a real user.
+  const deletedUsers = await prisma.user.deleteMany({ where: { id: { in: TEST_USER_IDS } } });
+  if (deletedUsers.count) console.log(`Removed ${deletedUsers.count} demo user(s).`);
+}
+
+async function seedUsers() {
+  for (const user of TEST_USERS) {
+    await prisma.user.upsert({
+      where: { id: user.id },
+      update: { name: user.name },
+      create: { id: user.id, name: user.name, email: user.email, role: "customer" },
+    });
+    await prisma.userCustomerAccess.upsert({
+      where: { userId_customerId: { userId: user.id, customerId: TEST_CUSTOMER_ID } },
+      update: {},
+      create: { userId: user.id, customerId: TEST_CUSTOMER_ID, role: user.companyRole },
+    });
+  }
+  console.log(`Demo users ready (${TEST_USERS.length}).`);
+}
+
+// Adds the demo participants that are missing. Existing rows are left alone, so
+// changes made while testing the Brukertilganger tab survive a re-run.
+async function seedParticipants(projectId, projectNumber) {
+  for (const user of TEST_USERS) {
+    const role = user.projects[projectNumber];
+    if (!role) continue;
+    await prisma.projectParticipant.upsert({
+      where: { projectId_userId: { projectId, userId: user.id } },
+      update: {},
+      create: { projectId, userId: user.id, role },
+    });
+  }
 }
 
 async function seed({ reset }) {
@@ -143,10 +222,14 @@ async function seed({ reset }) {
     },
   });
 
-  const strayAccesses = await prisma.userCustomerAccess.count({ where: { customerId: TEST_CUSTOMER_ID } });
+  await seedUsers();
+
+  const strayAccesses = await prisma.userCustomerAccess.count({
+    where: { customerId: TEST_CUSTOMER_ID, userId: { notIn: TEST_USER_IDS } },
+  });
   if (strayAccesses > 0) {
     console.warn(
-      `Warning: ${strayAccesses} user(s) have access to the test customer, so they can also see the test projects.`,
+      `Warning: ${strayAccesses} real user(s) have access to the test customer, so they can also see the test projects.`,
     );
   }
 
@@ -171,7 +254,8 @@ async function seed({ reset }) {
     });
 
     if (existing && !reset) {
-      console.log(`Skipped ${fields.projectNumber} (exists, use --reset to recreate)`);
+      await seedParticipants(existing.id, fields.projectNumber);
+      console.log(`Kept ${fields.projectNumber} (exists, use --reset to recreate), demo participants checked`);
       continue;
     }
     if (existing) await prisma.project.delete({ where: { id: existing.id } });
@@ -193,6 +277,7 @@ async function seed({ reset }) {
       },
       select: { id: true, projectNumber: true },
     });
+    await seedParticipants(project.id, project.projectNumber);
     console.log(`${existing ? "Recreated" : "Created"} ${project.projectNumber} (${project.id})`);
   }
 }

@@ -15,6 +15,7 @@ import {
   splitAgreementsByStatus,
   type AgreementPayload,
 } from "@/lib/agreements";
+import { loadTestAgreements, TEST_CUSTOMER_ID } from "@/lib/test-agreements";
 
 export type ProjectListItem = {
   id: string;
@@ -698,6 +699,9 @@ function roundCoordinate(value: number) {
 // There is no machine <-> project relation in our database. Machines reach a
 // project through rental agreements in the Bjugstad register, which carry the
 // customer's project number. We match agreements on customer + project number.
+//
+// The test customer is not in the register. Its projects get demo agreements
+// from lib/test-agreements.ts instead, and only when a super admin is looking.
 // ---------------------------------------------------------------------------
 
 export type ProjectMachine = {
@@ -716,12 +720,17 @@ export type ProjectMachinesResult = {
  * Machines on the project's rental agreements. Only the project's own customer is
  * queried, so callers must already have checked project access.
  */
-export async function listProjectMachines(project: {
-  customerId: number;
-  projectNumber: string;
-}): Promise<ProjectMachinesResult> {
+export async function listProjectMachines(
+  project: { customerId: number; projectNumber: string },
+  viewerRole?: string | null,
+): Promise<ProjectMachinesResult> {
   try {
-    const agreements = await fetchAgreementsForCustomer(project.customerId);
+    const agreements =
+      project.customerId === TEST_CUSTOMER_ID
+        ? viewerRole === "super_admin"
+          ? await loadTestAgreements()
+          : []
+        : await fetchAgreementsForCustomer(project.customerId);
     const { active } = splitAgreementsByStatus(agreements);
     const activeIds = new Set(active.map((agreement) => agreement.id));
     const wantedNumber = normalizeProjectNumber(project.projectNumber);

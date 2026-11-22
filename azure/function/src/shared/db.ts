@@ -14,9 +14,12 @@ function buildPool(): Pool {
     const max = Number(process.env.PG_POOL_MAX || "10");
     const sslMode = (process.env.PG_SSL || "require").toLowerCase() as SSLMode;
 
+    // Every TLS mode verifies the server certificate (chain and host name), also
+    // "require". Without the check, anyone on the network path could pose as the
+    // database and read the password.
     const ssl =
         sslMode === "require" || sslMode === "verify-ca" || sslMode === "verify-full"
-            ? { rejectUnauthorized: false }
+            ? { rejectUnauthorized: true }
             : undefined;
 
     return new Pool({ host, port, database, user, password, max, ssl });

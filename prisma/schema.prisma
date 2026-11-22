@@ -610,13 +610,18 @@ model AuditLog {
   id         String   @id @default(cuid())
   customerId Int?     @map("customer_id")
   userId     String?  @map("user_id")
+  // The project the entry is about. No foreign key: entries outlive a deleted project.
+  projectId  String?  @map("project_id")
   action     String
   entityType String   @map("entity_type")
   entityId   String?  @map("entity_id")
+  // Free-form details. `changes` holds [{ label, from, to }] for edits, and
+  // `projectLabel` a snapshot of the project's number and name.
   metadata   Json?
   createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([customerId, createdAt], map: "idx_audit_logs_customer_created_at")
+  @@index([projectId, createdAt], map: "idx_audit_logs_project_created_at")
   @@index([userId, createdAt], map: "idx_audit_logs_user_created_at")
   @@index([entityType, entityId], map: "idx_audit_logs_entity")
   @@map("audit_logs")

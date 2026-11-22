@@ -11,7 +11,10 @@ function createPool() {
         user: process.env.PG_USER,
         password: process.env.PG_PASSWORD,
         max: Number(process.env.PG_POOL_MAX ?? 10),
-        ssl: process.env.PG_SSL?.toLowerCase() === "require" ? { rejectUnauthorized: false } : undefined,
+        // Encrypted and verified: the server must present a certificate for PG_HOST
+        // that chains to a public root. Without the check, anyone on the network
+        // path could pose as the database and read the password.
+        ssl: process.env.PG_SSL?.toLowerCase() === "require" ? { rejectUnauthorized: true } : undefined,
     });
 }
 export const pool = global.__pgPool ?? createPool();

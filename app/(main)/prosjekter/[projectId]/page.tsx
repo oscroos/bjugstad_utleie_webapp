@@ -73,10 +73,10 @@ export default async function ProsjektSide({ params }: PageProps) {
   // The rental lookup goes to the Bjugstad API and is the slowest part of the page,
   // so it is streamed: the client renders immediately and suspends only where the
   // machines (or the map's fallback centre) are needed.
-  const machinesPromise = listProjectMachines({
-    customerId: project.customerId,
-    projectNumber: project.projectNumber,
-  });
+  const machinesPromise = listProjectMachines(
+    { customerId: project.customerId, projectNumber: project.projectNumber },
+    role,
+  );
   const mapFallbackCenterPromise: Promise<MapCenter | null> =
     project.zones.length === 0
       ? machinesPromise.then((result) => resolveMapFallbackCenter(result.machines))

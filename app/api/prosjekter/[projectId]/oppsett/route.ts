@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireProjectRole, writeAuditLog } from "@/lib/access";
+import { diffSnapshots } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { loadProjectSnapshot } from "@/lib/project-audit";
 import {
   getActiveProjectSetupCatalog,
   normalizeProjectFieldValues,
@@ -116,6 +118,9 @@ export async function PUT(request: Request, { params }: RouteContext) {
 
   const nextStatus = body.status !== undefined ? projectStatus.value ?? undefined : undefined;
 
+  // Snapshot before and after the save, so the activity log can show old and new values.
+  const before = await loadProjectSnapshot(projectId);
+
   await prisma.$transaction(async (tx) => {
     await tx.project.update({
       where: { id: projectId },
@@ -184,18 +189,20 @@ export async function PUT(request: Request, { params }: RouteContext) {
     }
   });
 
-  await writeAuditLog({
-    customerId: access.project.customerId,
-    userId: access.session.user.id,
-    action: "project.setup.update",
-    entityType: "Project",
-    entityId: projectId,
-    metadata: {
-      fieldValues: fieldPayload.values.length,
-      massTypes: massTypePayload.values.length,
-      kpis: kpiPayload.values.length,
-    },
-  });
+  const after = await loadProjectSnapshot(projectId);
+  const changes = before && after ? diffSnapshots(before, after) : [];
+  // A save that changed nothing is not an activity.
+  if (changes.length > 0) {
+    await writeAuditLog({
+      customerId: access.project.customerId,
+      userId: access.session.user.id,
+      project: { ...access.project, name: after?.Prosjektnavn ?? access.project.name },
+      action: "project.setup.update",
+      entityType: "Project",
+      entityId: projectId,
+      changes,
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

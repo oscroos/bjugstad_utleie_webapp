@@ -100,10 +100,11 @@ export async function POST(request: Request) {
       await writeAuditLog({
         customerId: access.project.customerId,
         userId: session.user.id,
+        project: access.project,
         action: "document.folder.project.create",
         entityType: "DocFolder",
         entityId: folder.id,
-        metadata: { projectId },
+        changes: [{ label: "Prosjektmappe", from: null, to: folder.name }],
       });
 
       return NextResponse.json({ folder }, { status: 201 });
@@ -130,9 +131,11 @@ export async function POST(request: Request) {
       await writeAuditLog({
         customerId: parent!.customerId,
         userId: session.user.id,
+        project: parent!.projectId ? { id: parent!.projectId } : null,
         action: "document.folder.create",
         entityType: "DocFolder",
         entityId: folder.id,
+        changes: [{ label: `Mappe i «${parent!.name}»`, from: null, to: folder.name }],
         metadata: { parentId },
       });
 
@@ -172,9 +175,11 @@ export async function PATCH(request: Request) {
     await writeAuditLog({
       customerId: folder!.customerId,
       userId: session.user.id,
+      project: folder!.projectId ? { id: folder!.projectId } : null,
       action: "document.folder.rename",
       entityType: "DocFolder",
       entityId: folderId,
+      changes: [{ label: "Mappenavn", from: folder!.name, to: updatedFolder.name }],
     });
 
     return NextResponse.json({ folder: updatedFolder });
@@ -203,9 +208,11 @@ export async function DELETE(request: Request) {
     await writeAuditLog({
       customerId: folder!.customerId,
       userId: session.user.id,
+      project: folder!.projectId ? { id: folder!.projectId } : null,
       action: "document.folder.delete",
       entityType: "DocFolder",
       entityId: folderId,
+      changes: [{ label: "Mappe", from: folder!.name, to: null }],
     });
 
     return NextResponse.json({ ok: true });

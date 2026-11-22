@@ -1,5 +1,6 @@
 import type { CompanyRole, ProjectRole, Prisma } from "@prisma/client";
 import type { Session } from "next-auth";
+import type { AuditChange } from "@/lib/audit";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -109,23 +110,40 @@ export async function requireProjectRole(
   return { session, project, role: projectRole, isSuperAdmin: false };
 }
 
+/**
+ * Writes one entry to the activity log (shown to super admins under Aktivitet).
+ * Pass `project` for anything that happens inside a project, and `changes` with
+ * the old and new values when something was edited.
+ */
 export async function writeAuditLog(params: {
   customerId?: number | null;
   userId?: string | null;
+  project?: { id: string; projectNumber?: string | null; name?: string | null } | null;
   action: string;
   entityType: string;
   entityId?: string | null;
-  metadata?: Prisma.InputJsonValue;
+  changes?: AuditChange[];
+  metadata?: Record<string, Prisma.InputJsonValue>;
 }) {
   try {
+    const projectLabel = params.project
+      ? [params.project.projectNumber, params.project.name].filter(Boolean).join(" ")
+      : "";
+    const metadata: Record<string, Prisma.InputJsonValue> = {
+      ...params.metadata,
+      ...(projectLabel ? { projectLabel } : {}),
+      ...(params.changes?.length ? { changes: params.changes } : {}),
+    };
+
     await prisma.auditLog.create({
       data: {
         customerId: params.customerId ?? null,
         userId: params.userId ?? null,
+        projectId: params.project?.id ?? null,
         action: params.action,
         entityType: params.entityType,
         entityId: params.entityId ?? null,
-        metadata: params.metadata,
+        metadata: Object.keys(metadata).length ? metadata : undefined,
       },
     });
   } catch (error) {

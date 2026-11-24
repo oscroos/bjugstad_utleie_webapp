@@ -1,7 +1,7 @@
 // components/Navbar.tsx
 "use client";
 
-import { useState, useEffect, type MouseEvent } from "react";
+import { useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
@@ -20,7 +20,6 @@ import {
   IconBuilding,
   IconLogout,
   IconClock,
-  IconLoader2,
   IconSettings,
   IconSatellite,
 } from "@tabler/icons-react";
@@ -32,14 +31,16 @@ type NavItem = {
   icon: React.ReactNode;
 };
 
-export default function ResponsiveNav() {
+type ResponsiveNavProps = {
+  /** The tab that was clicked and is still loading. It is shown as the active tab right away. */
+  pendingHref?: string | null;
+  /** Called when the user clicks a tab that is not already open. */
+  onNavigate?: (href: string) => void;
+};
+
+export default function ResponsiveNav({ pendingHref = null, onNavigate }: ResponsiveNavProps) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
-  const [loadingHref, setLoadingHref] = useState<string | null>(null);
-
-  useEffect(() => {
-    setLoadingHref(null);
-  }, [pathname]);
 
   const { data } = useSession();
   const isAdmin = data?.user?.role === "super_admin";
@@ -64,8 +65,9 @@ export default function ResponsiveNav() {
 
   const renderLinks = (list: NavItem[]) =>
     list.map(({ href, label, icon }) => {
-      const active = pathname === href || pathname.startsWith(`${href}/`);
-      const isLoading = loadingHref === href && !active;
+      const isCurrent = pathname === href || pathname.startsWith(`${href}/`);
+      // While another tab is loading, that tab is the highlighted one.
+      const active = pendingHref ? pendingHref === href : isCurrent;
 
       const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
         if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) {
@@ -73,8 +75,8 @@ export default function ResponsiveNav() {
         }
 
         setIsOpen(false);
-        if (!active) {
-          setLoadingHref(href);
+        if (!isCurrent) {
+          onNavigate?.(href);
         }
       };
 
@@ -88,13 +90,10 @@ export default function ResponsiveNav() {
               ? "bg-white/20 text-white"
               : "text-slate-200 hover:bg-white/10 hover:text-white"
             }`}
-          aria-busy={isLoading}
+          aria-current={active ? "page" : undefined}
         >
           {icon}
           <span className="flex-1">{label}</span>
-          {isLoading && (
-            <IconLoader2 className="h-4 w-4 animate-spin text-white" />
-          )}
         </Link>
       );
     });

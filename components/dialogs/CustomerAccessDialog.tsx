@@ -1,11 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { IconChevronLeft, IconLoader2, IconX } from "@tabler/icons-react";
-import {
-  destructiveButtonCompactClass,
-  standardButtonClass,
-} from "@/lib/buttonStyles";
+import { IconChevronLeft, IconLoader2, IconX, IconTrash } from "@tabler/icons-react";
+import { destructiveIconButtonClass, standardButtonClass } from "@/lib/buttonStyles";
 import { formatDisplay, formatPhone, normalizePhone } from "@/lib/formatters";
 
 export type CustomerContactPerson = {
@@ -603,9 +600,11 @@ function CustomerAccessList({
                 <button
                   type="button"
                   onClick={() => onRemove(access.userId)}
-                  className={destructiveButtonCompactClass}
+                  className={destructiveIconButtonClass}
+                  aria-label="Fjern"
+                  title="Fjern"
                 >
-                  Fjern
+                  <IconTrash className="h-4 w-4" />
                 </button>
               ) : null}
             </div>

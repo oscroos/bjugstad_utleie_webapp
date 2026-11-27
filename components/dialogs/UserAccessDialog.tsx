@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { IconLoader2, IconCircleMinus, IconPlus, IconX } from "@tabler/icons-react";
+import { IconLoader2, IconPlus, IconTrash, IconX } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import { useDialogs } from "@/components/dialogs/ConfirmDialog";
 import {
   destructiveButtonClass,
-  destructiveButtonCompactClass,
+  destructiveIconButtonClass,
   standardButtonClass,
 } from "@/lib/buttonStyles";
 import { formatDisplay, formatPhone, formatDate } from "@/lib/formatters";
@@ -460,10 +460,11 @@ function UserAccessList({
                   <button
                     type="button"
                     onClick={() => onRemove(access.customerId)}
-                    className={destructiveButtonCompactClass}
+                    className={destructiveIconButtonClass}
+                    aria-label="Fjern"
+                    title="Fjern"
                   >
-                    <IconCircleMinus className="h-5 w-5" />
-                    Fjern
+                    <IconTrash className="h-4 w-4" />
                   </button>
                 </div>
               ))}

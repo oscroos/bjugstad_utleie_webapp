@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { IconAlertTriangle, IconLoader2, IconUserPlus, IconUsers } from "@tabler/icons-react";
+import { IconAlertTriangle, IconLoader2, IconUserPlus, IconUsers, IconTrash } from "@tabler/icons-react";
 import { useDialogs } from "@/components/dialogs/ConfirmDialog";
-import { destructiveButtonCompactClass, standardButtonClass } from "@/lib/buttonStyles";
+import { destructiveIconButtonClass, standardButtonClass } from "@/lib/buttonStyles";
 import { formatDate, formatPhone } from "@/lib/formatters";
 import type { ProjectAccessCandidate, ProjectAccessKind, ProjectAccessMember } from "@/lib/project-access";
 
@@ -284,11 +284,13 @@ export default function ProjectAccessPanel({
                               {canRemove ? (
                                 <button
                                   type="button"
-                                  className={destructiveButtonCompactClass}
+                                  className={destructiveIconButtonClass}
+                                  aria-label="Fjern"
+                                  title="Fjern"
                                   disabled={busy}
                                   onClick={() => void removeParticipant(member)}
                                 >
-                                  Fjern
+                                  <IconTrash className="h-4 w-4" />
                                 </button>
                               ) : null}
                             </div>

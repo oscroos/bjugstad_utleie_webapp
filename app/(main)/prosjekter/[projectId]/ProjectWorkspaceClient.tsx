@@ -3,6 +3,7 @@
 import { Suspense, use, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   IconAlertTriangle,
   IconCalendarEvent,
@@ -13,6 +14,7 @@ import {
   IconHelp,
   IconMap2,
   IconMountain,
+  IconPencil,
   IconTarget,
   IconUsers,
 } from "@tabler/icons-react";
@@ -31,7 +33,10 @@ import type { ProjectListItem, ProjectMachinesResult, ProjectWorkspace } from "@
 import { MachinesSectionSkeleton } from "../ProjectSkeletons";
 import ProjectSwitcher from "../ProjectSwitcher";
 import ProjectAccessPanel from "./ProjectAccessPanel";
+import type { ProjectSetupSection } from "../ProjectSetupForm";
+import ProjectAboutSection from "./ProjectAboutSection";
 import ProjectDocumentsPanel from "./ProjectDocumentsPanel";
+import ProjectEditOverlay from "./ProjectEditOverlay";
 import ProjectMachinesSection from "./ProjectMachinesSection";
 import ProjectZonesEditor from "./ProjectZonesEditor";
 
@@ -64,6 +69,15 @@ const TABS: Array<{
   { id: "access", label: "Brukertilganger", icon: <IconUsers className="h-5 w-5" /> },
 ];
 
+/** What an edit button opens: the whole project, or one part of it. */
+type EditTarget = "all" | "kpis" | "masses";
+
+const EDIT_TARGETS: Record<EditTarget, { title: string; sections: ProjectSetupSection[] }> = {
+  all: { title: "Rediger prosjekt", sections: ["info", "contract", "kpis", "fields", "masses"] },
+  kpis: { title: "Rediger kontraktsmål", sections: ["kpis"] },
+  masses: { title: "Rediger masseplan", sections: ["masses"] },
+};
+
 const secondaryButtonClass =
   "inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50";
 
@@ -76,7 +90,10 @@ export default function ProjectWorkspaceClient({
   canCreateProject,
   canEdit,
 }: ProjectWorkspaceClientProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<ProjectTab>("info");
+  // Which edit overlay is open, if any.
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
 
   return (
     <main className="space-y-6 p-8">
@@ -107,9 +124,10 @@ export default function ProjectWorkspaceClient({
             </div>
           </div>
           {canEdit ? (
-            <Link href={`/prosjekter/${project.id}/oppsett`} className={secondaryButtonClass}>
-              Rediger
-            </Link>
+            <button type="button" onClick={() => setEditTarget("all")} className={`${secondaryButtonClass} cursor-pointer`}>
+              <IconPencil className="h-4 w-4" />
+              Rediger prosjekt
+            </button>
           ) : null}
         </div>
       </header>
@@ -136,18 +154,44 @@ export default function ProjectWorkspaceClient({
       </nav>
 
       {activeTab === "info" ? (
-        <ProjectInfoTab project={project} machinesPromise={machinesPromise} viewer={viewer} canEdit={canEdit} />
+        <ProjectInfoTab
+          project={project}
+          machinesPromise={machinesPromise}
+          viewer={viewer}
+          canEdit={canEdit}
+          onEdit={setEditTarget}
+          onSaved={() => router.refresh()}
+        />
       ) : null}
       {activeTab === "map" ? (
         <ProjectMapTab project={project} canEdit={canEdit} fallbackCenterPromise={mapFallbackCenterPromise} />
       ) : null}
-      {activeTab === "masses" ? <ProjectMassesTab project={project} canEdit={canEdit} /> : null}
+      {activeTab === "masses" ? (
+        <ProjectMassesTab project={project} canEdit={canEdit} onEdit={setEditTarget} />
+      ) : null}
       {activeTab === "documents" ? <ProjectDocumentsTab projectId={project.id} canEdit={canEdit} /> : null}
       {activeTab === "access" ? (
         <ProjectAccessPanel
           key={project.id}
           projectId={project.id}
           customerName={project.customerName ?? `Kunde ${project.customerId}`}
+        />
+      ) : null}
+
+      {editTarget ? (
+        <ProjectEditOverlay
+          // A new overlay per target, so the form never carries values over from another part.
+          key={editTarget}
+          projectId={project.id}
+          title={EDIT_TARGETS[editTarget].title}
+          subtitle={`${project.projectNumber} · ${project.name}`}
+          sections={EDIT_TARGETS[editTarget].sections}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => {
+            setEditTarget(null);
+            // Reload the page's data, so the saved values show at once.
+            router.refresh();
+          }}
         />
       ) : null}
     </main>
@@ -159,11 +203,16 @@ function ProjectInfoTab({
   machinesPromise,
   viewer,
   canEdit,
+  onEdit,
+  onSaved,
 }: {
   project: ProjectWorkspace;
   machinesPromise: Promise<ProjectMachinesResult>;
   viewer: Viewer;
   canEdit: boolean;
+  onEdit: (target: EditTarget) => void;
+  /** Reloads the project after something on this tab was saved. */
+  onSaved: () => void;
 }) {
   const timeline = computeTimeline(project.startDate, project.endDate);
   const kpiCounts = {
@@ -262,90 +311,21 @@ function ProjectInfoTab({
 
       {/* Project facts and contract goals */}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-            <h2 className="text-lg font-semibold text-slate-900">Om prosjektet</h2>
-            {canEdit ? (
-              <Link
-                href={`/prosjekter/${project.id}/oppsett`}
-                className="text-sm font-semibold text-blue-700 hover:text-blue-900"
-              >
-                Rediger
-              </Link>
-            ) : null}
-          </div>
+        <ProjectAboutSection project={project} canEdit={canEdit} onSaved={onSaved} />
 
-          {project.description ? (
-            <p className="whitespace-pre-wrap border-b border-slate-100 px-6 py-4 text-sm leading-relaxed text-slate-700">
-              {project.description}
-            </p>
-          ) : null}
-
-          <dl className="divide-y divide-slate-100">
-            <InfoRow label="Kunde">{project.customerName ?? `Kunde ${project.customerId}`}</InfoRow>
-            <InfoRow label="Sted">{formatAddressInline(project)}</InfoRow>
-            <InfoRow label="Kontrakt">
-              {project.contractType
-                ? CONTRACT_TYPE_LABELS[project.contractType as ContractTypeValue]
-                : "Ikke satt"}
-            </InfoRow>
-            <InfoRow label="Kontraktssum">{formatCurrency(project.contractSizeNok)}</InfoRow>
-            <InfoRow label="Oppstart">{formatDate(project.startDate, { showTime: false }) ?? "Ikke satt"}</InfoRow>
-            <InfoRow label="Sluttfrist">{formatDate(project.endDate, { showTime: false }) ?? "Ikke satt"}</InfoRow>
-            <InfoRow label="Byggherre">{project.clientName ?? "Ikke registrert"}</InfoRow>
-            <InfoRow label="Byggherretype">
-              {project.clientType ? CLIENT_TYPE_LABELS[project.clientType as ClientTypeValue] : "Ikke satt"}
-            </InfoRow>
-            <InfoRow label="Byggherre adresse">{project.clientAddress ?? "-"}</InfoRow>
-            <InfoRow label="Byggherre e-post">
-              {project.clientEmail ? (
-                <a href={`mailto:${project.clientEmail}`} className="text-blue-700 hover:underline">
-                  {project.clientEmail}
-                </a>
-              ) : (
-                "-"
-              )}
-            </InfoRow>
-            <InfoRow label="Byggherre kontaktperson">{project.clientContactName ?? "-"}</InfoRow>
-            <InfoRow label="Kontaktperson telefon">
-              {project.clientContactPhone ? (
-                <a href={`tel:${project.clientContactPhone}`} className="hover:underline">
-                  {project.clientContactPhone}
-                </a>
-              ) : (
-                "-"
-              )}
-            </InfoRow>
-            <InfoRow label="Kontaktperson e-post">
-              {project.clientContactEmail ? (
-                <a href={`mailto:${project.clientContactEmail}`} className="text-blue-700 hover:underline">
-                  {project.clientContactEmail}
-                </a>
-              ) : (
-                "-"
-              )}
-            </InfoRow>
-          </dl>
-
-          <p className="border-t border-slate-100 px-6 py-3 text-right text-xs text-slate-400">
-            Sist oppdatert {formatDate(project.updatedAt) ?? "-"}
-          </p>
-        </section>
-
-        <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+        {/*
+          The box never grows with the number of goals. On wide screens it is exactly as
+          tall as "Om prosjektet" beside it (it is taken out of the row's height
+          calculation); on narrow screens it has a fixed maximum. The goals scroll inside.
+        */}
+        <div className="relative">
+        <section className="flex max-h-[34rem] flex-col rounded-2xl border border-slate-200 bg-white shadow-sm xl:absolute xl:inset-0 xl:max-h-none">
+          <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Kontraktsmål</h2>
               <p className="mt-0.5 text-sm text-slate-500">Målt verdi mot kontraktsfestet grense.</p>
             </div>
-            {canEdit ? (
-              <Link
-                href={`/prosjekter/${project.id}/oppsett`}
-                className="text-sm font-semibold text-blue-700 hover:text-blue-900"
-              >
-                Rediger
-              </Link>
-            ) : null}
+            {canEdit ? <EditIconButton label="Rediger kontraktsmål" onClick={() => onEdit("kpis")} /> : null}
           </div>
           {project.kpis.length === 0 ? (
             <div className="p-10 text-center">
@@ -356,13 +336,14 @@ function ProjectInfoTab({
               </p>
             </div>
           ) : (
-            <div className="grid gap-4 p-5">
+            <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-5">
               {project.kpis.map((kpi) => (
                 <KpiCard key={kpi.id} kpi={kpi} />
               ))}
             </div>
           )}
         </section>
+        </div>
       </div>
 
       <Suspense fallback={<MachinesSectionSkeleton />}>
@@ -373,6 +354,24 @@ function ProjectInfoTab({
         />
       </Suspense>
     </div>
+  );
+}
+
+/**
+ * The edit button on a box: pencil only, in the same outline style as the
+ * "Rediger prosjekt" button. The label is read by screen readers and shown on hover.
+ */
+function EditIconButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
+    >
+      <IconPencil className="h-4 w-4" />
+    </button>
   );
 }
 
@@ -393,15 +392,6 @@ function StreamedMachinesSection({
       projectNumber={projectNumber}
       viewer={viewer}
     />
-  );
-}
-
-function InfoRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4 px-6 py-2.5">
-      <dt className="shrink-0 text-sm text-slate-500">{label}</dt>
-      <dd className="min-w-0 truncate text-right text-sm font-semibold text-slate-900">{children}</dd>
-    </div>
   );
 }
 
@@ -650,19 +640,17 @@ function MapAreaSkeleton() {
 function ProjectMassesTab({
   project,
   canEdit,
+  onEdit,
 }: {
   project: ProjectWorkspace;
   canEdit: boolean;
+  onEdit: (target: EditTarget) => void;
 }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-col gap-3 border-b border-slate-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl font-semibold text-slate-900">Masse & lasslister</h2>
-        {canEdit ? (
-          <Link href={`/prosjekter/${project.id}/oppsett`} className={secondaryButtonClass}>
-            Rediger masseoppsett
-          </Link>
-        ) : null}
+        {canEdit ? <EditIconButton label="Rediger masseplan" onClick={() => onEdit("masses")} /> : null}
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-100 text-sm">

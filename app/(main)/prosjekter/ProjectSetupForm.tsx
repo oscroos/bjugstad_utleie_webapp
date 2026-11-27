@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { IconCheck, IconLoader2, IconPlus, IconX } from "@tabler/icons-react";
-import { standardButtonClass } from "@/lib/buttonStyles";
+import { IconCheck, IconLoader2, IconPlus, IconX, IconTrash } from "@tabler/icons-react";
+import { destructiveIconButtonClass, standardButtonClass } from "@/lib/buttonStyles";
 import {
   CLIENT_TYPE_LABELS,
   CONTRACT_TYPE_LABELS,
@@ -76,12 +76,33 @@ export type ProjectSetupInitialProject = {
   }>;
 };
 
+/** The parts of the form. Each is one card. */
+export type ProjectSetupSection = "info" | "contract" | "kpis" | "fields" | "masses";
+
+export const ALL_PROJECT_SETUP_SECTIONS: ProjectSetupSection[] = ["info", "contract", "kpis", "fields", "masses"];
+
 type ProjectSetupFormProps = {
   mode: "create" | "edit";
   customers: ProjectSetupCustomer[];
   fieldDefinitions: ProjectSetupFieldDefinition[];
   massTypes: ProjectSetupMassType[];
   project?: ProjectSetupInitialProject;
+  /**
+   * Which cards to show. The hidden ones keep their values and are saved
+   * unchanged, so editing one part never clears another. Default: all.
+   */
+  sections?: ProjectSetupSection[];
+  /** Called after a successful save in edit mode, instead of showing the "saved" notice. */
+  onSaved?: () => void;
+  /** Called by "Avbryt". Default: go back in the browser history. */
+  onCancel?: () => void;
+  /** Tells the host whether the form has unsaved changes. */
+  onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * For an overlay: the form fills the height it is given, its fields scroll and
+   * the buttons stay fixed underneath them. The host must be a flex column.
+   */
+  stickyFooter?: boolean;
 };
 
 type CoreForm = {
@@ -151,8 +172,20 @@ export default function ProjectSetupForm({
   fieldDefinitions,
   massTypes,
   project,
+  sections = ALL_PROJECT_SETUP_SECTIONS,
+  onSaved,
+  onCancel,
+  onDirtyChange,
+  stickyFooter = false,
 }: ProjectSetupFormProps) {
   const router = useRouter();
+  const visible: Record<ProjectSetupSection, boolean> = {
+    info: sections.includes("info"),
+    contract: sections.includes("contract"),
+    kpis: sections.includes("kpis"),
+    fields: sections.includes("fields"),
+    masses: sections.includes("masses"),
+  };
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -229,6 +262,21 @@ export default function ProjectSetupForm({
       ),
     [kpis],
   );
+
+  // Unsaved changes: everything the user can edit, compared with how it started.
+  const snapshot = JSON.stringify([form, fieldValues, massSelections, kpis]);
+  const initialSnapshot = useRef(snapshot);
+  const dirty = snapshot !== initialSnapshot.current;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
+  // The whole project is validated on save. If the problem sits in a part that is
+  // not shown, say so instead of leaving a save button that silently does nothing.
+  const blockedByHiddenSection =
+    (!requiredFieldsComplete && !visible.fields) ||
+    (!kpisComplete && !visible.kpis) ||
+    ((!form.projectNumber.trim() || !form.name.trim()) && !visible.info);
 
   const canSubmit =
     !submitting &&
@@ -308,6 +356,13 @@ export default function ProjectSetupForm({
         return;
       }
 
+      // What is saved is the new starting point for "unsaved changes".
+      initialSnapshot.current = snapshot;
+      onDirtyChange?.(false);
+      if (onSaved) {
+        onSaved();
+        return;
+      }
       setSaved(true);
       router.refresh();
     } catch (submitError) {
@@ -382,432 +437,478 @@ export default function ProjectSetupForm({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-6">
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-6 py-4">
-          <h2 className="text-xl font-semibold text-slate-900">Prosjektinformasjon</h2>
-        </div>
-        <div className="grid gap-4 p-6 md:grid-cols-2">
-          <label className="text-sm font-medium text-slate-700">
-            Kunde
-            <select
-              value={form.customerId}
-              onChange={(event) => setCoreValue("customerId", event.target.value)}
-              disabled={mode === "edit"}
-              required
-              className={`${inputClass} mt-1`}
-            >
-              <option value="">Velg kunde</option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {formatCustomerLabel(customer)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Prosjektnummer
-            <input
-              value={form.projectNumber}
-              onChange={(event) => setCoreValue("projectNumber", event.target.value)}
-              disabled={mode === "edit"}
-              required
-              className={`${inputClass} mt-1`}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700 md:col-span-2">
-            Prosjektnavn
-            <input
-              value={form.name}
-              onChange={(event) => setCoreValue("name", event.target.value)}
-              required
-              className={`${inputClass} mt-1`}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700 md:col-span-2">
-            Beskrivelse
-            <textarea
-              value={form.description}
-              onChange={(event) => setCoreValue("description", event.target.value)}
-              className={`${textareaClass} mt-1`}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Adresse
-            <input
-              value={form.addressLine}
-              onChange={(event) => setCoreValue("addressLine", event.target.value)}
-              className={`${inputClass} mt-1`}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Postnummer
-            <input
-              value={form.postalCode}
-              onChange={(event) => setCoreValue("postalCode", event.target.value)}
-              className={`${inputClass} mt-1`}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Sted
-            <input
-              value={form.city}
-              onChange={(event) => setCoreValue("city", event.target.value)}
-              className={`${inputClass} mt-1`}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Status
-            <select
-              value={form.status}
-              onChange={(event) => setCoreValue("status", event.target.value as ProjectStatusValue)}
-              className={`${inputClass} mt-1`}
-            >
-              {Object.entries(PROJECT_STATUS_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="grid gap-4 md:col-span-2 sm:grid-cols-2">
-            <label className="text-sm font-medium text-slate-700">
-              Startdato
-              <input
-                type="date"
-                value={form.startDate}
-                onChange={(event) => setCoreValue("startDate", event.target.value)}
-                className={`${inputClass} mt-1`}
-              />
-            </label>
-            <label className="text-sm font-medium text-slate-700">
-              Sluttdato
-              <input
-                type="date"
-                value={form.endDate}
-                onChange={(event) => setCoreValue("endDate", event.target.value)}
-                className={`${inputClass} mt-1`}
-              />
-            </label>
-          </div>
-        </div>
-      </section>
+    <form onSubmit={submit} className={stickyFooter ? "flex min-h-0 flex-1 flex-col" : "space-y-6"}>
+      {/* In an overlay only this part scrolls; the buttons below it stay put. */}
+      <div className={stickyFooter ? "min-h-0 flex-1 space-y-6 overflow-y-auto p-6" : "space-y-6"}>
+        {visible.info ? (
+          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="text-xl font-semibold text-slate-900">Prosjektinformasjon</h2>
+            </div>
+            <div className="grid gap-4 p-6 md:grid-cols-2">
+              <label className="text-sm font-medium text-slate-700">
+                Kunde
+                <select
+                  value={form.customerId}
+                  onChange={(event) => setCoreValue("customerId", event.target.value)}
+                  disabled={mode === "edit"}
+                  required
+                  className={`${inputClass} mt-1`}
+                >
+                  <option value="">Velg kunde</option>
+                  {customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {formatCustomerLabel(customer)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Prosjektnummer
+                <input
+                  value={form.projectNumber}
+                  onChange={(event) => setCoreValue("projectNumber", event.target.value)}
+                  disabled={mode === "edit"}
+                  required
+                  className={`${inputClass} mt-1`}
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-700 md:col-span-2">
+                Prosjektnavn
+                <input
+                  value={form.name}
+                  onChange={(event) => setCoreValue("name", event.target.value)}
+                  required
+                  className={`${inputClass} mt-1`}
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-700 md:col-span-2">
+                Beskrivelse
+                <textarea
+                  value={form.description}
+                  onChange={(event) => setCoreValue("description", event.target.value)}
+                  className={`${textareaClass} mt-1`}
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Adresse
+                <input
+                  value={form.addressLine}
+                  onChange={(event) => setCoreValue("addressLine", event.target.value)}
+                  className={`${inputClass} mt-1`}
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Postnummer
+                <input
+                  value={form.postalCode}
+                  onChange={(event) => setCoreValue("postalCode", event.target.value)}
+                  className={`${inputClass} mt-1`}
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Sted
+                <input
+                  value={form.city}
+                  onChange={(event) => setCoreValue("city", event.target.value)}
+                  className={`${inputClass} mt-1`}
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Status
+                <select
+                  value={form.status}
+                  onChange={(event) => setCoreValue("status", event.target.value as ProjectStatusValue)}
+                  className={`${inputClass} mt-1`}
+                >
+                  {Object.entries(PROJECT_STATUS_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="grid gap-4 md:col-span-2 sm:grid-cols-2">
+                <label className="text-sm font-medium text-slate-700">
+                  Startdato
+                  <input
+                    type="date"
+                    value={form.startDate}
+                    onChange={(event) => setCoreValue("startDate", event.target.value)}
+                    className={`${inputClass} mt-1`}
+                  />
+                </label>
+                <label className="text-sm font-medium text-slate-700">
+                  Sluttdato
+                  <input
+                    type="date"
+                    value={form.endDate}
+                    onChange={(event) => setCoreValue("endDate", event.target.value)}
+                    className={`${inputClass} mt-1`}
+                  />
+                </label>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-6 py-4">
-          <h2 className="text-xl font-semibold text-slate-900">Kontrakt og byggherre</h2>
-        </div>
-        <div className="grid gap-4 p-6 md:grid-cols-2">
-          <label className="text-sm font-medium text-slate-700">
-            Kontraktstype
-            <select
-              value={form.contractType}
-              onChange={(event) => setCoreValue("contractType", event.target.value)}
-              className={`${inputClass} mt-1`}
-            >
-              <option value="">Velg kontraktstype</option>
-              {Object.entries(CONTRACT_TYPE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Kontraktsstørrelse NOK
-            <input
-              value={form.contractSizeNok}
-              onChange={(event) => setCoreValue("contractSizeNok", event.target.value)}
-              inputMode="decimal"
-              className={`${inputClass} mt-1`}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Byggherretype
-            <select
-              value={form.clientType}
-              onChange={(event) => setCoreValue("clientType", event.target.value)}
-              className={`${inputClass} mt-1`}
-            >
-              <option value="">Velg byggherretype</option>
-              {Object.entries(CLIENT_TYPE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Byggherre
-            <input
-              value={form.clientName}
-              onChange={(event) => setCoreValue("clientName", event.target.value)}
-              className={`${inputClass} mt-1`}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Byggherreadresse
-            <input
-              value={form.clientAddress}
-              onChange={(event) => setCoreValue("clientAddress", event.target.value)}
-              className={`${inputClass} mt-1`}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Byggherre e-post
-            <input
-              type="email"
-              value={form.clientEmail}
-              onChange={(event) => setCoreValue("clientEmail", event.target.value)}
-              className={`${inputClass} mt-1`}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Kontaktperson
-            <input
-              value={form.clientContactName}
-              onChange={(event) => setCoreValue("clientContactName", event.target.value)}
-              className={`${inputClass} mt-1`}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Kontakt e-post
-            <input
-              type="email"
-              value={form.clientContactEmail}
-              onChange={(event) => setCoreValue("clientContactEmail", event.target.value)}
-              className={`${inputClass} mt-1`}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Kontakt telefon
-            <input
-              value={form.clientContactPhone}
-              onChange={(event) => setCoreValue("clientContactPhone", event.target.value)}
-              className={`${inputClass} mt-1`}
-            />
-          </label>
-        </div>
-      </section>
+        {visible.contract ? (
+          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="text-xl font-semibold text-slate-900">Kontrakt og byggherre</h2>
+            </div>
+            <div className="grid gap-4 p-6 md:grid-cols-2">
+              <label className="text-sm font-medium text-slate-700">
+                Kontraktstype
+                <select
+                  value={form.contractType}
+                  onChange={(event) => setCoreValue("contractType", event.target.value)}
+                  className={`${inputClass} mt-1`}
+                >
+                  <option value="">Velg kontraktstype</option>
+                  {Object.entries(CONTRACT_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Kontraktsstørrelse NOK
+                <input
+                  value={form.contractSizeNok}
+                  onChange={(event) => setCoreValue("contractSizeNok", event.target.value)}
+                  inputMode="decimal"
+                  className={`${inputClass} mt-1`}
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Byggherretype
+                <select
+                  value={form.clientType}
+                  onChange={(event) => setCoreValue("clientType", event.target.value)}
+                  className={`${inputClass} mt-1`}
+                >
+                  <option value="">Velg byggherretype</option>
+                  {Object.entries(CLIENT_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Byggherre
+                <input
+                  value={form.clientName}
+                  onChange={(event) => setCoreValue("clientName", event.target.value)}
+                  className={`${inputClass} mt-1`}
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Byggherreadresse
+                <input
+                  value={form.clientAddress}
+                  onChange={(event) => setCoreValue("clientAddress", event.target.value)}
+                  className={`${inputClass} mt-1`}
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Byggherre e-post
+                <input
+                  type="email"
+                  value={form.clientEmail}
+                  onChange={(event) => setCoreValue("clientEmail", event.target.value)}
+                  className={`${inputClass} mt-1`}
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Kontaktperson
+                <input
+                  value={form.clientContactName}
+                  onChange={(event) => setCoreValue("clientContactName", event.target.value)}
+                  className={`${inputClass} mt-1`}
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Kontakt e-post
+                <input
+                  type="email"
+                  value={form.clientContactEmail}
+                  onChange={(event) => setCoreValue("clientContactEmail", event.target.value)}
+                  className={`${inputClass} mt-1`}
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-700">
+                Kontakt telefon
+                <input
+                  value={form.clientContactPhone}
+                  onChange={(event) => setCoreValue("clientContactPhone", event.target.value)}
+                  className={`${inputClass} mt-1`}
+                />
+              </label>
+            </div>
+          </section>
+        ) : null}
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-slate-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-xl font-semibold text-slate-900">Kontraktsmål</h2>
-          <button type="button" onClick={addKpi} className={secondaryButtonClass}>
-            <IconPlus className="h-5 w-5" />
-            Legg til mål
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-100 text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-6 py-3">Type</th>
-                <th className="px-4 py-3">Navn</th>
-                <th className="px-4 py-3">Målverdi</th>
-                <th className="px-4 py-3">Målt verdi</th>
-                <th className="px-4 py-3">Enhet</th>
-                <th className="px-4 py-3">Kontraktspunkt</th>
-                <th className="px-6 py-3 text-right">Handling</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {kpis.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
-                    Ingen kontraktsmål er lagt inn.
-                  </td>
-                </tr>
-              ) : (
-                kpis.map((kpi) => (
-                  <tr key={kpi.id}>
-                    <td className="min-w-44 px-6 py-3">
-                      <select
-                        value={kpi.metric}
-                        onChange={(event) => setKpiMetric(kpi.id, event.target.value as KpiMetricValue)}
-                        className={inputClass}
-                      >
-                        {KPI_METRIC_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="min-w-48 px-4 py-3">
-                      <input
-                        value={kpi.label}
-                        onChange={(event) => setKpiValue(kpi.id, { label: event.target.value })}
-                        className={inputClass}
-                      />
-                    </td>
-                    <td className="min-w-32 px-4 py-3">
-                      <input
-                        value={kpi.targetValue}
-                        onChange={(event) => setKpiValue(kpi.id, { targetValue: event.target.value })}
-                        inputMode="decimal"
-                        className={inputClass}
-                      />
-                    </td>
-                    <td className="min-w-32 px-4 py-3">
-                      <input
-                        value={kpi.currentValue}
-                        onChange={(event) => setKpiValue(kpi.id, { currentValue: event.target.value })}
-                        inputMode="decimal"
-                        className={inputClass}
-                      />
-                    </td>
-                    <td className="min-w-28 px-4 py-3">
-                      <input
-                        value={kpi.unit}
-                        onChange={(event) => setKpiValue(kpi.id, { unit: event.target.value })}
-                        className={inputClass}
-                      />
-                    </td>
-                    <td className="min-w-40 px-4 py-3">
-                      <input
-                        value={kpi.contractRef}
-                        onChange={(event) => setKpiValue(kpi.id, { contractRef: event.target.value })}
-                        className={inputClass}
-                      />
-                    </td>
-                    <td className="px-6 py-3 text-right">
+        {visible.kpis ? (
+          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="text-xl font-semibold text-slate-900">Kontraktsmål</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-100 text-sm">
+                <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-6 py-3">Type</th>
+                    <th className="px-4 py-3">Navn</th>
+                    <th className="px-4 py-3">Målverdi</th>
+                    <th className="px-4 py-3">Målt verdi</th>
+                    <th className="px-4 py-3">Enhet</th>
+                    <th className="px-4 py-3">Kontraktspunkt</th>
+                    {/* The remove column needs no heading. */}
+                    <th className="w-px px-4 py-3" aria-label="Fjern" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {kpis.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
+                        Ingen kontraktsmål er lagt inn.
+                      </td>
+                    </tr>
+                  ) : (
+                    kpis.map((kpi) => (
+                      <tr key={kpi.id}>
+                        <td className="min-w-44 px-6 py-3">
+                          <select
+                            value={kpi.metric}
+                            onChange={(event) => setKpiMetric(kpi.id, event.target.value as KpiMetricValue)}
+                            className={inputClass}
+                          >
+                            {KPI_METRIC_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="min-w-48 px-4 py-3">
+                          <input
+                            value={kpi.label}
+                            onChange={(event) => setKpiValue(kpi.id, { label: event.target.value })}
+                            className={inputClass}
+                          />
+                        </td>
+                        <td className="min-w-32 px-4 py-3">
+                          <input
+                            value={kpi.targetValue}
+                            onChange={(event) => setKpiValue(kpi.id, { targetValue: event.target.value })}
+                            inputMode="decimal"
+                            className={inputClass}
+                          />
+                        </td>
+                        <td className="min-w-32 px-4 py-3">
+                          <input
+                            value={kpi.currentValue}
+                            onChange={(event) => setKpiValue(kpi.id, { currentValue: event.target.value })}
+                            inputMode="decimal"
+                            className={inputClass}
+                          />
+                        </td>
+                        <td className="min-w-28 px-4 py-3">
+                          <input
+                            value={kpi.unit}
+                            onChange={(event) => setKpiValue(kpi.id, { unit: event.target.value })}
+                            className={inputClass}
+                          />
+                        </td>
+                        <td className="min-w-40 px-4 py-3">
+                          <input
+                            value={kpi.contractRef}
+                            onChange={(event) => setKpiValue(kpi.id, { contractRef: event.target.value })}
+                            className={inputClass}
+                          />
+                        </td>
+                        <td className="px-6 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => removeKpi(kpi.id)}
+                            className={destructiveIconButtonClass}
+                            aria-label="Fjern"
+                            title="Fjern"
+                          >
+                            <IconTrash className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                  {/*
+                    The add button is the table's last row, directly under the last goal,
+                    so it is clear that it adds a row. It scrolls with the table.
+                    Same look as "Legg til punkt" under the zone table.
+                  */}
+                  <tr>
+                    <td colSpan={7} className="px-6 py-3">
                       <button
                         type="button"
-                        onClick={() => removeKpi(kpi.id)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                        onClick={addKpi}
+                        className="inline-flex cursor-pointer items-center gap-1 text-sm font-semibold text-blue-700 hover:text-blue-900"
                       >
-                        <IconX className="h-4 w-4" />
-                        Fjern
+                        <IconPlus className="h-4 w-4" />
+                        Legg til mål
                       </button>
                     </td>
                   </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : null}
+
+        {visible.fields ? (
+          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="text-xl font-semibold text-slate-900">Egendefinerte felt</h2>
+            </div>
+            <div className="grid gap-4 p-6 md:grid-cols-2">
+              {fieldDefinitions.length === 0 ? (
+                <p className="text-sm text-slate-500 md:col-span-2">
+                  Ingen egendefinerte prosjektfelt er aktive.
+                </p>
+              ) : (
+                fieldDefinitions.map((definition) => (
+                  <CustomFieldControl
+                    key={definition.id}
+                    definition={definition}
+                    value={fieldValues[definition.id] ?? ""}
+                    onChange={(value) =>
+                      setFieldValues((current) => ({ ...current, [definition.id]: value }))
+                    }
+                  />
                 ))
               )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+            </div>
+          </section>
+        ) : null}
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-6 py-4">
-          <h2 className="text-xl font-semibold text-slate-900">Egendefinerte felt</h2>
-        </div>
-        <div className="grid gap-4 p-6 md:grid-cols-2">
-          {fieldDefinitions.length === 0 ? (
-            <p className="text-sm text-slate-500 md:col-span-2">
-              Ingen egendefinerte prosjektfelt er aktive.
-            </p>
-          ) : (
-            fieldDefinitions.map((definition) => (
-              <CustomFieldControl
-                key={definition.id}
-                definition={definition}
-                value={fieldValues[definition.id] ?? ""}
-                onChange={(value) =>
-                  setFieldValues((current) => ({ ...current, [definition.id]: value }))
-                }
-              />
-            ))
-          )}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-6 py-4">
-          <h2 className="text-xl font-semibold text-slate-900">Masseoppsett</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-100 text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-6 py-3">Massetype</th>
-                <th className="px-4 py-3">Enhet</th>
-                <th className="px-4 py-3">Tonn/m3</th>
-                <th className="px-4 py-3">Plan inn</th>
-                <th className="px-4 py-3">Plan ut</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {massTypes.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
-                    Ingen massetyper er aktive.
-                  </td>
-                </tr>
-              ) : (
-                massTypes.map((massType) => {
-                  const selection = massSelections[massType.id] ?? {
-                    selected: false,
-                    plannedIn: "0",
-                    plannedOut: "0",
-                  };
-                  return (
-                    <tr key={massType.id}>
-                      <td className="px-6 py-3">
-                        <label className="flex items-center gap-3 font-medium text-slate-900">
-                          <input
-                            type="checkbox"
-                            checked={selection.selected}
-                            onChange={(event) =>
-                              setMassSelection(massType.id, { selected: event.target.checked })
-                            }
-                            className="h-4 w-4 rounded border-slate-300"
-                          />
-                          {massType.name}
-                        </label>
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">{massType.unit}</td>
-                      <td className="px-4 py-3 tabular-nums text-slate-700">{massType.tonnPerM3}</td>
-                      <td className="px-4 py-3">
-                        <input
-                          value={selection.plannedIn}
-                          onChange={(event) =>
-                            setMassSelection(massType.id, { plannedIn: event.target.value })
-                          }
-                          disabled={!selection.selected}
-                          inputMode="decimal"
-                          className={inputClass}
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <input
-                          value={selection.plannedOut}
-                          onChange={(event) =>
-                            setMassSelection(massType.id, { plannedOut: event.target.value })
-                          }
-                          disabled={!selection.selected}
-                          inputMode="decimal"
-                          className={inputClass}
-                        />
+        {visible.masses ? (
+          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="text-xl font-semibold text-slate-900">Masseoppsett</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-100 text-sm">
+                <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-6 py-3">Massetype</th>
+                    <th className="px-4 py-3">Enhet</th>
+                    <th className="px-4 py-3">Tonn/m3</th>
+                    <th className="px-4 py-3">Plan inn</th>
+                    <th className="px-4 py-3">Plan ut</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {massTypes.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                        Ingen massetyper er aktive.
                       </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                  ) : (
+                    massTypes.map((massType) => {
+                      const selection = massSelections[massType.id] ?? {
+                        selected: false,
+                        plannedIn: "0",
+                        plannedOut: "0",
+                      };
+                      return (
+                        <tr key={massType.id}>
+                          <td className="px-6 py-3">
+                            <label className="flex items-center gap-3 font-medium text-slate-900">
+                              <input
+                                type="checkbox"
+                                checked={selection.selected}
+                                onChange={(event) =>
+                                  setMassSelection(massType.id, { selected: event.target.checked })
+                                }
+                                className="h-4 w-4 rounded border-slate-300"
+                              />
+                              {massType.name}
+                            </label>
+                          </td>
+                          <td className="px-4 py-3 text-slate-700">{massType.unit}</td>
+                          <td className="px-4 py-3 tabular-nums text-slate-700">{massType.tonnPerM3}</td>
+                          <td className="px-4 py-3">
+                            <input
+                              value={selection.plannedIn}
+                              onChange={(event) =>
+                                setMassSelection(massType.id, { plannedIn: event.target.value })
+                              }
+                              disabled={!selection.selected}
+                              inputMode="decimal"
+                              className={inputClass}
+                            />
+                          </td>
+                          <td className="px-4 py-3">
+                            <input
+                              value={selection.plannedOut}
+                              onChange={(event) =>
+                                setMassSelection(massType.id, { plannedOut: event.target.value })
+                              }
+                              disabled={!selection.selected}
+                              inputMode="decimal"
+                              className={inputClass}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : null}
 
-      {error && (
-        <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          <span className="flex-1">{error}</span>
-          <button type="button" onClick={() => setError(null)} aria-label="Lukk feil">
-            <IconX className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+        {error && (
+          <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <span className="flex-1">{error}</span>
+            <button type="button" onClick={() => setError(null)} aria-label="Lukk feil">
+              <IconX className="h-4 w-4" />
+            </button>
+          </div>
+        )}
 
-      {saved && (
-        <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800">
-          <IconCheck className="h-4 w-4" />
-          Prosjektoppsettet er lagret.
-        </div>
-      )}
+        {saved && (
+          <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800">
+            <IconCheck className="h-4 w-4" />
+            Prosjektoppsettet er lagret.
+          </div>
+        )}
 
-      <div className="flex flex-wrap gap-3">
-        <button type="button" onClick={() => router.back()} className={standardButtonClass}>
+        {blockedByHiddenSection ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Kan ikke lagre ennå: obligatoriske opplysninger mangler i en annen del av prosjektet. Åpne «Rediger
+            prosjekt» for å fylle dem ut.
+          </div>
+        ) : null}
+      </div>
+
+      <div
+        className={
+          stickyFooter
+            ? "flex shrink-0 flex-wrap justify-end gap-3 rounded-b-2xl border-t border-slate-200 bg-white px-6 py-4"
+            : "flex flex-wrap gap-3"
+        }
+      >
+        <button
+          type="button"
+          onClick={() => (onCancel ? onCancel() : router.back())}
+          disabled={submitting}
+          className={secondaryButtonClass}
+        >
           Avbryt
         </button>
         <button type="submit" disabled={!canSubmit} className={standardButtonClass}>
@@ -824,7 +925,7 @@ export default function ProjectSetupForm({
           ) : (
             <>
               <IconCheck className="h-5 w-5" />
-              Lagre oppsett
+              Lagre
             </>
           )}
         </button>
@@ -905,7 +1006,7 @@ function CustomFieldControl({
   );
 }
 
-function toDateInput(value?: string | null) {
+export function toDateInput(value?: string | null) {
   if (!value) return "";
   return value.slice(0, 10);
 }
@@ -914,15 +1015,15 @@ function decimalInputValue(value: string) {
   return value.replace(",", ".").trim() || "0";
 }
 
-function optionalDecimalInputValue(value: string) {
+export function optionalDecimalInputValue(value: string) {
   return value.trim() ? value.replace(",", ".").trim() : "";
 }
 
-function optionalDecimalDisplay(value?: number | null) {
+export function optionalDecimalDisplay(value?: number | null) {
   return value === null || value === undefined ? "" : String(value);
 }
 
-function isDecimalInput(value: string) {
+export function isDecimalInput(value: string) {
   const normalized = value.replace(",", ".").trim();
   if (!normalized) return false;
   return Number.isFinite(Number(normalized));

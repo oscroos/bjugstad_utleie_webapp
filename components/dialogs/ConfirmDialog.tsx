@@ -12,7 +12,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { IconAlertTriangle, IconHelp } from "@tabler/icons-react";
+import { IconAlertTriangle, IconHelp, IconX } from "@tabler/icons-react";
 import { destructiveButtonClass, standardButtonClass } from "@/lib/buttonStyles";
 
 // The app's own replacement for window.confirm and window.prompt.
@@ -21,7 +21,10 @@ import { destructiveButtonClass, standardButtonClass } from "@/lib/buttonStyles"
 //   if (!(await confirm({ title: "Slette mappen?", tone: "danger", confirmLabel: "Slett" }))) return;
 //   const name = await prompt({ title: "Nytt mappenavn", defaultValue: folder.name });
 //
+//   const answer = await choose({ title: "...", actions: [{ value: "save", label: "Lagre" }, ...] });
+//
 // confirm() resolves to true or false. prompt() resolves to the trimmed text, or
+// null when the user cancels. choose() resolves to the picked action's value, or
 // null when the user cancels.
 
 export type ConfirmOptions = {
@@ -29,6 +32,11 @@ export type ConfirmOptions = {
   message?: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
+  /**
+   * Show an X in the top right corner instead of a cancel button. It does the
+   * same as cancelling; `cancelLabel` becomes its description for screen readers.
+   */
+  closeInCorner?: boolean;
   /** "danger" for actions that delete or remove something. */
   tone?: "default" | "danger";
 };
@@ -42,14 +50,27 @@ export type PromptOptions = ConfirmOptions & {
   maxLength?: number;
 };
 
+export type ChoiceAction = {
+  value: string;
+  label: string;
+  /** "primary" is the recommended answer, "danger" one that loses something. */
+  tone?: "primary" | "danger";
+};
+
+export type ChoiceOptions = Pick<ConfirmOptions, "title" | "message" | "cancelLabel" | "closeInCorner" | "tone"> & {
+  actions: ChoiceAction[];
+};
+
 type DialogsApi = {
   confirm: (options: ConfirmOptions) => Promise<boolean>;
   prompt: (options: PromptOptions) => Promise<string | null>;
+  choose: (options: ChoiceOptions) => Promise<string | null>;
 };
 
 type Pending =
   | { kind: "confirm"; options: ConfirmOptions; resolve: (value: boolean) => void }
-  | { kind: "prompt"; options: PromptOptions; resolve: (value: string | null) => void };
+  | { kind: "prompt"; options: PromptOptions; resolve: (value: string | null) => void }
+  | { kind: "choice"; options: ChoiceOptions; resolve: (value: string | null) => void };
 
 const DialogsContext = createContext<DialogsApi | null>(null);
 
@@ -83,6 +104,7 @@ export default function ConfirmDialogProvider({ children }: { children: ReactNod
     () => ({
       confirm: (options) => new Promise<boolean>((resolve) => open({ kind: "confirm", options, resolve })),
       prompt: (options) => new Promise<string | null>((resolve) => open({ kind: "prompt", options, resolve })),
+      choose: (options) => new Promise<string | null>((resolve) => open({ kind: "choice", options, resolve })),
     }),
     [open],
   );
@@ -113,7 +135,9 @@ function DialogView({
 }) {
   const { options } = pending;
   const isPrompt = pending.kind === "prompt";
-  const promptOptions = isPrompt ? pending.options : null;
+  const promptOptions = pending.kind === "prompt" ? pending.options : null;
+  const choiceActions = pending.kind === "choice" ? pending.options.actions : null;
+  const confirmLabel = pending.kind === "choice" ? undefined : pending.options.confirmLabel;
   const required = promptOptions?.required ?? true;
   const [value, setValue] = useState(promptOptions?.defaultValue ?? "");
   const titleId = useId();
@@ -129,7 +153,7 @@ function DialogView({
     if (isPrompt) {
       inputRef.current?.focus();
       inputRef.current?.select();
-    } else if (danger) {
+    } else if (danger && !choiceActions) {
       cancelRef.current?.focus();
     } else {
       confirmRef.current?.focus();
@@ -146,10 +170,12 @@ function DialogView({
       document.removeEventListener("keydown", onKeyDown, true);
       previouslyFocused?.focus?.();
     };
-  }, [danger, isPrompt, onClose]);
+  }, [choiceActions, danger, isPrompt, onClose]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
+    // With several answers there is no default one: the user has to pick a button.
+    if (choiceActions) return;
     if (!isPrompt) {
       onClose(true);
       return;
@@ -174,8 +200,20 @@ function DialogView({
         aria-labelledby={titleId}
         aria-describedby={options.message ? messageId : undefined}
         onSubmit={submit}
-        className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10"
+        className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10"
       >
+        {options.closeInCorner ? (
+          <button
+            ref={cancelRef}
+            type="button"
+            onClick={() => onClose(null)}
+            aria-label={options.cancelLabel ?? "Lukk"}
+            title={options.cancelLabel ?? "Lukk"}
+            className="absolute right-3 top-3 cursor-pointer rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+          >
+            <IconX className="h-5 w-5" />
+          </button>
+        ) : null}
         <div className="px-6 py-5">
           {/* Icon on its own line above the title, aligned left. */}
           <span
@@ -210,18 +248,41 @@ function DialogView({
             ) : null}
           </div>
         </div>
-        <div className="flex justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-3">
-          <button ref={cancelRef} type="button" className={cancelButtonClass} onClick={() => onClose(null)}>
-            {options.cancelLabel ?? "Avbryt"}
-          </button>
-          <button
-            ref={confirmRef}
-            type="submit"
-            className={danger ? destructiveButtonClass : standardButtonClass}
-            disabled={isPrompt && required && !value.trim()}
-          >
-            {options.confirmLabel ?? (isPrompt ? "Lagre" : "Bekreft")}
-          </button>
+        <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-3">
+          {options.closeInCorner ? null : (
+            <button ref={cancelRef} type="button" className={cancelButtonClass} onClick={() => onClose(null)}>
+              {options.cancelLabel ?? "Avbryt"}
+            </button>
+          )}
+          {choiceActions ? (
+            choiceActions.map((action, index) => (
+              <button
+                key={action.value}
+                // The first primary answer gets focus when the dialog opens.
+                ref={action.tone === "primary" || (index === 0 && !choiceActions.some((a) => a.tone === "primary")) ? confirmRef : undefined}
+                type="button"
+                onClick={() => onClose(action.value)}
+                className={
+                  action.tone === "danger"
+                    ? destructiveButtonClass
+                    : action.tone === "primary"
+                      ? standardButtonClass
+                      : cancelButtonClass
+                }
+              >
+                {action.label}
+              </button>
+            ))
+          ) : (
+            <button
+              ref={confirmRef}
+              type="submit"
+              className={danger ? destructiveButtonClass : standardButtonClass}
+              disabled={isPrompt && required && !value.trim()}
+            >
+              {confirmLabel ?? (isPrompt ? "Lagre" : "Bekreft")}
+            </button>
+          )}
         </div>
       </form>
     </div>

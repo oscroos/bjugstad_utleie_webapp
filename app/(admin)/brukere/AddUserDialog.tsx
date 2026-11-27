@@ -2,11 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { IconLoader2, IconCircleMinus, IconPlus, IconX } from "@tabler/icons-react";
-import {
-  destructiveButtonCompactClass,
-  standardButtonClass,
-} from "@/lib/buttonStyles";
+import { IconLoader2, IconPlus, IconTrash, IconX } from "@tabler/icons-react";
+import { destructiveIconButtonClass, standardButtonClass } from "@/lib/buttonStyles";
 
 type RoleOption = "customer" | "super_admin";
 type CompanyRole = "selskapsadmin" | "selskapsbruker";
@@ -341,10 +338,11 @@ export default function AddUserDialog() {
                           <div aria-hidden="true" className="h-0 overflow-hidden">
                             <button
                               type="button"
-                              className={destructiveButtonCompactClass}
+                              className={destructiveIconButtonClass}
+                              aria-label="Fjern"
+                              title="Fjern"
                             >
-                              <IconCircleMinus className="h-5 w-5" />
-                              Fjern
+                              <IconTrash className="h-4 w-4" />
                             </button>
                           </div>
                         )}
@@ -428,10 +426,11 @@ export default function AddUserDialog() {
                                 <button
                                   type="button"
                                   onClick={() => removeRelationship(rel.id)}
-                                  className={destructiveButtonCompactClass}
+                                  className={destructiveIconButtonClass}
+                                  aria-label="Fjern"
+                                  title="Fjern"
                                 >
-                                  <IconCircleMinus className="h-5 w-5" />
-                                  Fjern
+                                  <IconTrash className="h-4 w-4" />
                                 </button>
                               </div>
                             )}

@@ -89,6 +89,11 @@ export async function PUT(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Prosjektnavn er påkrevd" }, { status: 400 });
   }
 
+  const postalCode = stringValue(body.postalCode);
+  if (postalCode && !/^\d+$/.test(postalCode)) {
+    return NextResponse.json({ error: "Postnummer kan bare inneholde tall." }, { status: 400 });
+  }
+
   const contractType = optionalEnumValue(body.contractType, CONTRACT_TYPES);
   const clientType = optionalEnumValue(body.clientType, CLIENT_TYPES);
   const projectStatus = optionalEnumValue(body.status, PROJECT_STATUSES);
@@ -104,11 +109,22 @@ export async function PUT(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: contractSizeNok.error }, { status: 400 });
   }
 
-  const { fieldDefinitions, massTypes } = await getActiveProjectSetupCatalog();
-  const fieldPayload = normalizeProjectFieldValues(fieldDefinitions, body.fieldValues);
+  // Custom fields, the mass plan and the contract goals are each replaced as a
+  // whole, but only when the request contains them. A request that edits one part
+  // of the project (for example the "Om prosjektet" box) leaves the others alone.
+  const updatesFieldValues = body.fieldValues !== undefined;
+  const updatesMassTypes = body.massTypes !== undefined;
+  const catalog =
+    updatesFieldValues || updatesMassTypes ? await getActiveProjectSetupCatalog() : { fieldDefinitions: [], massTypes: [] };
+
+  const fieldPayload = updatesFieldValues
+    ? normalizeProjectFieldValues(catalog.fieldDefinitions, body.fieldValues)
+    : { values: [], error: null };
   if (fieldPayload.error) return NextResponse.json({ error: fieldPayload.error }, { status: 400 });
 
-  const massTypePayload = normalizeProjectMassTypes(massTypes, body.massTypes);
+  const massTypePayload = updatesMassTypes
+    ? normalizeProjectMassTypes(catalog.massTypes, body.massTypes)
+    : { values: [], error: null };
   if (massTypePayload.error) {
     return NextResponse.json({ error: massTypePayload.error }, { status: 400 });
   }
@@ -148,8 +164,8 @@ export async function PUT(request: Request, { params }: RouteContext) {
       },
     });
 
-    await tx.projectFieldValue.deleteMany({ where: { projectId } });
-    if (fieldPayload.values.length) {
+    if (updatesFieldValues) await tx.projectFieldValue.deleteMany({ where: { projectId } });
+    if (updatesFieldValues && fieldPayload.values.length) {
       await tx.projectFieldValue.createMany({
         data: fieldPayload.values.map((fieldValue) => ({
           projectId,
@@ -159,8 +175,8 @@ export async function PUT(request: Request, { params }: RouteContext) {
       });
     }
 
-    await tx.projectMassType.deleteMany({ where: { projectId } });
-    if (massTypePayload.values.length) {
+    if (updatesMassTypes) await tx.projectMassType.deleteMany({ where: { projectId } });
+    if (updatesMassTypes && massTypePayload.values.length) {
       await tx.projectMassType.createMany({
         data: massTypePayload.values.map((massType) => ({
           projectId,

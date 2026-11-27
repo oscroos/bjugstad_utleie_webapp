@@ -59,6 +59,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: startDate.error ?? endDate.error }, { status: 400 });
   }
 
+  const postalCode = stringValue(body.postalCode);
+  if (postalCode && !/^\d+$/.test(postalCode)) {
+    return NextResponse.json({ error: "Postnummer kan bare inneholde tall." }, { status: 400 });
+  }
+
   const contractType = optionalEnumValue(body.contractType, CONTRACT_TYPES);
   const clientType = optionalEnumValue(body.clientType, CLIENT_TYPES);
   const projectStatus = optionalEnumValue(body.status, PROJECT_STATUSES);

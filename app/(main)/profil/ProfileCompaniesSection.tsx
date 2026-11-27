@@ -9,6 +9,7 @@ import {
   IconMail,
   IconPhone,
   IconUserCircle,
+  IconTrash,
 } from "@tabler/icons-react";
 import type {
   CustomerAccessEntry,
@@ -18,10 +19,7 @@ import {
   formatDisplay,
   formatPhone,
 } from "@/lib/formatters";
-import {
-  destructiveButtonCompactClass,
-  standardButtonClass,
-} from "@/lib/buttonStyles";
+import { destructiveIconButtonClass, standardButtonClass } from "@/lib/buttonStyles";
 import type { CompanyCardState } from "./profileTypes";
 
 type ProfileRowEntry = {
@@ -330,9 +328,11 @@ function CompanyProfileCard({
                     <button
                       type="button"
                       onClick={() => removeEntry(entry.userId)}
-                      className={destructiveButtonCompactClass}
+                      className={destructiveIconButtonClass}
+                      aria-label="Fjern"
+                      title="Fjern"
                     >
-                      Fjern
+                      <IconTrash className="h-4 w-4" />
                     </button>
                   ) : null}
                 </div>
